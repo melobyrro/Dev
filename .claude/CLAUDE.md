@@ -49,42 +49,11 @@ The following MCP servers are configured at the root level and available to all 
 
 ## Infrastructure Access
 
-All projects have SSH access to the home server infrastructure:
+SSH access to home server infrastructure:
+- **Proxmox Server**: 192.168.1.10 (admin user)
+- **Docker VM**: 192.168.1.11 (byrro user, SSH keys configured)
 
-### Proxmox Server (Hypervisor)
-- **IP Address**: 192.168.1.10
-- **SSH Access**: `ssh admin@192.168.1.10`
-- **Purpose**: Hypervisor host running virtual machines
-- **Role**: Infrastructure layer
-
-### Docker VM (Application Host)
-- **IP Address**: 192.168.1.11
-- **SSH Access**: `ssh byrro@192.168.1.11`
-- **Authentication**: SSH keys configured (no password needed)
-- **Purpose**: Docker container host
-- **Services**:
-  - Docker Engine
-  - Immich (photo management)
-  - CultoTranscript (sermon transcription system)
-- **Project Locations**:
-  - CultoTranscript: `/home/byrro/CultoTranscript/`
-
-### Common Operations
-
-**Check Docker containers:**
-```bash
-ssh byrro@192.168.1.11 "docker compose -f /home/byrro/CultoTranscript/docker/docker-compose.yml ps"
-```
-
-**View container logs:**
-```bash
-ssh byrro@192.168.1.11 "docker compose -f /home/byrro/CultoTranscript/docker/docker-compose.yml logs --tail=50"
-```
-
-**Restart services:**
-```bash
-ssh byrro@192.168.1.11 "cd /home/byrro/CultoTranscript/docker && docker compose restart <service-name>"
-```
+For detailed access methods, system architecture, and project-specific operations, see the respective project CLAUDE.md files.
 
 ## Projects
 
