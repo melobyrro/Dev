@@ -1,0 +1,30 @@
+# FastAPI and web framework
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+jinja2==3.1.2
+itsdangerous==2.1.2
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+pgvector==0.2.4
+
+# Redis and job queue
+redis==4.6.0
+rq==1.15.1
+
+# Authentication
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+python-dotenv==1.0.0
+
+# AI and ML
+google-generativeai==0.3.2
+numpy==1.24.3
+
+# Utilities
+pydantic==2.5.0
+pydantic-settings==2.1.0
+yt-dlp==2023.11.16

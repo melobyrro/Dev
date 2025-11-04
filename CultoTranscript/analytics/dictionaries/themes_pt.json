@@ -1,0 +1,70 @@
+{
+  "Cristo-cêntrica": {
+    "keywords": [
+      "Cristo", "Jesus", "Salvador", "Messias", "Senhor Jesus",
+      "filho de Deus", "cruz", "crucificado", "ressurreição",
+      "ressuscitou", "evangelho", "graça", "salvação",
+      "redentor", "cordeiro de Deus", "sangue de Cristo",
+      "nome de Jesus", "em Cristo", "Cristo Jesus"
+    ],
+    "weight": 1.5,
+    "description": "Mensagens focadas na pessoa e obra de Cristo"
+  },
+  "Motivacional": {
+    "keywords": [
+      "motivação", "motivar", "superação", "vencer", "vitória",
+      "conquista", "sonhos", "realizar", "sucesso", "prosperar",
+      "crescimento", "desenvolvimento", "potencial", "força",
+      "coragem", "determinação", "persistir", "alcançar",
+      "transformação", "mudança", "novo tempo", "propósito"
+    ],
+    "weight": 1.0,
+    "description": "Mensagens de incentivo e motivação pessoal"
+  },
+  "Prosperidade": {
+    "keywords": [
+      "prosperidade", "riqueza", "bênção financeira", "abastança",
+      "dízimo", "oferta", "contribuição", "semear", "colher",
+      "multiplicação", "abundância", "provisão financeira",
+      "dinheiro", "recursos", "investir", "retorno",
+      "janelas do céu", "bênção material", "enriquecer"
+    ],
+    "weight": 1.0,
+    "description": "Mensagens sobre prosperidade financeira e material"
+  },
+  "Família": {
+    "keywords": [
+      "família", "casamento", "esposa", "esposo", "marido",
+      "filhos", "pais", "mãe", "pai", "matrimônio",
+      "conjugal", "parentalidade", "educar filhos",
+      "lar", "casa", "união familiar", "relacionamento",
+      "cônjuge", "aliança matrimonial", "família cristã"
+    ],
+    "weight": 1.0,
+    "description": "Mensagens sobre família e relações familiares"
+  },
+  "Evangelismo": {
+    "keywords": [
+      "evangelizar", "evangelismo", "missões", "missão",
+      "pregar", "testemunhar", "testemunho", "ganhar almas",
+      "ide", "anunciar", "proclamar", "converter",
+      "conversão", "pecadores", "perdidos", "salvação das almas",
+      "grande comissão", "plantar igrejas", "discipular",
+      "fazer discípulos", "compartilhar o evangelho"
+    ],
+    "weight": 1.0,
+    "description": "Mensagens sobre evangelismo e missões"
+  },
+  "Santidade": {
+    "keywords": [
+      "santidade", "santo", "santificação", "pureza",
+      "consagração", "separação", "piedade", "retidão",
+      "justiça", "obediência", "pecado", "arrependimento",
+      "confissão", "jejum", "oração", "buscar a Deus",
+      "vida santa", "viver em santidade", "consagrar",
+      "renunciar", "mortificar a carne", "crucificar"
+    ],
+    "weight": 1.0,
+    "description": "Mensagens sobre vida santa e consagração"
+  }
+}

@@ -1,0 +1,15 @@
+# Local settings (machine-specific, not committed)
+settings.local.json
+
+# Temporary files
+*.tmp
+*.log
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# IDE-specific files
+*.swp
+*.swo
+*~

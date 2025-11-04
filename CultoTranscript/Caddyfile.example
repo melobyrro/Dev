@@ -1,0 +1,43 @@
+# Caddyfile example for CultoTranscript reverse proxy
+#
+# Usage:
+# 1. Copy this file to Caddyfile
+# 2. Replace culto.yourdomain.com with your actual domain
+# 3. Ensure Docker containers are running on localhost:8000
+# 4. Run Caddy: caddy run
+#
+# Caddy will automatically handle HTTPS certificates via Let's Encrypt
+
+culto.yourdomain.com {
+    # Reverse proxy to FastAPI web service
+    reverse_proxy localhost:8000
+
+    # Enable compression
+    encode gzip
+
+    # Add security headers
+    header {
+        # Prevent clickjacking
+        X-Frame-Options "SAMEORIGIN"
+
+        # Prevent MIME sniffing
+        X-Content-Type-Options "nosniff"
+
+        # Enable XSS protection
+        X-XSS-Protection "1; mode=block"
+
+        # Remove server header
+        -Server
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/culto-access.log
+        format json
+    }
+}
+
+# Optional: Redirect www to non-www
+www.culto.yourdomain.com {
+    redir https://culto.yourdomain.com{uri} permanent
+}

@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block title %}Canais - CultoTranscript{% endblock %}
+
+{% block content %}
+<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+    <h1>Canais</h1>
+    <a href="/channels/new" class="btn">+ Novo Canal</a>
+</div>
+
+{% if channels %}
+<table>
+    <thead>
+        <tr>
+            <th>Título</th>
+            <th>URL</th>
+            <th>Channel ID</th>
+            <th>Ativo</th>
+            <th>Criado em</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for channel in channels %}
+        <tr>
+            <td>{{ channel.title }}</td>
+            <td><a href="{{ channel.youtube_url }}" target="_blank">Ver no YouTube</a></td>
+            <td>{{ channel.channel_id }}</td>
+            <td>{{ 'Sim' if channel.active else 'Não' }}</td>
+            <td>{{ channel.created_at.strftime('%d/%m/%Y') }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>Nenhum canal cadastrado. <a href="/channels/new">Adicionar primeiro canal</a></p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Vídeos - CultoTranscript{% endblock %}
+
+{% block content %}
+<h1 class="text-2xl font-semibold mb-6 tracking-tight">Vídeos</h1>
+
+<div class="overflow-hidden">
+    <table class="w-full">
+        <thead>
+            <tr>
+                <th class="px-4 py-3 text-left">Título</th>
+                <th class="px-4 py-3 text-left">YouTube ID</th>
+                <th class="px-4 py-3 text-left">Status</th>
+                <th class="px-4 py-3 text-left">Duração</th>
+                <th class="px-4 py-3 text-left">Data</th>
+                <th class="px-4 py-3 text-left">Ações</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for video in videos %}
+            <tr>
+                <td class="px-4 py-3 text-sm">{{ video.title }}</td>
+                <td class="px-4 py-3 text-sm text-secondary font-mono">{{ video.youtube_id }}</td>
+                <td class="px-4 py-3"><span class="status status-{{ video.status }}">{{ video.status }}</span></td>
+                <td class="px-4 py-3 text-sm text-secondary">{{ (video.duration_sec / 60)|int }} min</td>
+                <td class="px-4 py-3 text-sm text-secondary">{{ video.created_at.strftime('%d/%m/%Y') }}</td>
+                <td class="px-4 py-3">
+                    <a href="/?expand={{ video.id }}" class="inline-flex items-center px-3 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
+                        Ver
+                    </a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<!-- Pagination -->
+<div class="mt-6 flex items-center justify-center gap-4">
+    {% if page > 1 %}
+    <a href="/videos?page={{ page - 1 }}" class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
+        Anterior
+    </a>
+    {% endif %}
+    <span class="text-sm text-secondary">Página {{ page }} de {{ pages }}</span>
+    {% if page < pages %}
+    <a href="/videos?page={{ page + 1 }}" class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
+        Próxima
+    </a>
+    {% endif %}
+</div>
+{% endblock %}

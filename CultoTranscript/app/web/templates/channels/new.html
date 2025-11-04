@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block title %}Novo Canal - CultoTranscript{% endblock %}
+
+{% block content %}
+<h1>Adicionar Novo Canal</h1>
+
+{% if error %}
+<div class="alert alert-error">
+    <strong>Erro:</strong> {{ error }}
+</div>
+{% endif %}
+
+<div class="card">
+    <form method="POST" action="/channels/new">
+        <div class="form-group">
+            <label for="title">Título do Canal</label>
+            <input type="text" id="title" name="title" placeholder="Igreja Exemplo" required>
+        </div>
+
+        <div class="form-group">
+            <label for="youtube_url">URL do Canal no YouTube</label>
+            <input type="url" id="youtube_url" name="youtube_url"
+                   placeholder="https://www.youtube.com/@IgrejaExemplo" required>
+            <small>Exemplo: https://www.youtube.com/@NomeDaIgreja</small>
+        </div>
+
+
+        <div class="form-group">
+            <label for="schedule_cron">Agendamento (Cron - opcional)</label>
+            <input type="text" id="schedule_cron" name="schedule_cron"
+                   placeholder="0 8 * * 0">
+            <small>Deixe em branco para usar o padrão (diário + semanal)</small>
+        </div>
+
+        <div style="margin-top: 1.5rem;">
+            <button type="submit" class="btn">Salvar Canal</button>
+            <a href="/channels" class="btn btn-secondary" style="margin-left: 0.5rem;">Cancelar</a>
+        </div>
+    </form>
+</div>
+{% endblock %}
