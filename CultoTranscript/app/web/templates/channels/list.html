@@ -26,7 +26,7 @@
             <td><a href="{{ channel.youtube_url }}" target="_blank">Ver no YouTube</a></td>
             <td>{{ channel.channel_id }}</td>
             <td>{{ 'Sim' if channel.active else 'Não' }}</td>
-            <td>{{ channel.created_at.strftime('%d/%m/%Y') }}</td>
+            <td>{{ channel.created_at.strftime('%m/%d/%Y') }}</td>
         </tr>
         {% endfor %}
     </tbody>

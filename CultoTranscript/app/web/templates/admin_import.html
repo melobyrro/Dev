@@ -17,7 +17,7 @@
         <div>📊 <strong>{{ total_videos }}</strong> vídeos</div>
         <div>✅ <strong>{{ completed_videos }}</strong> processados</div>
         {% if channel.last_checked_at %}
-        <div>🔄 Última verificação: {{ channel.last_checked_at.strftime('%d/%m/%Y %H:%M') }}</div>
+        <div>🔄 Última verificação: {{ channel.last_checked_at.strftime('%m/%d/%Y %H:%M') }}</div>
         {% endif %}
     </div>
 </div>

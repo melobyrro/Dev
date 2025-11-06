@@ -24,7 +24,7 @@
                 <td class="px-4 py-3 text-sm text-secondary font-mono">{{ video.youtube_id }}</td>
                 <td class="px-4 py-3"><span class="status status-{{ video.status }}">{{ video.status }}</span></td>
                 <td class="px-4 py-3 text-sm text-secondary">{{ (video.duration_sec / 60)|int }} min</td>
-                <td class="px-4 py-3 text-sm text-secondary">{{ video.created_at.strftime('%d/%m/%Y') }}</td>
+                <td class="px-4 py-3 text-sm text-secondary">{{ video.created_at.strftime('%m/%d/%Y') }}</td>
                 <td class="px-4 py-3">
                     <a href="/?expand={{ video.id }}" class="inline-flex items-center px-3 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
                         Ver

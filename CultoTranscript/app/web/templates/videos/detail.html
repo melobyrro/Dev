@@ -205,7 +205,7 @@
     <h1>{{ video.title }}</h1>
     <div class="video-meta">
         <div>
-            📅 <strong>Publicado:</strong> {{ video.published_at.strftime('%d/%m/%Y às %H:%M') }}
+            📅 <strong>Publicado:</strong> {{ video.published_at.strftime('%m/%d/%Y às %H:%M') }}
         </div>
         <div>
             ⏱️ <strong>Duração:</strong> {{ (video.duration_sec // 60) }} minutos
