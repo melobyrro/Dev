@@ -14,7 +14,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # Always public paths (no auth required)
-        public_paths = ["/login", "/static", "/health"]
+        public_paths = ["/login", "/static", "/health", "/api/v2/events"]
 
         # Public view paths (GET only)
         public_view_paths = ["/", "/videos", "/channels", "/reports"]
@@ -25,6 +25,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/api/channels",
             "/api/jobs",
             "/api/videos/",  # Detail routes like /api/videos/{id}/transcript
+            "/api/v2/videos",  # Backend v2 videos API
         ]
 
         # Check if path is always public
