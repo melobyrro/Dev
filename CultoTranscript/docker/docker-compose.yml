@@ -53,8 +53,13 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.7}
+      - PRIMARY_LLM=${PRIMARY_LLM:-gemini}
+      - FALLBACK_LLM=${FALLBACK_LLM:-ollama}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-phi3:mini}
     volumes:
       - ../app:/app/app
+      - ../Backend:/app/Backend
       - ../migrations:/app/migrations
     ports:
       - "${WEB_PORT:-8000}:8000"
@@ -84,6 +89,10 @@ services:
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       - GEMINI_MODEL=${GEMINI_MODEL:-gemini-2.5-flash}
       - GEMINI_TEMPERATURE=${GEMINI_TEMPERATURE:-0.7}
+      - PRIMARY_LLM=${PRIMARY_LLM:-gemini}
+      - FALLBACK_LLM=${FALLBACK_LLM:-ollama}
+      - OLLAMA_URL=${OLLAMA_URL:-http://ollama:11434}
+      - OLLAMA_MODEL=${OLLAMA_MODEL:-phi3:mini}
     volumes:
       - ../app:/app/app
       - ../analytics:/app/analytics
@@ -125,6 +134,25 @@ services:
       - culto_network
     restart: unless-stopped
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: culto_ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_models:/root/.ollama
+    environment:
+      - OLLAMA_HOST=0.0.0.0
+      - OLLAMA_MODELS=/root/.ollama/models
+    networks:
+      - culto_network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
 networks:
   culto_network:
     driver: bridge
@@ -133,3 +161,4 @@ volumes:
   postgres_data:
   redis_data:
   worker_tmp:
+  ollama_models:
