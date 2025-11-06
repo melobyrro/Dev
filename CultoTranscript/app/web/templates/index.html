@@ -653,6 +653,7 @@
 {% block extra_js %}
 <script>
 const CHANNEL_ID = {{ channel.id if channel else 'null' }};
+let csrfToken = null;
 
 
 // Load recent videos with date grouping
@@ -661,6 +662,7 @@ async function loadRecentVideos() {
 
     try {
         const response = await fetch(`/api/channels/${CHANNEL_ID}/videos?limit=50`);
+        csrfToken = response.headers.get('X-CSRF-Token');
         const data = await response.json();
 
         const container = document.getElementById('recentVideos');
@@ -931,7 +933,10 @@ async function reprocessVideo(videoId, title) {
 
         const response = await fetch(`/api/videos/${videoId}/reprocess`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
             body: JSON.stringify({ password: password })
         });
 
@@ -974,7 +979,10 @@ async function deleteVideo(videoId, title) {
     try {
         const response = await fetch(`/api/videos/${videoId}`, {
             method: 'DELETE',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
             body: JSON.stringify({ password: password })
         });
 
@@ -1289,7 +1297,10 @@ async function sendChatMessage() {
     try {
         const response = await fetch(`/api/channels/${CHANNEL_ID}/chat`, {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
             body: JSON.stringify({
                 message: message,
                 session_id: chatSessionId
@@ -1453,7 +1464,8 @@ async function saveSpeaker(videoId) {
         const response = await fetch(`/api/videos/${videoId}/speaker`, {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
             },
             body: JSON.stringify({ speaker: speaker })
         });
