@@ -6,20 +6,20 @@
 <h1 class="text-2xl font-semibold mb-6 tracking-tight">Vídeos</h1>
 
 <!-- Filter Form -->
-<form method="GET" action="/videos" class="mb-6" style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+<form method="GET" action="/videos" class="mb-6" style="background: var(--muted); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem; border: 1px solid var(--border);">
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
         <!-- Search by title -->
         <div>
-            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Buscar Título</label>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: var(--text-muted);">Buscar Título</label>
             <input type="text" name="search" value="{{ current_search }}"
                    placeholder="Digite para buscar..."
-                   style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+                   style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text);">
         </div>
 
         <!-- Speaker filter -->
         <div>
-            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Pregador</label>
-            <select name="speaker" style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: var(--text-muted);">Pregador</label>
+            <select name="speaker" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text);">
                 <option value="">Todos os pregadores</option>
                 {% for spk in speakers %}
                 <option value="{{ spk.name }}" {% if current_speaker == spk.name %}selected{% endif %}>
@@ -31,8 +31,8 @@
 
         <!-- Status filter -->
         <div>
-            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Status</label>
-            <select name="status" style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: var(--text-muted);">Status</label>
+            <select name="status" style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text);">
                 <option value="">Todos os status</option>
                 <option value="completed" {% if current_status == "completed" %}selected{% endif %}>Completo</option>
                 <option value="processing" {% if current_status == "processing" %}selected{% endif %}>Processando</option>
@@ -45,15 +45,15 @@
 
         <!-- Date range -->
         <div>
-            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Data Início</label>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: var(--text-muted);">Data Início</label>
             <input type="date" name="date_start" value="{{ current_date_start }}"
-                   style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+                   style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text);">
         </div>
 
         <div>
-            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Data Fim</label>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: var(--text-muted);">Data Fim</label>
             <input type="date" name="date_end" value="{{ current_date_end }}"
-                   style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+                   style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text);">
         </div>
     </div>
 
@@ -61,7 +61,7 @@
         <button type="submit" style="padding: 0.5rem 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
             Filtrar
         </button>
-        <a href="/videos" style="padding: 0.5rem 1.5rem; background: #6b7280; color: white; text-decoration: none; border-radius: 4px; display: inline-block;">
+        <a href="/videos" style="padding: 0.5rem 1.5rem; background: var(--text-muted); color: white; text-decoration: none; border-radius: 4px; display: inline-block;">
             Limpar Filtros
         </a>
     </div>
