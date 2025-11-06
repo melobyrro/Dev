@@ -9,8 +9,9 @@ from datetime import datetime
 
 from app.common.database import get_db
 from app.common.models import GeminiChatHistory
-from app.ai.gemini_client import get_gemini_client
+from app.ai.llm_client import get_llm_client
 from app.ai.embedding_service import EmbeddingService
+from app.ai.cache_manager import CacheManager
 
 logger = logging.getLogger(__name__)
 
@@ -21,16 +22,18 @@ class ChatbotService:
 
     Features:
     - Retrieves relevant sermon segments using embeddings
-    - Generates contextual answers with Gemini
+    - Generates contextual answers with unified LLM client (Gemini or Ollama)
     - Maintains conversation history
     - Cites specific sermons and timestamps
+    - Automatically falls back to local Ollama when Gemini quota is exhausted
     """
 
     def __init__(self):
         """Initialize chatbot service"""
-        self.gemini = get_gemini_client()
+        self.llm = get_llm_client()
         self.embedding_service = EmbeddingService()
-        logger.info("Chatbot service initialized")
+        self.cache_manager = CacheManager()
+        logger.info("Chatbot service initialized with unified LLM client and caching")
 
     def chat(
         self,
@@ -39,7 +42,7 @@ class ChatbotService:
         session_id: str = None
     ) -> Dict:
         """
-        Handle a chat message
+        Handle a chat message with caching
 
         Args:
             channel_id: Channel ID
@@ -62,6 +65,52 @@ class ChatbotService:
             top_k=3
         )
 
+        # Debug logging
+        logger.info(f"📊 Found {len(relevant_segments)} relevant segments")
+        if relevant_segments:
+            logger.info(f"📚 Videos: {[s['video_title'] for s in relevant_segments]}")
+            relevance_pcts = [f"{s['relevance']:.2%}" for s in relevant_segments]
+            logger.info(f"🎯 Relevance scores: {relevance_pcts}")
+        else:
+            logger.warning(f"⚠️ No relevant segments found for query: {user_message[:100]}")
+
+        # Extract video IDs for cache key
+        video_ids = [seg['video_id'] for seg in relevant_segments]
+
+        # Check cache first
+        cached_response = self.cache_manager.get_cached_response(
+            user_message,
+            video_ids
+        )
+
+        if cached_response:
+            logger.info(f"Using cached chatbot response (age={cached_response['cache_age_hours']:.1f}h)")
+
+            # Still save to history for conversation tracking
+            with get_db() as db:
+                history_entry = GeminiChatHistory(
+                    channel_id=channel_id,
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_response=cached_response['response'],
+                    cited_videos=cached_response['cited_videos']
+                )
+                db.add(history_entry)
+                db.commit()
+
+            return {
+                'response': cached_response['response'],
+                'cited_videos': cached_response['cited_videos'],
+                'session_id': session_id,
+                'relevance_scores': cached_response['relevance_scores'],
+                'cached': True,
+                'cache_age_hours': cached_response['cache_age_hours'],
+                'hit_count': cached_response['hit_count']
+            }
+
+        # Cache miss - generate new response
+        logger.info(f"Generating new chatbot response with LLM")
+
         # Get conversation history
         conversation_context = self._get_conversation_history(
             channel_id, session_id, limit=3
@@ -74,8 +123,16 @@ class ChatbotService:
             conversation_context
         )
 
-        # Generate response
-        response_text = self.gemini.generate_content(prompt)
+        # Generate response using unified LLM client
+        llm_response = self.llm.generate(
+            prompt=prompt,
+            max_tokens=1000,
+            temperature=0.7
+        )
+        response_text = llm_response["text"]
+        backend_used = llm_response["backend"]
+
+        logger.info(f"✅ Chatbot response generated using {backend_used} backend")
 
         # Extract cited videos
         cited_videos = [
@@ -87,6 +144,18 @@ class ChatbotService:
             }
             for seg in relevant_segments
         ]
+
+        # Extract relevance scores
+        relevance_scores = [s['relevance'] for s in relevant_segments]
+
+        # Store in cache
+        self.cache_manager.store_response(
+            user_message,
+            video_ids,
+            response_text,
+            cited_videos,
+            relevance_scores
+        )
 
         # Save to history
         with get_db() as db:
@@ -104,7 +173,10 @@ class ChatbotService:
             'response': response_text,
             'cited_videos': cited_videos,
             'session_id': session_id,
-            'relevance_scores': [s['relevance'] for s in relevant_segments]
+            'relevance_scores': relevance_scores,
+            'cached': False,
+            'backend': backend_used,
+            'tokens_used': llm_response.get('tokens_used', 0)
         }
 
     def _build_prompt(
@@ -130,14 +202,16 @@ class ChatbotService:
 
         prompt = f"""
 Você é um assistente teológico especializado em sermões desta igreja.
-Responda a pergunta do usuário baseando-se APENAS nos sermões fornecidos abaixo.
+Responda a pergunta do usuário baseando-se nos sermões fornecidos abaixo como contexto principal.
 
 REGRAS:
-1. Cite o sermão específico ao responder (use o título fornecido)
-2. Se a informação não estiver nos sermões, diga "Não encontrei isso nos sermões disponíveis"
-3. Seja conciso mas informativo
-4. Use linguagem pastoral e respeitosa
-5. Quando relevante, conecte diferentes sermões
+1. Cite o sermão específico ao responder (use o título fornecido entre colchetes)
+2. Use os trechos fornecidos como base principal para sua resposta
+3. Se não encontrar informação direta, ofereça contexto relacionado dos sermões disponíveis
+4. Quando os sermões não cobrem o tema, seja honesto: "Nos sermões disponíveis, não encontrei referência direta a [tema], mas temas relacionados incluem..."
+5. Seja conciso mas informativo (máximo 3-4 parágrafos)
+6. Use linguagem pastoral e respeitosa
+7. Quando relevante, conecte insights de diferentes sermões
 
 SERMÕES RELEVANTES:
 {context_text}
