@@ -12,16 +12,30 @@ logger = logging.getLogger(__name__)
 
 SUMMARY_PROMPT_TEMPLATE = """Você é um assistente especializado em analisar sermões cristãos.
 
-Sua tarefa é criar um resumo narrativo do sermão abaixo, focando no conteúdo teológico e mensagem principal.
+Crie um resumo estruturado do sermão abaixo em formato de tópicos (bullets).
 
-O resumo deve ter 3-4 parágrafos e incluir:
-1. **Tema Central**: Qual é o tema principal do sermão?
-2. **Texto Bíblico**: Qual(is) texto(s) bíblico(s) foram usados como base?
-3. **Pontos Principais**: Quais foram os principais pontos desenvolvidos pelo pregador?
-4. **Aplicação Prática**: Qual aplicação prática foi sugerida para os ouvintes?
+Organize o resumo nas seguintes seções usando bullets:
+
+## 📖 Tema Central
+- [Uma linha descrevendo o tema principal do sermão]
+
+## 📕 Texto(s) Bíblico(s)
+- [Liste as passagens bíblicas principais usadas como base]
+- [Adicione mais se houver múltiplas passagens]
+
+## 💡 Pontos Principais
+- [Primeiro ponto principal desenvolvido]
+- [Segundo ponto principal]
+- [Terceiro ponto principal]
+- [Adicione mais conforme necessário]
+
+## ✨ Aplicação Prática
+- [Principal aplicação prática sugerida pelo pregador]
+- [Outras aplicações relevantes se houver]
 
 IMPORTANTE:
-- Escreva de forma clara e objetiva
+- Use formato de bullets (lista de pontos)
+- Seja conciso e objetivo em cada ponto
 - Use linguagem acessível (evite jargão teológico complexo)
 - Foque no conteúdo do sermão, não na forma de apresentação
 - NÃO mencione avisos, músicas ou elementos externos ao sermão
@@ -29,7 +43,7 @@ IMPORTANTE:
 TRANSCRIÇÃO DO SERMÃO:
 {transcript}
 
-RESUMO (3-4 parágrafos):"""
+RESUMO EM BULLETS:"""
 
 
 def generate_ai_summary(
@@ -78,10 +92,10 @@ def generate_ai_summary(
         # Check if it's a quota error (429)
         if "429" in error_str or "quota" in error_str.lower():
             logger.warning(f"Gemini API quota exhausted for summary generation: {e}")
-            return "Resumo não disponível - cota da API Gemini atingida (reprocesse após 24h)"
+            return "Resumo temporariamente indisponível (limite de API atingido)"
         else:
             logger.error(f"Failed to generate AI summary: {e}", exc_info=True)
-            return f"Erro ao gerar resumo: {str(e)}"
+            return "Erro ao gerar resumo (tente novamente mais tarde)"
 
 
 def generate_short_summary(full_summary: str, max_length: int = 200) -> str:

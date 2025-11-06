@@ -19,6 +19,12 @@ from app.ai.embedding_service import EmbeddingService
 from app.ai.sermon_detector import detect_sermon_start
 from app.common.database import get_db
 from app.common.models import Job, Video, Transcript
+from app.worker.sse_broadcaster import (
+    broadcast_queued,
+    broadcast_processing,
+    broadcast_processed,
+    broadcast_failed
+)
 
 # Configure logging
 logging.basicConfig(
@@ -89,6 +95,10 @@ def process_transcription_job(job_data: dict):
     logger.info(f"Processing job {job_id}: {url}")
 
     try:
+        # Broadcast QUEUED status (if video_id is known)
+        if video_id:
+            broadcast_queued(video_id, "Iniciando processamento")
+
         # Update job status to running
         with get_db() as db:
             job = db.query(Job).filter(Job.id == job_id).first()
@@ -114,15 +124,21 @@ def process_transcription_job(job_data: dict):
         # Step 1: Extract metadata
         update_job_progress(job_id, "1", "running", "Extraindo informações do vídeo")
         logger.info(f"Step 1/5: Extracting video metadata")
+        if video_id:
+            broadcast_processing(video_id, "Extraindo informações do vídeo", 10)
         time.sleep(1)  # Simulate some work
 
         # Step 2: Validate duration
         update_job_progress(job_id, "2", "running", "Validando duração do vídeo")
         logger.info(f"Step 2/5: Validating video duration")
+        if video_id:
+            broadcast_processing(video_id, "Validando duração do vídeo", 20)
 
         # Step 3: Transcribe video
         update_job_progress(job_id, "3", "running", "Obtendo transcrição (pode demorar alguns minutos)")
         logger.info(f"Step 3/5: Transcribing video {url}")
+        if video_id:
+            broadcast_processing(video_id, "Obtendo transcrição", 30)
         transcription_result = transcription_service.process_video(url, channel_id)
 
         if not transcription_result["success"]:
@@ -130,10 +146,12 @@ def process_transcription_job(job_data: dict):
 
         video_id = transcription_result["video_id"]
         logger.info(f"Transcription completed. Video ID: {video_id}")
+        broadcast_processing(video_id, "Transcrição concluída", 50)
 
         # Step 4: Detect sermon start time
         update_job_progress(job_id, "4", "running", "Detectando início do sermão")
         logger.info(f"Step 4/6: Detecting sermon start time for video {video_id}")
+        broadcast_processing(video_id, "Detectando início do sermão", 60)
         try:
             with get_db() as db:
                 video = db.query(Video).filter(Video.id == video_id).first()
@@ -156,6 +174,7 @@ def process_transcription_job(job_data: dict):
         # Step 5: Advanced Analytics
         update_job_progress(job_id, "5", "running", "Executando análise avançada com IA")
         logger.info(f"Step 5/6: Running advanced analytics for video {video_id}")
+        broadcast_processing(video_id, "Executando análise avançada com IA", 70)
         analytics_result = advanced_analytics_service.analyze_video(video_id)
 
         if not analytics_result.get("success"):
@@ -171,6 +190,7 @@ def process_transcription_job(job_data: dict):
         # Step 6: Generate embeddings for chatbot
         update_job_progress(job_id, "6", "running", "Gerando embeddings para chatbot")
         logger.info(f"Step 6/6: Generating embeddings")
+        broadcast_processing(video_id, "Gerando embeddings para chatbot", 90)
         try:
             embedding_service.generate_embeddings_for_video(video_id)
             logger.info("Embeddings generated successfully")

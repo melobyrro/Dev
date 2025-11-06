@@ -3,7 +3,9 @@ Advanced Analytics Service (V2)
 Orchestrates all analytics components and generates comprehensive sermon reports
 """
 import logging
-from typing import Dict, List
+import hashlib
+import os
+from typing import Dict, List, Optional
 from datetime import datetime
 
 from app.common.database import get_db
@@ -26,6 +28,9 @@ from app.worker.sensitivity_analyzer import SensitivityAnalyzer
 from app.worker.ai_summarizer import generate_ai_summary, extract_speaker_name
 
 logger = logging.getLogger(__name__)
+
+# Feature flags from environment
+ENABLE_ANALYTICS_CACHE = os.getenv("ENABLE_ANALYTICS_CACHE", "true").lower() == "true"
 
 
 class AdvancedAnalyticsService:
@@ -61,7 +66,61 @@ class AdvancedAnalyticsService:
         self.question_generator = QuestionGenerator(self.gemini)
         self.sensitivity_analyzer = SensitivityAnalyzer()
 
+        # Cache statistics
+        self.cache_hits = 0
+        self.cache_misses = 0
+
         logger.info("Advanced analytics service initialized with all components")
+
+    @staticmethod
+    def _hash_transcript(text: str) -> str:
+        """
+        Generate SHA-256 hash of transcript text for cache validation
+
+        Args:
+            text: Transcript text
+
+        Returns:
+            Hexadecimal hash string
+        """
+        return hashlib.sha256(text.encode('utf-8')).hexdigest()
+
+    def _check_analytics_cache(self, video_id: int, transcript_hash: str) -> bool:
+        """
+        Check if analytics already exist and are valid for this transcript
+
+        Args:
+            video_id: Video ID
+            transcript_hash: SHA-256 hash of transcript text
+
+        Returns:
+            True if valid cached analytics exist, False otherwise
+        """
+        if not ENABLE_ANALYTICS_CACHE:
+            return False
+
+        with get_db() as db:
+            # Check if report exists
+            report = db.query(SermonReport).filter(
+                SermonReport.video_id == video_id
+            ).first()
+
+            if not report:
+                logger.info(f"No cached analytics for video {video_id}")
+                return False
+
+            # Check if transcript has changed
+            video = db.query(Video).filter(Video.id == video_id).first()
+            if not video or not hasattr(video, 'transcript_hash') or video.transcript_hash != transcript_hash:
+                logger.info(f"Transcript changed for video {video_id}, invalidating cache")
+                return False
+
+            # Update last_accessed timestamp
+            report.last_accessed = datetime.utcnow()
+            db.commit()
+
+            logger.info(f"Valid cached analytics found for video {video_id}")
+            return True
 
     def analyze_video(self, video_id: int) -> Dict:
         """
