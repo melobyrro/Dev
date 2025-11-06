@@ -1,0 +1,7 @@
+{
+  "worker": "Backend",
+  "terminal": "backend-terminal",
+  "workdir": ".orchestrator/backend",
+  "allowed_tools": ["run", "ref"],
+  "responsibilities": ["API development", "Database operations", "Server-side logic"]
+}

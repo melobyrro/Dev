@@ -1,0 +1,7 @@
+{
+  "worker": "UI",
+  "terminal": "ui-terminal",
+  "workdir": ".orchestrator/ui",
+  "allowed_tools": ["browser-use"],
+  "responsibilities": ["Frontend development", "UI/UX changes", "Component work"]
+}
