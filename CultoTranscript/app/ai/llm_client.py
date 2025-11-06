@@ -152,7 +152,8 @@ class LLMClient:
         """
         full_prompt = f"{system_instruction}\n\n{prompt}" if system_instruction else prompt
 
-        logger.info(f"🔵 Calling Gemini API - model: {self.gemini_model_name}, prompt_length: {len(full_prompt)}, max_tokens: {max_tokens}, temp: {temperature}")
+        gemini_model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        logger.info(f"🔵 Calling Gemini API - model: {gemini_model}, prompt_length: {len(full_prompt)}, max_tokens: {max_tokens}, temp: {temperature}")
         logger.debug(f"Prompt preview: {full_prompt[:200]}...")
 
         response = self.gemini_model.generate_content(
