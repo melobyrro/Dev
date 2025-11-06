@@ -85,6 +85,37 @@
     border-radius: 4px;
     font-size: 0.9rem;
 }
+
+/* Biblical References Styling */
+.biblical-references {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.bible-ref {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+    color: white;
+    cursor: help;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.bible-ref:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.bible-ref-citation {
+    background: #3498db; /* Blue for citations */
+}
+
+.bible-ref-mention {
+    background: #f39c12; /* Orange for mentions */
+}
 .book-list {
     list-style: none;
     padding: 0;
@@ -200,27 +231,34 @@
             <button id="editSpeakerBtn" class="btn btn-secondary" style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; font-size: 0.85rem;" onclick="toggleSpeakerEdit()">✏️</button>
         </p>
         <div id="speakerEditContainer" style="display: none; position: relative;">
-            <input type="text" id="speakerInput" class="transcript-editor" style="min-height: auto; height: 2.5rem; width: 100%; padding: 0.5rem;" placeholder="Digite o nome do pregador..." value="{{ video.speaker if video.speaker else '' }}" />
-            <div id="speakerSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none;"></div>
+            <div style="display: flex; gap: 0.5rem; align-items: stretch;">
+                <div style="flex: 1; position: relative;">
+                    <input type="text" id="speakerInput" class="transcript-editor" style="min-height: auto; height: 2.75rem; width: 100%; padding: 0.5rem; margin: 0; border: 2px solid #3498db; border-radius: 6px;" placeholder="Digite o nome do pregador..." value="{{ video.speaker if video.speaker else '' }}" />
+                    <div id="speakerSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; margin-top: 0.25rem;"></div>
+                </div>
+                <button class="btn" onclick="saveSpeaker()" style="height: 2.75rem; padding: 0 1.25rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">💾 Salvar</button>
+                <button class="btn btn-secondary" onclick="cancelSpeakerEdit()" style="height: 2.75rem; padding: 0 1rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">❌</button>
+            </div>
             <div style="margin-top: 0.5rem;">
-                <button class="btn" onclick="saveSpeaker()" style="padding: 0.3rem 0.8rem; font-size: 0.9rem;">💾 Salvar</button>
-                <button class="btn btn-secondary" onclick="cancelSpeakerEdit()" style="margin-left: 0.5rem; padding: 0.3rem 0.8rem; font-size: 0.9rem;">❌ Cancelar</button>
-                <span id="speakerSaveStatus" style="margin-left: 1rem;"></span>
+                <span id="speakerSaveStatus"></span>
             </div>
         </div>
     </div>
 
-    <!-- Temas Identificados -->
+    <!-- Referências Bíblicas -->
     <div class="analytics-card">
-        <h3>🏷️ Temas Identificados</h3>
-        {% if themes %}
-        <div>
-            {% for theme in themes %}
-            <span class="theme-tag">{{ theme.tag }} ({{ "%.1f"|format(theme.score) }})</span>
+        <h3>📖 Referências Bíblicas</h3>
+        {% if biblical_passages %}
+        <div class="biblical-references">
+            {% for passage in biblical_passages %}
+            <span class="bible-ref bible-ref-{{ passage.type }}"
+                  title="{{ passage.book }} {{ passage.chapter }}:{{ passage.verse_start }}{% if passage.verse_end %}-{{ passage.verse_end }}{% endif %} ({{ 'citação' if passage.type == 'citation' else 'menção' }})">
+                {{ passage.book }} {{ passage.chapter }}{% if passage.verse_start %}:{{ passage.verse_start }}{% endif %}{% if passage.verse_end and passage.verse_end != passage.verse_start %}-{{ passage.verse_end }}{% endif %}
+            </span>
             {% endfor %}
         </div>
         {% else %}
-        <p>Nenhum tema identificado</p>
+        <p>Nenhuma referência bíblica detectada</p>
         {% endif %}
     </div>
 </div>
@@ -406,6 +444,33 @@ function toggleSpeakerEdit() {
     editBtn.style.display = 'none';
     editContainer.style.display = 'block';
     input.focus();
+
+    // Show popular speakers immediately on focus
+    loadPopularSpeakers();
+}
+
+async function loadPopularSpeakers() {
+    const input = document.getElementById('speakerInput');
+    const suggestions = document.getElementById('speakerSuggestions');
+
+    try {
+        const response = await fetch('/api/speakers/autocomplete?limit=3');
+        const data = await response.json();
+
+        if (data.suggestions && data.suggestions.length > 0) {
+            suggestions.innerHTML = data.suggestions.map(s =>
+                `<div style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #eee;"
+                      onmouseover="this.style.background='#f0f0f0'"
+                      onmouseout="this.style.background='white'"
+                      onclick="selectSpeaker('${s.name.replace(/'/g, "\\'")}')">${s.name} <small style="color: #666;">(${s.video_count} vídeos)</small></div>`
+            ).join('');
+            suggestions.style.display = 'block';
+        } else {
+            suggestions.style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error loading popular speakers:', error);
+    }
 }
 
 function cancelSpeakerEdit() {
@@ -456,21 +521,46 @@ async function saveSpeaker() {
     }
 }
 
-// Autocomplete for speaker input
+// Autocomplete for speaker input with focus handler
 let speakerDebounceTimer;
+
+// Clear 'desconhecido' on focus and show popular speakers
+document.getElementById('speakerInput')?.addEventListener('focus', function(e) {
+    const input = e.target;
+    const value = input.value.trim().toLowerCase();
+
+    // Clear 'desconhecido' or 'não identificado' on focus
+    if (value === 'desconhecido' || value === 'não identificado' || value === '') {
+        input.value = '';
+    }
+
+    // Show popular speakers if input is empty
+    if (input.value.trim() === '') {
+        loadPopularSpeakers();
+    }
+});
+
 document.getElementById('speakerInput')?.addEventListener('input', async function(e) {
     clearTimeout(speakerDebounceTimer);
     const query = e.target.value.trim();
     const suggestions = document.getElementById('speakerSuggestions');
 
-    if (query.length < 2) {
-        suggestions.style.display = 'none';
+    // If empty query, show popular speakers immediately
+    if (query.length === 0) {
+        loadPopularSpeakers();
         return;
     }
 
+    // For queries < 2 chars, still show popular speakers
+    if (query.length < 2) {
+        loadPopularSpeakers();
+        return;
+    }
+
+    // For longer queries, search with debouncing
     speakerDebounceTimer = setTimeout(async () => {
         try {
-            const response = await fetch(`/api/speakers/autocomplete?q=${encodeURIComponent(query)}`);
+            const response = await fetch(`/api/speakers/autocomplete?q=${encodeURIComponent(query)}&limit=10`);
             const data = await response.json();
 
             if (data.suggestions && data.suggestions.length > 0) {

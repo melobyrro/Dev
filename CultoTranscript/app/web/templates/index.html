@@ -293,6 +293,38 @@
     font-size: 0.9rem;
     border: 1px solid var(--border);
 }
+
+/* Biblical References Styling */
+.biblical-references {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.bible-ref {
+    display: inline-block;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.9em;
+    font-weight: 500;
+    color: white;
+    cursor: help;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.bible-ref:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+}
+
+.bible-ref-citation {
+    background: #3498db; /* Blue for citations */
+}
+
+.bible-ref-mention {
+    background: #f39c12; /* Orange for mentions */
+}
 .highlight-item, .question-item {
     background: var(--surface);
     padding: 1rem;
@@ -1078,13 +1110,14 @@ async function fetchAndDisplayTranscript(videoId, expansionRow) {
                                 </div>
                             </div>
                         </div>
-                        ${report.themes && report.themes.length > 0 ? `
+                        ${(report.biblical_content?.key_passages || []).length > 0 ? `
                             <div style="margin-top: 1rem;">
-                                <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;">🎯 Temas Identificados</h4>
-                                <div class="theme-list">
-                                    ${report.themes.map(t => `
-                                        <span class="theme-tag" title="Confiança: ${(t.score * 100).toFixed(0)}%">
-                                            ${t.theme}
+                                <h4 style="font-size: 0.95rem; margin-bottom: 0.5rem;">📖 Referências Bíblicas</h4>
+                                <div class="biblical-references">
+                                    ${(report.biblical_content?.key_passages || []).slice(0, 10).map(p => `
+                                        <span class="bible-ref bible-ref-${p.type}"
+                                              title="${p.book} ${p.chapter}:${p.verse_start}${p.verse_end ? '-' + p.verse_end : ''} (${p.type === 'citation' ? 'citação' : 'menção'})">
+                                            ${p.book} ${p.chapter}${p.verse_start ? ':' + p.verse_start : ''}${p.verse_end && p.verse_end !== p.verse_start ? '-' + p.verse_end : ''}
                                         </span>
                                     `).join('')}
                                 </div>
