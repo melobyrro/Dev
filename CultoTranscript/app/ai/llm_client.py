@@ -152,6 +152,9 @@ class LLMClient:
         """
         full_prompt = f"{system_instruction}\n\n{prompt}" if system_instruction else prompt
 
+        logger.info(f"🔵 Calling Gemini API - model: {self.gemini_model_name}, prompt_length: {len(full_prompt)}, max_tokens: {max_tokens}, temp: {temperature}")
+        logger.debug(f"Prompt preview: {full_prompt[:200]}...")
+
         response = self.gemini_model.generate_content(
             full_prompt,
             generation_config={
@@ -160,20 +163,33 @@ class LLMClient:
             }
         )
 
+        logger.info(f"✅ Gemini API response received")
+        logger.debug(f"Response structure - candidates: {len(response.candidates) if hasattr(response, 'candidates') and response.candidates else 0}")
+
         tokens_used = 0
         if hasattr(response, 'usage_metadata') and response.usage_metadata:
             tokens_used = response.usage_metadata.total_token_count
+            logger.debug(f"Tokens used: {tokens_used}")
 
         # Handle both simple and multi-part responses
         try:
             text = response.text
-        except ValueError:
+            logger.info(f"✅ Simple response.text accessed successfully - length: {len(text)}")
+        except ValueError as e:
+            logger.warning(f"⚠️ ValueError accessing response.text: {str(e)}")
             # Multi-part response - extract ALL text from ALL parts
             if response.candidates:
                 parts = response.candidates[0].content.parts
+                logger.info(f"📦 Extracting from {len(parts)} parts in multi-part response")
                 text = "".join(part.text for part in parts if hasattr(part, 'text'))
+                logger.info(f"✅ Extracted {len(text)} chars from parts")
             else:
+                logger.error("❌ No candidates in response!")
                 text = ""
+
+        logger.info(f"🎯 Final extracted text length: {len(text)} chars")
+        if len(text) < 200:
+            logger.warning(f"⚠️ Short response: '{text}'")
 
         return {
             "text": text,

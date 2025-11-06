@@ -1,10 +1,10 @@
 """
 AI Sermon Summarizer
-Generates narrative summaries of sermons using Gemini AI
+Generates narrative summaries of sermons using unified LLM client (Gemini or Ollama)
 """
 import logging
 from typing import Optional
-from app.ai.gemini_client import GeminiClient
+from app.ai.llm_client import get_llm_client
 from app.ai.sermon_detector import get_sermon_portion
 
 logger = logging.getLogger(__name__)
@@ -48,8 +48,7 @@ RESUMO EM BULLETS:"""
 
 def generate_ai_summary(
     transcript_text: str,
-    sermon_start_time: Optional[int],
-    gemini_client: GeminiClient
+    sermon_start_time: Optional[int] = None
 ) -> str:
     """
     Generate AI-powered narrative summary of a sermon
@@ -57,45 +56,59 @@ def generate_ai_summary(
     Args:
         transcript_text: Full transcript text
         sermon_start_time: Sermon start time in seconds (or None)
-        gemini_client: Initialized Gemini client
 
     Returns:
         AI-generated summary as plain text
     """
     try:
+        logger.info(f"📝 Starting AI summary generation - transcript_length: {len(transcript_text)}, sermon_start: {sermon_start_time}")
+
         # Extract sermon portion
         sermon_text = get_sermon_portion(transcript_text, sermon_start_time)
+        logger.info(f"✂️ Sermon portion extracted - length: {len(sermon_text)} chars")
+        logger.debug(f"Sermon text preview: {sermon_text[:300]}...")
 
         # Truncate if too long (max ~50,000 chars for context window)
         max_chars = 50000
         if len(sermon_text) > max_chars:
-            logger.warning(f"Sermon text too long ({len(sermon_text)} chars), truncating to {max_chars}")
+            logger.warning(f"⚠️ Sermon text too long ({len(sermon_text)} chars), truncating to {max_chars}")
             sermon_text = sermon_text[:max_chars]
+        else:
+            logger.info(f"✅ Sermon text fits within limit ({len(sermon_text)} chars)")
 
         # Generate prompt
         prompt = SUMMARY_PROMPT_TEMPLATE.format(transcript=sermon_text)
+        logger.info(f"📋 Prompt generated - total length: {len(prompt)} chars")
 
-        # Call Gemini
-        logger.info("Generating AI summary...")
-        summary = gemini_client.generate_content(prompt)
+        # Call unified LLM client
+        llm = get_llm_client()
+        logger.info("🤖 Generating AI summary with LLM...")
+        llm_response = llm.generate(
+            prompt=prompt,
+            max_tokens=2000,
+            temperature=0.7
+        )
+        summary = llm_response["text"]
+        backend_used = llm_response["backend"]
+
+        logger.info(f"📦 LLM response received - backend: {backend_used}, text_length: {len(summary)}")
+        logger.debug(f"Summary preview: {summary[:300] if summary else '(empty)'}...")
 
         # Validate output
         if not summary or len(summary.strip()) < 100:
-            logger.warning(f"Generated summary is too short ({len(summary)} chars)")
+            logger.warning(f"❌ Generated summary validation FAILED - length: {len(summary) if summary else 0} chars (minimum: 100)")
+            logger.warning(f"❌ Summary content: '{summary}'")
             return "Resumo não disponível - falha na geração"
 
-        logger.info(f"AI summary generated successfully ({len(summary)} chars)")
-        return summary.strip()
+        final_summary = summary.strip()
+        logger.info(f"✅ AI summary generated successfully using {backend_used} backend ({len(final_summary)} chars)")
+        logger.debug(f"Final summary preview: {final_summary[:200]}...")
+        return final_summary
 
     except Exception as e:
         error_str = str(e)
-        # Check if it's a quota error (429)
-        if "429" in error_str or "quota" in error_str.lower():
-            logger.warning(f"Gemini API quota exhausted for summary generation: {e}")
-            return "Resumo temporariamente indisponível (limite de API atingido)"
-        else:
-            logger.error(f"Failed to generate AI summary: {e}", exc_info=True)
-            return "Erro ao gerar resumo (tente novamente mais tarde)"
+        logger.error(f"❌ Failed to generate AI summary: {e}", exc_info=True)
+        return "Erro ao gerar resumo (tente novamente mais tarde)"
 
 
 def generate_short_summary(full_summary: str, max_length: int = 200) -> str:
@@ -144,15 +157,13 @@ RESPOSTA (apenas o nome):"""
 
 
 def extract_speaker_name(
-    transcript_text: str,
-    gemini_client: GeminiClient
+    transcript_text: str
 ) -> str:
     """
-    Extract the speaker/preacher name from sermon transcript using Gemini AI
+    Extract the speaker/preacher name from sermon transcript using LLM
 
     Args:
         transcript_text: Full transcript text
-        gemini_client: Initialized Gemini client
 
     Returns:
         Speaker name or "Desconhecido" if not found
@@ -164,9 +175,16 @@ def extract_speaker_name(
         # Generate prompt
         prompt = SPEAKER_EXTRACTION_PROMPT.format(transcript_sample=sample_text)
 
-        # Call Gemini
-        logger.info("Extracting speaker name with Gemini...")
-        response = gemini_client.generate_content(prompt)
+        # Call unified LLM client
+        llm = get_llm_client()
+        logger.info("Extracting speaker name with LLM...")
+        llm_response = llm.generate(
+            prompt=prompt,
+            max_tokens=100,
+            temperature=0.3
+        )
+        response = llm_response["text"]
+        backend_used = llm_response["backend"]
 
         # Clean up response
         speaker_name = response.strip()
@@ -184,15 +202,9 @@ def extract_speaker_name(
         # Capitalize properly
         speaker_name = ' '.join(word.capitalize() for word in speaker_name.split())
 
-        logger.info(f"Speaker name extracted: {speaker_name}")
+        logger.info(f"✅ Speaker name extracted using {backend_used} backend: {speaker_name}")
         return speaker_name
 
     except Exception as e:
-        error_str = str(e)
-        # Check if it's a quota error (429)
-        if "429" in error_str or "quota" in error_str.lower():
-            logger.warning(f"Gemini API quota exhausted for speaker extraction: {e}")
-        else:
-            logger.error(f"Failed to extract speaker name: {e}", exc_info=True)
-
+        logger.error(f"Failed to extract speaker name: {e}", exc_info=True)
         return "Desconhecido"
