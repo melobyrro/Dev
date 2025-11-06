@@ -24,11 +24,22 @@
                 <td class="px-4 py-3 text-sm text-secondary font-mono">{{ video.youtube_id }}</td>
                 <td class="px-4 py-3"><span class="status status-{{ video.status }}">{{ video.status }}</span></td>
                 <td class="px-4 py-3 text-sm text-secondary">{{ (video.duration_sec / 60)|int }} min</td>
-                <td class="px-4 py-3 text-sm text-secondary">{{ video.created_at.strftime('%m/%d/%Y') }}</td>
-                <td class="px-4 py-3">
-                    <a href="/?expand={{ video.id }}" class="inline-flex items-center px-3 py-1.5 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
-                        Ver
-                    </a>
+                <td class="px-4 py-3 text-sm">
+                    <div>{{ (video.video_created_at or video.published_at).strftime('%m/%d/%Y') }}</div>
+                    <div style="font-size: 0.75rem; color: #6b7280;">Adicionado: {{ (video.ingested_at or video.created_at).strftime('%m/%d/%Y') }}</div>
+                </td>
+                <td class="px-4 py-3" onclick="event.stopPropagation();">
+                    <a href="/?expand={{ video.id }}" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; background: #3498db; color: white; text-decoration: none; border-radius: 4px;">Ver</a>
+                    <button onclick="reprocessVideo({{ video.id }}, '{{ video.title.replace("'", "\\'") }}')"
+                            class="btn"
+                            style="padding: 0.3rem 0.6rem; font-size: 0.85rem; background: #f39c12; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 0.3rem;">
+                        Reprocessar
+                    </button>
+                    <button onclick="excludeVideo({{ video.id }}, '{{ video.title.replace("'", "\\'") }}')"
+                            class="btn"
+                            style="padding: 0.3rem 0.6rem; font-size: 0.85rem; background: #dc3545; color: white; border: none; border-radius: 4px; cursor: pointer; margin-left: 0.3rem;">
+                        Excluir
+                    </button>
                 </td>
             </tr>
             {% endfor %}
@@ -50,4 +61,114 @@
     </a>
     {% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let csrfToken = null;
+
+// Refresh CSRF token from server
+async function refreshCSRFToken() {
+    try {
+        const response = await fetch(`/api/videos?limit=1`);
+        const newToken = response.headers.get('X-CSRF-Token');
+        if (newToken) {
+            csrfToken = newToken;
+            return true;
+        }
+        console.warn('No CSRF token in response headers');
+        return false;
+    } catch (error) {
+        console.error('Failed to refresh CSRF token:', error);
+        return false;
+    }
+}
+
+// Reprocess video function
+async function reprocessVideo(videoId, title) {
+    // Refresh CSRF token before operation
+    if (!await refreshCSRFToken()) {
+        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
+        return;
+    }
+
+    // Prompt for password
+    const password = prompt(`Reprocessar vídeo "${title}"?\n\nEsta ação irá:\n- Re-executar detecção de início do sermão\n- Regenerar análise de IA e resumo\n- Atualizar todos os dados analíticos\n\nDigite a senha de admin para confirmar:`);
+
+    if (!password) {
+        return; // User cancelled
+    }
+
+    try {
+        const response = await fetch(`/api/videos/${videoId}/reprocess`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({ password: password })
+        });
+
+        const data = await response.json();
+
+        if (response.ok && data.success) {
+            alert(`Reprocessamento iniciado! O vídeo será reanalizado em alguns minutos.`);
+            // Reload page after a short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            alert(`Erro: ${data.detail || 'Falha ao iniciar reprocessamento'}`);
+        }
+    } catch (error) {
+        alert(`Erro ao reprocessar vídeo: ${error.message}`);
+    }
+}
+
+// Exclude video function (uses /exclude endpoint)
+async function excludeVideo(videoId, title) {
+    // Refresh CSRF token before operation
+    if (!await refreshCSRFToken()) {
+        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
+        return;
+    }
+
+    // Prompt for password
+    const password = prompt(`Excluir vídeo "${title}"?\n\nIsso irá remover permanentemente:\n- Vídeo\n- Transcrição\n- Todos os dados relacionados\n\nDigite a senha de admin para confirmar:`);
+
+    if (!password) {
+        return; // User cancelled
+    }
+
+    try {
+        const response = await fetch(`/api/videos/${videoId}/exclude`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({ password: password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert(`Vídeo excluído com sucesso!`);
+            // Reload page after a short delay
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            alert(`Erro ao excluir vídeo: ${data.detail || 'Erro desconhecido'}`);
+        }
+    } catch (error) {
+        alert(`Erro ao excluir vídeo: ${error.message}`);
+    }
+}
+
+// Initialize CSRF token on page load
+document.addEventListener('DOMContentLoaded', function() {
+    refreshCSRFToken();
+});
+</script>
 {% endblock %}

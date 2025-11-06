@@ -883,11 +883,6 @@ async function loadRecentVideos() {
                                                         style="padding: 0.3rem 0.6rem; font-size: 0.85rem; margin-left: 0.3rem; background: #dc3545;">
                                                     Excluir
                                                 </button>
-                                                <button onclick="deleteVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')"
-                                                        class="btn btn-secondary"
-                                                        style="padding: 0.3rem 0.6rem; font-size: 0.85rem; margin-left: 0.3rem;">
-                                                    Remover
-                                                </button>
                                             </td>
                                         </tr>
                                         <tr class="transcript-expansion" id="transcript-${v.id}">
@@ -1191,44 +1186,6 @@ async function excludeVideo(videoId, title) {
         }
     } catch (error) {
         alert(`Erro ao excluir vídeo: ${error.message}`);
-    }
-}
-
-// Delete video function
-async function deleteVideo(videoId, title) {
-    // Refresh CSRF token before operation
-    if (!await refreshCSRFToken()) {
-        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
-        return;
-    }
-
-    // Prompt for password
-    const password = prompt(`Remover vídeo "${title}"?\n\nIsso irá remover permanentemente:\n- Vídeo\n- Transcrição\n- Todos os dados relacionados\n\nDigite a senha de admin para confirmar:`);
-
-    if (!password) {
-        return; // User cancelled
-    }
-
-    try {
-        const response = await fetch(`/api/videos/${videoId}`, {
-            method: 'DELETE',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRF-Token': csrfToken
-            },
-            body: JSON.stringify({ password: password })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            alert(`Vídeo removido com sucesso!`);
-            loadRecentVideos();
-        } else {
-            alert(`Erro ao remover vídeo: ${data.detail || 'Erro desconhecido'}`);
-        }
-    } catch (error) {
-        alert(`Erro ao remover vídeo: ${error.message}`);
     }
 }
 
