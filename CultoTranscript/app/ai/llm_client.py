@@ -168,8 +168,12 @@ class LLMClient:
         try:
             text = response.text
         except ValueError:
-            # Multi-part response - extract text from parts
-            text = "".join(part.text for part in response.parts if hasattr(part, 'text'))
+            # Multi-part response - extract ALL text from ALL parts
+            if response.candidates:
+                parts = response.candidates[0].content.parts
+                text = "".join(part.text for part in parts if hasattr(part, 'text'))
+            else:
+                text = ""
 
         return {
             "text": text,
