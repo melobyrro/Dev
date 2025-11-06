@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir -r requirements-web.txt
 
 # Copy application code
 COPY app/ /app/app/
+COPY Backend/ /app/Backend/
 COPY migrations/ /app/migrations/
 
 # Expose port
