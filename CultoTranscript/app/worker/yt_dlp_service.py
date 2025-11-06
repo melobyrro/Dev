@@ -8,6 +8,7 @@ import tempfile
 from typing import Optional, Dict, Any, Tuple
 from datetime import datetime
 import logging
+import html
 
 logger = logging.getLogger(__name__)
 
@@ -176,6 +177,9 @@ class YtDlpService:
 
             # Remove VTT tags like <c>, <v>, <i>, etc.
             line = re.sub(r'<[^>]+>', '', line)
+
+            # Decode HTML entities (YouTube encodes special chars in VTT)
+            line = html.unescape(line)
 
             # Remove common sound annotations [Música], [Aplausos], etc.
             line = re.sub(r'\[.*?\]', '', line)

@@ -2,6 +2,7 @@
 YouTube transcript extraction using youtube-transcript-api (fallback method)
 """
 import logging
+import html
 from typing import Optional, List
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import (
@@ -83,7 +84,7 @@ class TranscriptApiService:
         Returns:
             Concatenated text string
         """
-        text_segments = [segment.get('text', '').strip() for segment in transcript_data]
+        text_segments = [html.unescape(segment.get('text', '')).strip() for segment in transcript_data]
         return ' '.join(text_segments)
 
     @staticmethod
