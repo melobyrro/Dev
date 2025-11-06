@@ -13,23 +13,23 @@
                 extend: {
                     colors: {
                         primary: {
-                            DEFAULT: '#667eea',
-                            dark: '#5568d3',
-                            light: '#7c8feb',
+                            DEFAULT: '#0F766E',  // Teal
+                            dark: '#115E59',
+                            light: '#14B8A6',
                         },
-                        secondary: '#0ea5e9',
+                        accent: '#2563EB',      // Blue
                         success: '#10b981',
-                        warning: '#f59e0b',
-                        error: '#ef4444',
+                        warning: '#D97706',
+                        error: '#B91C1C',
                         background: {
-                            page: '#0f172a',      // Slate-900 - Main background
-                            surface: '#1e293b',   // Slate-800 - Elevated surface
-                            elevated: '#334155',  // Slate-700 - Cards
+                            page: '#F5F5F4',      // Stone
+                            surface: '#FFFFFF',    // White
+                            muted: '#E7E5E4',     // Light stone
                         },
                         text: {
-                            primary: 'rgba(255, 255, 255, 0.95)',
-                            secondary: 'rgba(255, 255, 255, 0.70)',
-                            tertiary: 'rgba(255, 255, 255, 0.50)',
+                            primary: '#1C1917',   // Dark stone
+                            secondary: '#6B7280', // Gray
+                            tertiary: '#9CA3AF',  // Light gray
                         }
                     },
                     fontFamily: {
@@ -44,7 +44,41 @@
     </script>
 
     <style>
-        /* === GLASSMORPHISM & DARK THEME === */
+        /* === CSS VARIABLES FOR THEME SWITCHING === */
+        :root {
+            --bg: #F8FAFC;
+            --surface: #FFFFFF;
+            --muted: #F1F5F9;
+            --text: #0F172A;
+            --text-muted: #475569;
+            --text-tertiary: #94A3B8;
+            --primary: #0EA5E9;
+            --primary-dark: #0284C7;
+            --primary-light: #38BDF8;
+            --accent: #3B82F6;
+            --border: #E2E8F0;
+            --shadow: rgba(15, 23, 42, 0.08);
+        }
+
+        [data-theme="dark"] {
+            --bg: #0F172A;
+            --surface: #1E293B;
+            --muted: #334155;
+            --text: #F8FAFC;
+            --text-muted: #CBD5E1;
+            --text-tertiary: #94A3B8;
+            --primary: #38BDF8;
+            --primary-dark: #0EA5E9;
+            --primary-light: #7DD3FC;
+            --accent: #60A5FA;
+            --border: #334155;
+            --shadow: rgba(0, 0, 0, 0.3);
+        }
+
+        /* === THEME TRANSITIONS === */
+        * {
+            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+        }
 
         /* Smooth font rendering */
         html {
@@ -52,80 +86,56 @@
             -moz-osx-font-smoothing: grayscale;
         }
 
-        /* Navigation underline animation */
-        nav a {
-            position: relative;
+        body {
+            background: var(--bg);
+            color: var(--text);
         }
 
-        nav a::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-            width: 0;
-            height: 2px;
-            background: white;
-            transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        nav a:hover::after {
-            width: 100%;
-        }
-
-        /* === GLASSMORPHISM CARDS === */
+        /* === CARDS === */
         .card {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(12px) saturate(180%);
-            -webkit-backdrop-filter: blur(12px) saturate(180%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow:
-                0 8px 32px rgba(0, 0, 0, 0.25),
-                0 2px 8px rgba(0, 0, 0, 0.15),
-                inset 0 1px 0 rgba(255, 255, 255, 0.08);
-            border-radius: 16px;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px var(--shadow);
+            transition: all 0.2s ease;
+            padding: 1.5rem;
         }
 
         .card:hover {
             transform: translateY(-2px);
-            box-shadow:
-                0 12px 48px rgba(0, 0, 0, 0.3),
-                0 4px 12px rgba(0, 0, 0, 0.2),
-                inset 0 1px 0 rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.08);
+            box-shadow: 0 4px 12px var(--shadow);
         }
 
-        /* === TABLES WITH GLASSMORPHISM === */
+        /* === TABLES === */
         table {
-            background: rgba(255, 255, 255, 0.03);
-            backdrop-filter: blur(10px);
-            -webkit-backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 1px 3px var(--shadow);
         }
 
         table thead {
-            background: rgba(255, 255, 255, 0.05);
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            background: var(--muted);
+            border-bottom: 1px solid var(--border);
         }
 
         table th {
-            color: rgba(255, 255, 255, 0.70);
+            color: var(--text-muted);
             font-weight: 600;
             text-transform: uppercase;
             letter-spacing: 0.05em;
-            font-size: 0.75rem;
+            font-size: 0.875rem;
+            padding: 0.75rem 1rem;
         }
 
         table tbody tr {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            transition: background 0.2s ease;
+            border-bottom: 1px solid var(--border);
+            transition: background-color 0.2s ease;
         }
 
         table tbody tr:hover {
-            background: rgba(255, 255, 255, 0.05);
+            background: var(--muted);
         }
 
         table tbody tr:last-child {
@@ -133,93 +143,208 @@
         }
 
         table td {
-            color: rgba(255, 255, 255, 0.95);
+            color: var(--text);
+            padding: 0.75rem 1rem;
+            line-height: 1.5;
         }
 
-        /* === STATUS BADGES (DARK THEME) === */
+        /* === STATUS BADGES === */
         .status {
-            @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-medium;
+            display: inline-flex;
+            align-items: center;
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
         }
 
         .status-completed {
-            background: rgba(16, 185, 129, 0.15);
-            color: #6ee7b7;
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background: #D1FAE5;
+            color: #065F46;
+            border: 1px solid #A7F3D0;
+        }
+
+        [data-theme="dark"] .status-completed {
+            background: #065F46;
+            color: #D1FAE5;
+            border: 1px solid #047857;
         }
 
         .status-processing,
         .status-running {
-            background: rgba(245, 158, 11, 0.15);
-            color: #fbbf24;
-            border: 1px solid rgba(245, 158, 11, 0.3);
+            background: #DBEAFE;
+            color: #1E40AF;
+            border: 1px solid #BFDBFE;
+        }
+
+        [data-theme="dark"] .status-processing,
+        [data-theme="dark"] .status-running {
+            background: #1E40AF;
+            color: #DBEAFE;
+            border: 1px solid #1D4ED8;
         }
 
         .status-failed {
-            background: rgba(239, 68, 68, 0.15);
-            color: #fca5a5;
-            border: 1px solid rgba(239, 68, 68, 0.3);
+            background: #FEE2E2;
+            color: #991B1B;
+            border: 1px solid #FECACA;
+        }
+
+        [data-theme="dark"] .status-failed {
+            background: #991B1B;
+            color: #FEE2E2;
+            border: 1px solid #B91C1C;
         }
 
         .status-too_long,
         .status-pending {
-            background: rgba(156, 163, 175, 0.15);
-            color: #d1d5db;
-            border: 1px solid rgba(156, 163, 175, 0.3);
+            background: #E5E7EB;
+            color: #4B5563;
+            border: 1px solid #D1D5DB;
+        }
+
+        [data-theme="dark"] .status-too_long,
+        [data-theme="dark"] .status-pending {
+            background: #4B5563;
+            color: #E5E7EB;
+            border: 1px solid #6B7280;
         }
 
         .status-queued {
-            background: rgba(59, 130, 246, 0.15);
-            color: #93c5fd;
-            border: 1px solid rgba(59, 130, 246, 0.3);
+            background: #DBEAFE;
+            color: #1E40AF;
+            border: 1px solid #BFDBFE;
+        }
+
+        [data-theme="dark"] .status-queued {
+            background: #1E40AF;
+            color: #DBEAFE;
+            border: 1px solid #1D4ED8;
         }
 
         /* === HEADING COLORS === */
         h1, h2, h3, h4, h5, h6 {
-            color: rgba(255, 255, 255, 0.95);
+            color: var(--text);
         }
 
         /* === TEXT HIERARCHY === */
         .text-secondary {
-            color: rgba(255, 255, 255, 0.70);
+            color: var(--text-muted);
         }
 
         .text-tertiary {
-            color: rgba(255, 255, 255, 0.50);
+            color: var(--text-tertiary);
         }
 
-        /* === BUTTONS DARK THEME === */
+        /* === BUTTONS === */
         .btn {
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+            box-shadow: 0 2px 8px var(--shadow);
         }
 
         .btn:hover {
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            box-shadow: 0 4px 12px var(--shadow);
+        }
+
+        /* === NAVIGATION LINKS === */
+        .nav-link {
+            position: relative;
+            transition: color 0.2s ease;
+        }
+
+        .nav-link:hover {
+            color: var(--primary) !important;
         }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body class="antialiased" style="background-color: #0f172a; color: rgba(255, 255, 255, 0.95);">
-    <header class="bg-gradient-to-br from-primary to-primary-dark text-white py-4 mb-8 shadow-md">
-        <div class="max-w-7xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-6">
-            <h1 class="text-xl font-semibold tracking-tight">CultoTranscript</h1>
-            <nav class="flex items-center flex-wrap justify-center gap-6">
-                <a href="/" class="text-white/90 hover:text-white no-underline font-medium text-sm transition-colors duration-150">Início</a>
-                <a href="/videos" class="text-white/90 hover:text-white no-underline font-medium text-sm transition-colors duration-150">Sermões</a>
-                <a href="/reports" class="text-white/90 hover:text-white no-underline font-medium text-sm transition-colors duration-150">Relatórios</a>
-                {% if user %}
-                <a href="/admin/import" class="text-white/90 hover:text-white no-underline font-medium text-sm transition-colors duration-150">Importar</a>
-                <a href="/admin/schedule" class="text-white/90 hover:text-white no-underline font-medium text-sm transition-colors duration-150">Configuração</a>
-                <a href="/logout" class="text-white/90 hover:text-white no-underline font-medium text-sm transition-colors duration-150">Sair (Admin)</a>
-                {% else %}
-                <a href="/login" class="text-white/90 hover:text-white no-underline font-medium text-sm transition-colors duration-150">Admin</a>
-                {% endif %}
-            </nav>
+<body class="antialiased" style="background-color: var(--bg); color: var(--text);">
+    <header class="sticky top-0 z-50" style="background: var(--surface); border-bottom: 1px solid var(--border); box-shadow: 0 1px 3px var(--shadow);">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <!-- Logo -->
+                <h1 class="text-2xl font-bold" style="color: var(--primary);">CultoTranscript</h1>
+
+                <!-- Navigation -->
+                <nav class="flex items-center gap-6">
+                    <a href="/" class="nav-link" style="color: var(--text);">Início</a>
+                    <a href="/videos" class="nav-link" style="color: var(--text);">Sermões</a>
+                    <a href="/reports" class="nav-link" style="color: var(--text);">Relatórios</a>
+                    {% if user %}
+                    <a href="/admin/import" class="nav-link" style="color: var(--text);">Importar</a>
+                    <a href="/admin/schedule" class="nav-link" style="color: var(--text);">Configuração</a>
+                    <a href="/logout" class="nav-link" style="color: var(--text);">Sair (Admin)</a>
+                    {% else %}
+                    <a href="/login" class="nav-link" style="color: var(--text);">Admin</a>
+                    {% endif %}
+
+                    <!-- Theme Toggle Button -->
+                    <button id="theme-toggle" style="padding: 0.5rem; border-radius: 0.5rem; background: var(--muted); color: var(--text); transition: all 0.2s ease; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                        <svg id="theme-icon-sun" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="5"></circle>
+                            <line x1="12" y1="1" x2="12" y2="3"></line>
+                            <line x1="12" y1="21" x2="12" y2="23"></line>
+                            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                            <line x1="1" y1="12" x2="3" y2="12"></line>
+                            <line x1="21" y1="12" x2="23" y2="12"></line>
+                            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                        </svg>
+                        <svg id="theme-icon-moon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: none;">
+                            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                        </svg>
+                    </button>
+                </nav>
+            </div>
         </div>
     </header>
 
     <div class="max-w-7xl mx-auto px-6">
         {% block content %}{% endblock %}
     </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const themeToggle = document.getElementById('theme-toggle');
+            const sunIcon = document.getElementById('theme-icon-sun');
+            const moonIcon = document.getElementById('theme-icon-moon');
+
+            // Get saved theme from localStorage or system preference
+            const savedTheme = localStorage.getItem('theme');
+            const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+            const currentTheme = savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+            // Apply initial theme
+            if (currentTheme === 'dark') {
+                document.documentElement.setAttribute('data-theme', 'dark');
+                sunIcon.style.display = 'none';
+                moonIcon.style.display = 'block';
+            } else {
+                document.documentElement.removeAttribute('data-theme');
+                sunIcon.style.display = 'block';
+                moonIcon.style.display = 'none';
+            }
+
+            // Toggle theme on button click
+            themeToggle.addEventListener('click', () => {
+                const isDark = document.documentElement.hasAttribute('data-theme');
+
+                if (isDark) {
+                    // Switch to light
+                    document.documentElement.removeAttribute('data-theme');
+                    sunIcon.style.display = 'block';
+                    moonIcon.style.display = 'none';
+                    localStorage.setItem('theme', 'light');
+                } else {
+                    // Switch to dark
+                    document.documentElement.setAttribute('data-theme', 'dark');
+                    sunIcon.style.display = 'none';
+                    moonIcon.style.display = 'block';
+                    localStorage.setItem('theme', 'dark');
+                }
+            });
+        });
+    </script>
 
     {% block extra_js %}{% endblock %}
 </body>
