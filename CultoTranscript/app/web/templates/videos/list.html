@@ -5,15 +5,118 @@
 {% block content %}
 <h1 class="text-2xl font-semibold mb-6 tracking-tight">Vídeos</h1>
 
+<!-- Filter Form -->
+<form method="GET" action="/videos" class="mb-6" style="background: #f8f9fa; padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+        <!-- Search by title -->
+        <div>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Buscar Título</label>
+            <input type="text" name="search" value="{{ current_search }}"
+                   placeholder="Digite para buscar..."
+                   style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+        </div>
+
+        <!-- Speaker filter -->
+        <div>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Pregador</label>
+            <select name="speaker" style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+                <option value="">Todos os pregadores</option>
+                {% for spk in speakers %}
+                <option value="{{ spk.name }}" {% if current_speaker == spk.name %}selected{% endif %}>
+                    {{ spk.name }} ({{ spk.video_count }})
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+
+        <!-- Status filter -->
+        <div>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Status</label>
+            <select name="status" style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+                <option value="">Todos os status</option>
+                <option value="completed" {% if current_status == "completed" %}selected{% endif %}>Completo</option>
+                <option value="processing" {% if current_status == "processing" %}selected{% endif %}>Processando</option>
+                <option value="failed" {% if current_status == "failed" %}selected{% endif %}>Falhou</option>
+                <option value="pending" {% if current_status == "pending" %}selected{% endif %}>Pendente</option>
+                <option value="too_long" {% if current_status == "too_long" %}selected{% endif %}>Muito Longo</option>
+                <option value="skipped" {% if current_status == "skipped" %}selected{% endif %}>Ignorado</option>
+            </select>
+        </div>
+
+        <!-- Date range -->
+        <div>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Data Início</label>
+            <input type="date" name="date_start" value="{{ current_date_start }}"
+                   style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+        </div>
+
+        <div>
+            <label style="display: block; margin-bottom: 0.25rem; font-size: 0.875rem; color: #4b5563;">Data Fim</label>
+            <input type="date" name="date_end" value="{{ current_date_end }}"
+                   style="width: 100%; padding: 0.5rem; border: 1px solid #d1d5db; border-radius: 4px;">
+        </div>
+    </div>
+
+    <div style="display: flex; gap: 0.5rem;">
+        <button type="submit" style="padding: 0.5rem 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+            Filtrar
+        </button>
+        <a href="/videos" style="padding: 0.5rem 1.5rem; background: #6b7280; color: white; text-decoration: none; border-radius: 4px; display: inline-block;">
+            Limpar Filtros
+        </a>
+    </div>
+</form>
+
 <div class="overflow-hidden">
     <table class="w-full">
-        <thead>
+        <thead class="bg-secondary text-primary">
             <tr>
-                <th class="px-4 py-3 text-left">Título</th>
+                <th class="px-4 py-3 text-left">
+                    <a href="/videos?sort=title&order={% if current_sort == 'title' and current_order == 'asc' %}desc{% else %}asc{% endif %}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}"
+                       style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
+                        Título
+                        {% if current_sort == "title" %}
+                            <span>{% if current_order == "asc" %}▲{% else %}▼{% endif %}</span>
+                        {% endif %}
+                    </a>
+                </th>
                 <th class="px-4 py-3 text-left">YouTube ID</th>
-                <th class="px-4 py-3 text-left">Status</th>
-                <th class="px-4 py-3 text-left">Duração</th>
-                <th class="px-4 py-3 text-left">Data</th>
+                <th class="px-4 py-3 text-left">
+                    <a href="/videos?sort=speaker&order={% if current_sort == 'speaker' and current_order == 'asc' %}desc{% else %}asc{% endif %}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}"
+                       style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
+                        Pregador
+                        {% if current_sort == "speaker" %}
+                            <span>{% if current_order == "asc" %}▲{% else %}▼{% endif %}</span>
+                        {% endif %}
+                    </a>
+                </th>
+                <th class="px-4 py-3 text-left">
+                    <a href="/videos?sort=status&order={% if current_sort == 'status' and current_order == 'asc' %}desc{% else %}asc{% endif %}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}"
+                       style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
+                        Status
+                        {% if current_sort == "status" %}
+                            <span>{% if current_order == "asc" %}▲{% else %}▼{% endif %}</span>
+                        {% endif %}
+                    </a>
+                </th>
+                <th class="px-4 py-3 text-left">
+                    <a href="/videos?sort=duration_sec&order={% if current_sort == 'duration_sec' and current_order == 'asc' %}desc{% else %}asc{% endif %}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}"
+                       style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
+                        Duração
+                        {% if current_sort == "duration_sec" %}
+                            <span>{% if current_order == "asc" %}▲{% else %}▼{% endif %}</span>
+                        {% endif %}
+                    </a>
+                </th>
+                <th class="px-4 py-3 text-left">
+                    <a href="/videos?sort=published_at&order={% if current_sort == 'published_at' and current_order == 'asc' %}desc{% else %}asc{% endif %}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}"
+                       style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
+                        Data
+                        {% if current_sort == "published_at" %}
+                            <span>{% if current_order == "asc" %}▲{% else %}▼{% endif %}</span>
+                        {% endif %}
+                    </a>
+                </th>
                 <th class="px-4 py-3 text-left">Ações</th>
             </tr>
         </thead>
@@ -22,6 +125,41 @@
             <tr>
                 <td class="px-4 py-3 text-sm">{{ video.title }}</td>
                 <td class="px-4 py-3 text-sm text-secondary font-mono">{{ video.youtube_id }}</td>
+                <!-- Speaker column with inline editor -->
+                <td class="px-4 py-3 text-sm">
+                    <div id="speaker-display-{{ video.id }}" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <span id="speaker-text-{{ video.id }}" style="color: #374151;">
+                            {{ video.speaker or "Não definido" }}
+                        </span>
+                        <button onclick="toggleSpeakerEdit({{ video.id }})"
+                                style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 0.25rem;">
+                            <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div id="speaker-edit-{{ video.id }}" style="display: none;">
+                        <div style="display: flex; gap: 0.25rem; position: relative;">
+                            <input type="text"
+                                   id="speaker-input-{{ video.id }}"
+                                   value="{{ video.speaker or '' }}"
+                                   oninput="handleSpeakerInput({{ video.id }}, this.value)"
+                                   placeholder="Digite o nome do pregador..."
+                                   style="flex: 1; padding: 0.25rem 0.5rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.875rem;">
+                            <button onclick="saveSpeaker({{ video.id }})"
+                                    style="padding: 0.25rem 0.5rem; background: #10b981; color: white; border: none; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+                                Salvar
+                            </button>
+                            <button onclick="cancelSpeakerEdit({{ video.id }}, '{{ video.speaker or '' }}')"
+                                    style="padding: 0.25rem 0.5rem; background: #6b7280; color: white; border: none; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
+                                Cancelar
+                            </button>
+                        </div>
+                        <div id="speaker-suggestions-{{ video.id }}"
+                             style="position: absolute; background: white; border: 1px solid #d1d5db; border-radius: 4px; margin-top: 0.25rem; max-height: 200px; overflow-y: auto; z-index: 10; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                        </div>
+                    </div>
+                </td>
                 <td class="px-4 py-3"><span class="status status-{{ video.status }}">{{ video.status }}</span></td>
                 <td class="px-4 py-3 text-sm text-secondary">{{ (video.duration_sec / 60)|int }} min</td>
                 <td class="px-4 py-3 text-sm">
@@ -50,13 +188,13 @@
 <!-- Pagination -->
 <div class="mt-6 flex items-center justify-center gap-4">
     {% if page > 1 %}
-    <a href="/videos?page={{ page - 1 }}" class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
+    <a href="/videos?page={{ page - 1 }}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}&sort={{ current_sort }}&order={{ current_order }}" class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
         Anterior
     </a>
     {% endif %}
     <span class="text-sm text-secondary">Página {{ page }} de {{ pages }}</span>
     {% if page < pages %}
-    <a href="/videos?page={{ page + 1 }}" class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
+    <a href="/videos?page={{ page + 1 }}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}&sort={{ current_sort }}&order={{ current_order }}" class="inline-flex items-center px-4 py-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium rounded-md transition-all duration-200">
         Próxima
     </a>
     {% endif %}
@@ -164,6 +302,129 @@ async function excludeVideo(videoId, title) {
     } catch (error) {
         alert(`Erro ao excluir vídeo: ${error.message}`);
     }
+}
+
+// Toggle speaker edit mode
+function toggleSpeakerEdit(videoId) {
+    const displayDiv = document.getElementById(`speaker-display-${videoId}`);
+    const editDiv = document.getElementById(`speaker-edit-${videoId}`);
+
+    displayDiv.style.display = 'none';
+    editDiv.style.display = 'block';
+
+    // Focus the input
+    const input = document.getElementById(`speaker-input-${videoId}`);
+    input.focus();
+}
+
+// Cancel speaker edit
+function cancelSpeakerEdit(videoId, originalValue) {
+    const displayDiv = document.getElementById(`speaker-display-${videoId}`);
+    const editDiv = document.getElementById(`speaker-edit-${videoId}`);
+    const input = document.getElementById(`speaker-input-${videoId}`);
+    const suggestionsDiv = document.getElementById(`speaker-suggestions-${videoId}`);
+
+    // Reset to original value
+    input.value = originalValue;
+
+    // Hide edit mode
+    editDiv.style.display = 'none';
+    displayDiv.style.display = 'flex';
+
+    // Hide suggestions
+    suggestionsDiv.style.display = 'none';
+}
+
+// Save speaker
+async function saveSpeaker(videoId) {
+    const input = document.getElementById(`speaker-input-${videoId}`);
+    const newSpeaker = input.value.trim();
+
+    if (!csrfToken) {
+        await refreshCSRFToken();
+    }
+
+    try {
+        const response = await fetch(`/api/videos/${videoId}/speaker`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({ speaker: newSpeaker })
+        });
+
+        if (response.ok) {
+            // Update display text
+            const textSpan = document.getElementById(`speaker-text-${videoId}`);
+            textSpan.textContent = newSpeaker || "Não definido";
+
+            // Hide edit mode
+            const displayDiv = document.getElementById(`speaker-display-${videoId}`);
+            const editDiv = document.getElementById(`speaker-edit-${videoId}`);
+            editDiv.style.display = 'none';
+            displayDiv.style.display = 'flex';
+
+            // Hide suggestions
+            const suggestionsDiv = document.getElementById(`speaker-suggestions-${videoId}`);
+            suggestionsDiv.style.display = 'none';
+
+            console.log('Speaker updated successfully');
+        } else {
+            alert('Erro ao salvar pregador. Tente novamente.');
+        }
+    } catch (error) {
+        console.error('Error saving speaker:', error);
+        alert('Erro ao salvar pregador. Tente novamente.');
+    }
+}
+
+// Debounce timer for autocomplete
+let speakerDebounceTimer = null;
+
+// Handle speaker input with autocomplete
+async function handleSpeakerInput(videoId, value) {
+    clearTimeout(speakerDebounceTimer);
+
+    const suggestionsDiv = document.getElementById(`speaker-suggestions-${videoId}`);
+
+    if (value.length < 2) {
+        suggestionsDiv.style.display = 'none';
+        return;
+    }
+
+    speakerDebounceTimer = setTimeout(async () => {
+        try {
+            const response = await fetch(`/api/speakers/autocomplete?q=${encodeURIComponent(value)}`);
+            const data = await response.json();
+
+            if (data.speakers && data.speakers.length > 0) {
+                suggestionsDiv.innerHTML = data.speakers.map(speaker => `
+                    <div onclick="selectSpeaker(${videoId}, '${speaker.name.replace(/'/g, "\\'")}')"
+                         style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #e5e7eb;"
+                         onmouseover="this.style.background='#f3f4f6'"
+                         onmouseout="this.style.background='white'">
+                        <div style="font-weight: 500;">${speaker.name}</div>
+                        <div style="font-size: 0.75rem; color: #6b7280;">${speaker.video_count} vídeos</div>
+                    </div>
+                `).join('');
+                suggestionsDiv.style.display = 'block';
+            } else {
+                suggestionsDiv.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Error fetching speaker suggestions:', error);
+        }
+    }, 300);
+}
+
+// Select speaker from autocomplete
+function selectSpeaker(videoId, name) {
+    const input = document.getElementById(`speaker-input-${videoId}`);
+    const suggestionsDiv = document.getElementById(`speaker-suggestions-${videoId}`);
+
+    input.value = name;
+    suggestionsDiv.style.display = 'none';
 }
 
 // Initialize CSRF token on page load
