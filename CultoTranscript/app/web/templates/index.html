@@ -144,16 +144,17 @@
     transform: rotate(-90deg);
 }
 .date-content {
-    max-height: 2000px;
-    overflow: hidden;
+    max-height: none;
+    overflow: visible;
     transition: max-height 0.3s ease;
 }
 .date-content.collapsed {
     max-height: 0;
+    overflow: hidden;
 }
 .month-controls {
     padding: 0.75rem 1rem;
-    background: var(--muted);
+    background: transparent;
     border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: flex-end;
@@ -851,8 +852,8 @@ async function loadRecentVideos() {
                         </div>
                         <div class="date-content">
                             <div class="month-controls">
-                                <button onclick="collapseAllVideosInMonth('${dateKey}')">▼ Expandir Todos</button>
-                                <button onclick="expandAllVideosInMonth('${dateKey}')">▲ Recolher Todos</button>
+                                <button onclick="expandAllVideosInMonth('${dateKey}')">▼ Expandir Todos</button>
+                                <button onclick="collapseAllVideosInMonth('${dateKey}')">▲ Recolher Todos</button>
                             </div>
                             <table>
                                 <thead>
