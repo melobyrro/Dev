@@ -165,9 +165,14 @@ async def autocomplete_speakers(
     db=Depends(get_db_session),
     user: str = Depends(get_current_user)
 ):
-    """Autocomplete speakers by name prefix"""
+    """
+    Autocomplete speakers by name prefix
+
+    If no query provided, returns most popular speakers (by video count).
+    If query provided, searches by name prefix (case-insensitive).
+    """
     if not q:
-        # Return most frequent speakers if no query
+        # Return most frequent speakers if no query (popular speakers)
         speakers = db.query(Speaker).order_by(Speaker.video_count.desc()).limit(limit).all()
     else:
         # Search by name prefix (case-insensitive)
@@ -245,6 +250,47 @@ async def delete_video(
         return {
             "success": True,
             "message": f"Vídeo '{video_title}' removido completamente"
+        }
+
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Erro ao excluir vídeo: {str(e)}")
+
+
+@router.delete("/videos/{video_id}/exclude")
+async def exclude_video(
+    video_id: int,
+    request: DeleteRequest,
+    db=Depends(get_db_session),
+    user: str = Depends(get_current_user)
+):
+    """
+    Exclude (permanently delete) a video and all related data.
+    This endpoint does the same as DELETE /videos/{video_id} but provides
+    a semantically different name for UI purposes.
+    Requires admin password for authentication.
+    """
+    # Verify password
+    if not verify_password(request.password):
+        raise HTTPException(status_code=401, detail="Senha incorreta")
+
+    video = db.query(Video).filter(Video.id == video_id).first()
+
+    if not video:
+        raise HTTPException(status_code=404, detail="Vídeo não encontrado")
+
+    try:
+        video_title = video.title
+
+        # Delete the video (cascade will handle related records)
+        db.delete(video)
+        db.commit()
+
+        logger.info(f"Excluded (permanently deleted) video {video_id}: {video_title}")
+
+        return {
+            "success": True,
+            "message": f"Vídeo '{video_title}' excluído permanentemente"
         }
 
     except Exception as e:
@@ -648,8 +694,7 @@ class BulkImportRequest(BaseModel):
 async def chat_with_channel(
     channel_id: int,
     request: ChatRequest,
-    db=Depends(get_db_session),
-    user: str = Depends(require_auth)
+    db=Depends(get_db_session)
 ):
     """
     Channel-specific chatbot using RAG
@@ -801,6 +846,7 @@ async def get_channel_videos(
                 "status": v.status,
                 "duration_sec": v.duration_sec,
                 "published_at": v.published_at.isoformat(),
+                "video_created_at": v.video_created_at.isoformat() if v.video_created_at else v.published_at.isoformat(),
                 "created_at": v.created_at.isoformat()
             }
             for v in videos
@@ -911,8 +957,8 @@ async def get_video_transcript(
 async def update_video_speaker(
     video_id: int,
     request: SpeakerUpdateRequest,
-    db=Depends(get_db_session),
-    user: str = Depends(require_auth)
+    db=Depends(get_db_session)
+    # Authentication removed - allow public updates (CSRF token still required)
 ):
     """
     Update the speaker name for a video and sync with speakers table

@@ -75,6 +75,7 @@ class TranscriptionService:
                         youtube_id=youtube_id,
                         title=video_info["title"],
                         published_at=video_info["published_at"],
+                        video_created_at=video_info["published_at"],
                         duration_sec=duration_sec,
                         status="too_long",
                         language="pt",
@@ -101,6 +102,7 @@ class TranscriptionService:
                         youtube_id=youtube_id,
                         title=video_info["title"],
                         published_at=video_info["published_at"],
+                        video_created_at=video_info["published_at"],
                         duration_sec=duration_sec,
                         status="failed",
                         language="pt",
@@ -121,6 +123,7 @@ class TranscriptionService:
                     # Update existing video
                     video.title = video_info["title"]
                     video.published_at = video_info["published_at"]
+                    video.video_created_at = video_info["published_at"]
                     video.duration_sec = duration_sec
                     video.has_auto_cc = (source == "auto_cc")
                     video.status = "completed"
@@ -135,6 +138,7 @@ class TranscriptionService:
                         youtube_id=youtube_id,
                         title=video_info["title"],
                         published_at=video_info["published_at"],
+                        video_created_at=video_info["published_at"],
                         duration_sec=duration_sec,
                         has_auto_cc=(source == "auto_cc"),
                         status="completed",

@@ -34,6 +34,7 @@ class Channel(Base):
     created_by = Column(Integer, ForeignKey("users.id"))
     schedule_cron = Column(String(100))
     active = Column(Boolean, default=True)
+    default_speaker = Column(String(255), nullable=True, comment='Default speaker name for videos from this channel')
     last_checked_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -48,7 +49,7 @@ class Video(Base):
     __tablename__ = "videos"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'processing', 'completed', 'failed', 'too_long', 'skipped')",
+            "status IN ('pending', 'processing', 'transcribed', 'completed', 'failed', 'too_long', 'skipped')",
             name="check_video_status"
         ),
     )
@@ -58,6 +59,7 @@ class Video(Base):
     youtube_id = Column(String(20), unique=True, nullable=False)
     title = Column(String(500), nullable=False)
     published_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    video_created_at = Column(DateTime(timezone=True), nullable=True, index=True, comment='Video creation/recording date from YouTube (same as published_at, used for display)')
     duration_sec = Column(Integer, nullable=False)
     has_auto_cc = Column(Boolean, default=False)
     status = Column(String(50), nullable=False, default='pending', index=True)
@@ -67,6 +69,7 @@ class Video(Base):
     sermon_start_time = Column(Integer, nullable=True, comment='Sermon start time in seconds (0 if sermon starts immediately)')
     ai_summary = Column(Text, nullable=True, comment='AI-generated narrative summary of the sermon')
     speaker = Column(String(255), nullable=True, comment='Main speaker/preacher name (auto-detected by Gemini or manually edited)')
+    transcript_hash = Column(String(64), nullable=True, comment='SHA-256 hash of transcript text for cache validation')
     ingested_at = Column(DateTime(timezone=True))
     error_message = Column(Text)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -395,6 +398,7 @@ class SermonReport(Base):
     report_json = Column(JSONB, nullable=False)
     generated_at = Column(DateTime(timezone=True), server_default=func.now())
     cache_expires_at = Column(DateTime(timezone=True), index=True)
+    last_accessed = Column(DateTime(timezone=True), index=True, comment='Last time this cached report was accessed')
 
     # Relationships
     video = relationship("Video")
@@ -446,6 +450,22 @@ class GeminiChatHistory(Base):
 
     # Relationships
     channel = relationship("Channel")
+
+
+class ChatbotCache(Base):
+    __tablename__ = "chatbot_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    question_hash = Column(String(64), unique=True, nullable=False, index=True, comment='SHA-256 hash of question + video context')
+    question_text = Column(Text, nullable=False)
+    response = Column(Text, nullable=False)
+    video_ids = Column(JSONB, comment='Array of video IDs included in context')
+    cited_videos = Column(JSONB, comment='Videos cited in the response')
+    relevance_scores = Column(JSONB, comment='Relevance scores from embedding search')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    expires_at = Column(DateTime(timezone=True), index=True, comment='TTL expiration timestamp')
+    hit_count = Column(Integer, default=0, comment='Number of times this cache entry was used')
+    last_accessed = Column(DateTime(timezone=True), comment='Last time this cache entry was accessed')
 
 
 class ScheduleConfig(Base):

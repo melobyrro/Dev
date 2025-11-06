@@ -812,7 +812,7 @@ let csrfToken = null;
 // Refresh CSRF token from server
 async function refreshCSRFToken() {
     try {
-        const response = await fetch(`/api/channels/${CHANNEL_ID}/videos?limit=1`);
+        const response = await fetch(`/api/videos?limit=1`);
         const newToken = response.headers.get('X-CSRF-Token');
         if (newToken) {
             csrfToken = newToken;
@@ -878,10 +878,15 @@ async function loadRecentVideos() {
                                                         style="padding: 0.3rem 0.6rem; font-size: 0.85rem; background: #f39c12;">
                                                     Reprocessar
                                                 </button>
+                                                <button onclick="excludeVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')"
+                                                        class="btn btn-secondary"
+                                                        style="padding: 0.3rem 0.6rem; font-size: 0.85rem; margin-left: 0.3rem; background: #dc3545;">
+                                                    Excluir
+                                                </button>
                                                 <button onclick="deleteVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')"
                                                         class="btn btn-secondary"
                                                         style="padding: 0.3rem 0.6rem; font-size: 0.85rem; margin-left: 0.3rem;">
-                                                    Excluir
+                                                    Remover
                                                 </button>
                                             </td>
                                         </tr>
@@ -928,12 +933,14 @@ async function loadRecentVideos() {
     }
 }
 
-// Group videos by year and month using YouTube published date
+// Group videos by year and month using video_created_at (with fallback to published_at)
 function groupVideosByDate(videos) {
     const grouped = {};
 
     videos.forEach(video => {
-        const date = new Date(video.published_at);
+        // Use video_created_at if available, otherwise fall back to published_at
+        const dateStr = video.video_created_at || video.published_at;
+        const date = new Date(dateStr);
         // Group by YYYY-MM format
         const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 
@@ -943,17 +950,23 @@ function groupVideosByDate(videos) {
         grouped[key].push(video);
     });
 
-    // Sort videos within each group by published date (newest first)
+    // Sort videos within each group by video_created_at (newest first)
     Object.keys(grouped).forEach(key => {
-        grouped[key].sort((a, b) => new Date(b.published_at) - new Date(a.published_at));
+        grouped[key].sort((a, b) => {
+            const dateA = new Date(a.video_created_at || a.published_at);
+            const dateB = new Date(b.video_created_at || b.published_at);
+            return dateB - dateA;
+        });
     });
 
     return grouped;
 }
 
-// Format video title with published date prefix (mm/dd/yyyy format)
+// Format video title with video creation date prefix (mm/dd/yyyy format)
 function formatVideoTitle(video) {
-    const date = new Date(video.published_at);
+    // Use video_created_at if available, otherwise fall back to published_at
+    const dateStr = video.video_created_at || video.published_at;
+    const date = new Date(dateStr);
     const day = String(date.getDate()).padStart(2, '0');
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const year = date.getFullYear();
@@ -1143,8 +1156,8 @@ async function reprocessVideo(videoId, title) {
     }
 }
 
-// Delete video function
-async function deleteVideo(videoId, title) {
+// Exclude video function (uses /exclude endpoint)
+async function excludeVideo(videoId, title) {
     // Refresh CSRF token before operation
     if (!await refreshCSRFToken()) {
         alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
@@ -1159,7 +1172,7 @@ async function deleteVideo(videoId, title) {
     }
 
     try {
-        const response = await fetch(`/api/videos/${videoId}`, {
+        const response = await fetch(`/api/videos/${videoId}/exclude`, {
             method: 'DELETE',
             headers: {
                 'Content-Type': 'application/json',
@@ -1178,6 +1191,44 @@ async function deleteVideo(videoId, title) {
         }
     } catch (error) {
         alert(`Erro ao excluir vídeo: ${error.message}`);
+    }
+}
+
+// Delete video function
+async function deleteVideo(videoId, title) {
+    // Refresh CSRF token before operation
+    if (!await refreshCSRFToken()) {
+        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
+        return;
+    }
+
+    // Prompt for password
+    const password = prompt(`Remover vídeo "${title}"?\n\nIsso irá remover permanentemente:\n- Vídeo\n- Transcrição\n- Todos os dados relacionados\n\nDigite a senha de admin para confirmar:`);
+
+    if (!password) {
+        return; // User cancelled
+    }
+
+    try {
+        const response = await fetch(`/api/videos/${videoId}`, {
+            method: 'DELETE',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({ password: password })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            alert(`Vídeo removido com sucesso!`);
+            loadRecentVideos();
+        } else {
+            alert(`Erro ao remover vídeo: ${data.detail || 'Erro desconhecido'}`);
+        }
+    } catch (error) {
+        alert(`Erro ao remover vídeo: ${error.message}`);
     }
 }
 
@@ -1543,7 +1594,7 @@ async function sendChatMessage() {
                     const score = data.relevance_scores && data.relevance_scores[idx]
                         ? `(${(data.relevance_scores[idx] * 100).toFixed(0)}%)`
                         : '';
-                    citationsHtml += `<span class="chat-citation">${video.title} ${score}</span>`;
+                    citationsHtml += `<span class="chat-citation">${video.video_title} ${score}</span>`;
                 });
                 citationsHtml += '</div>';
             }
@@ -1735,6 +1786,7 @@ async function saveSpeaker(videoId) {
                 'Content-Type': 'application/json',
                 'X-CSRF-Token': csrfToken
             },
+            credentials: 'include',
             body: JSON.stringify({ speaker: speaker })
         });
 
@@ -1742,6 +1794,14 @@ async function saveSpeaker(videoId) {
         if (!response.ok) {
             const errorText = await response.text();
             console.error('Server error:', response.status, errorText);
+
+            // Handle authentication error specifically
+            if (response.status === 401) {
+                alert('Sessão expirada. Por favor, faça login novamente.');
+                window.location.href = '/login';
+                return;
+            }
+
             alert(`Erro ao salvar pregador (${response.status}). Por favor, tente novamente.`);
             return;
         }
@@ -1814,21 +1874,16 @@ async function handleSpeakerInput(videoId, value) {
 
     const trimmedValue = (value || '').trim();
 
-    // Only hide if exactly 1 character (waiting for more input)
-    // Allow 0 characters (show popular) and 2+ characters (search)
-    if (trimmedValue.length === 1) {
-        suggestionsDiv.style.display = 'none';
-        return;
-    }
+    // Allow 0 characters (popular speakers) and 1+ characters (search)
+    // No minimum length restriction - let the API handle filtering
 
-    // No debounce for empty query (show popular immediately)
-    // Regular debounce for typed queries
-    const debounceDelay = trimmedValue.length === 0 ? 0 : 300;
+    // Optimized debounce: 0ms for empty (popular immediately), 150ms for 1 char, 300ms for 2+
+    const debounceDelay = trimmedValue.length === 0 ? 0 : (trimmedValue.length === 1 ? 150 : 300);
 
     speakerDebounceTimers[videoId] = setTimeout(async () => {
         try {
-            // Empty query gets popular speakers, typed query gets filtered results
-            const query = trimmedValue.length >= 2 ? encodeURIComponent(trimmedValue) : '';
+            // Empty query gets popular speakers, any typed query gets filtered results
+            const query = trimmedValue.length >= 1 ? encodeURIComponent(trimmedValue) : '';
             const response = await fetch(`/api/speakers/autocomplete?q=${query}&limit=5`);
             const data = await response.json();
 
