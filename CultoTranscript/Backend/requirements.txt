@@ -1,0 +1,17 @@
+# Backend Worker - Phase 1 Requirements
+# SSE Endpoint and API v2 dependencies
+
+# Core FastAPI (should already be installed)
+fastapi>=0.104.0
+pydantic>=2.4.0
+uvicorn[standard]>=0.24.0
+
+# SSE Support
+sse-starlette==1.6.5
+
+# Async support
+asyncio-mqtt>=0.16.1  # If using MQTT for worker communication (optional)
+
+# For existing app compatibility
+starlette>=0.27.0
+python-multipart>=0.0.6

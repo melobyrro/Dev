@@ -28,3 +28,6 @@ numpy==1.24.3
 pydantic==2.5.0
 pydantic-settings==2.1.0
 yt-dlp==2023.11.16
+
+# SSE (Server-Sent Events)
+sse-starlette==1.6.5
