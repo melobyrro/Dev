@@ -809,6 +809,22 @@
 const CHANNEL_ID = {{ channel.id if channel else 'null' }};
 let csrfToken = null;
 
+// Refresh CSRF token from server
+async function refreshCSRFToken() {
+    try {
+        const response = await fetch(`/api/channels/${CHANNEL_ID}/videos?limit=1`);
+        const newToken = response.headers.get('X-CSRF-Token');
+        if (newToken) {
+            csrfToken = newToken;
+            return true;
+        }
+        console.warn('No CSRF token in response headers');
+        return false;
+    } catch (error) {
+        console.error('Failed to refresh CSRF token:', error);
+        return false;
+    }
+}
 
 // Load recent videos with date grouping
 async function loadRecentVideos() {
@@ -1059,6 +1075,12 @@ function collapseAllVideosInMonth(dateKey) {
 
 // Reprocess video function
 async function reprocessVideo(videoId, title) {
+    // Refresh CSRF token before operation
+    if (!await refreshCSRFToken()) {
+        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
+        return;
+    }
+
     // Prompt for password
     const password = prompt(`Reprocessar vídeo "${title}"?\n\nEsta ação irá:\n- Re-executar detecção de início do sermão\n- Regenerar análise de IA e resumo\n- Atualizar todos os dados analíticos\n\nDigite a senha de admin para confirmar:`);
 
@@ -1123,6 +1145,12 @@ async function reprocessVideo(videoId, title) {
 
 // Delete video function
 async function deleteVideo(videoId, title) {
+    // Refresh CSRF token before operation
+    if (!await refreshCSRFToken()) {
+        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
+        return;
+    }
+
     // Prompt for password
     const password = prompt(`Excluir vídeo "${title}"?\n\nIsso irá remover permanentemente:\n- Vídeo\n- Transcrição\n- Todos os dados relacionados\n\nDigite a senha de admin para confirmar:`);
 
@@ -1218,22 +1246,47 @@ async function fetchAndDisplayTranscript(videoId, expansionRow) {
                             </div>
                             <div class="meta-card">
                                 <strong>Pregador</strong>
-                                <div style="position: relative;">
-                                    <div style="display: flex; gap: 0.5rem; align-items: stretch;">
-                                        <div style="flex: 1; position: relative;">
-                                            <input type="text" id="speaker-${videoId}" value="${report.speaker || data.video_info.speaker || 'Desconhecido'}"
-                                                   style="height: 2.75rem; width: 100%; padding: 0.5rem; margin: 0; border: 2px solid #3498db; border-radius: 6px; background: #1e293b; color: white; font-size: 0.95rem;"
-                                                   oninput="handleSpeakerInput(${videoId}, this.value)"
-                                                   onfocus="handleSpeakerInput(${videoId}, this.value)">
+                                <div>
+                                    <!-- Display mode (default) -->
+                                    <span id="speaker-display-${videoId}" style="display: inline;">
+                                        ${report.speaker || data.video_info.speaker || 'Não identificado'}
+                                    </span>
+                                    <button onclick="toggleSpeakerEdit(${videoId})"
+                                            id="speaker-edit-btn-${videoId}"
+                                            style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; font-size: 0.85rem; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                        ✏️
+                                    </button>
+
+                                    <!-- Edit mode (hidden by default) -->
+                                    <div id="speaker-edit-container-${videoId}" style="display: none; margin-top: 0.5rem;">
+                                        <div style="display: flex; flex-direction: column; gap: 0.75rem;">
+                                            <!-- Input container (full width) -->
+                                            <div style="width: 100%; position: relative;">
+                                                <input type="text"
+                                                       id="speaker-${videoId}"
+                                                       value="${report.speaker || data.video_info.speaker || ''}"
+                                                       style="width: 100%; height: 2.75rem; padding: 0.5rem; margin: 0; border: 2px solid #3498db; border-radius: 6px; background: #1e293b; color: white; font-size: 0.95rem; box-sizing: border-box;"
+                                                       placeholder="Digite o nome do pregador..."
+                                                       oninput="handleSpeakerInput(${videoId}, this.value)"
+                                                       onfocus="handleSpeakerInput(${videoId}, this.value)">
+                                                <div id="speaker-suggestions-${videoId}"
+                                                     style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                                                </div>
+                                            </div>
+
+                                            <!-- Buttons row (centered below input) -->
+                                            <div style="display: flex; gap: 0.5rem; justify-content: center;">
+                                                <button onclick="saveSpeaker(${videoId})"
+                                                        style="height: 2.75rem; padding: 0 1.25rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
+                                                    💾 Salvar
+                                                </button>
+                                                <button onclick="cancelSpeakerEdit(${videoId})"
+                                                        style="height: 2.75rem; padding: 0 1rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
+                                                    ❌
+                                                </button>
+                                            </div>
                                         </div>
-                                        <button onclick="saveSpeaker(${videoId})" style="height: 2.75rem; padding: 0 1.25rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">
-                                            💾 Salvar
-                                        </button>
-                                        <button onclick="cancelSpeakerEdit(${videoId})" style="height: 2.75rem; padding: 0 1rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">
-                                            ❌
-                                        </button>
                                     </div>
-                                    <div id="speaker-suggestions-${videoId}" style="display: none; position: absolute; top: 100%; left: 0; right: 0; background: rgba(255, 255, 255, 0.98); border: 1px solid rgba(28, 25, 23, 0.15); border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; margin-top: 0.25rem; box-shadow: 0 2px 8px rgba(0,0,0,0.1);"></div>
                                 </div>
                             </div>
                         </div>
@@ -1421,6 +1474,12 @@ function refreshChat() {
 
 // Send chat message
 async function sendChatMessage() {
+    // Refresh CSRF token before operation
+    if (!await refreshCSRFToken()) {
+        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
+        return;
+    }
+
     const input = document.getElementById('chatInput');
     const sendBtn = document.getElementById('chatSendBtn');
     const messagesDiv = document.getElementById('chatMessages');
@@ -1610,13 +1669,62 @@ async function toggleFullTranscript(videoId) {
     }
 }
 
+// Toggle speaker edit mode
+function toggleSpeakerEdit(videoId) {
+    const displaySpan = document.getElementById(`speaker-display-${videoId}`);
+    const editBtn = document.getElementById(`speaker-edit-btn-${videoId}`);
+    const editContainer = document.getElementById(`speaker-edit-container-${videoId}`);
+    const input = document.getElementById(`speaker-${videoId}`);
+
+    // Toggle visibility
+    if (editContainer.style.display === 'none') {
+        // Enter edit mode
+        displaySpan.style.display = 'none';
+        editBtn.style.display = 'none';
+        editContainer.style.display = 'block';
+
+        // Store original value for cancel (before clearing)
+        input.dataset.originalValue = input.value;
+
+        // Clear "Desconhecido" or similar placeholder values
+        const clearValues = ['Desconhecido', 'desconhecido', 'Não identificado', 'não identificado', 'Desconhec'];
+        if (clearValues.some(val => input.value.includes(val))) {
+            input.value = '';
+        }
+
+        // Focus input and trigger autocomplete with empty value to show popular speakers
+        setTimeout(() => {
+            input.focus();
+            handleSpeakerInput(videoId, '');
+        }, 50);
+    } else {
+        // Exit edit mode (should not be called directly, use save/cancel)
+        displaySpan.style.display = 'inline';
+        editBtn.style.display = 'inline-block';
+        editContainer.style.display = 'none';
+    }
+}
+
 // Save speaker name
 async function saveSpeaker(videoId) {
+    // Refresh CSRF token before operation
+    if (!await refreshCSRFToken()) {
+        alert('Erro: Não foi possível validar a sessão. Por favor, recarregue a página.');
+        return;
+    }
+
     const input = document.getElementById(`speaker-${videoId}`);
     const speaker = input.value.trim();
 
     if (!speaker) {
         alert('Por favor, insira o nome do pregador');
+        return;
+    }
+
+    // Check if CSRF token exists
+    if (typeof csrfToken === 'undefined') {
+        console.error('CSRF token not found');
+        alert('Erro de autenticação. Por favor, recarregue a página.');
         return;
     }
 
@@ -1630,23 +1738,66 @@ async function saveSpeaker(videoId) {
             body: JSON.stringify({ speaker: speaker })
         });
 
+        // Check response status before parsing JSON
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Server error:', response.status, errorText);
+            alert(`Erro ao salvar pregador (${response.status}). Por favor, tente novamente.`);
+            return;
+        }
+
         const data = await response.json();
 
         if (data.success) {
-            // Show success feedback
-            const originalBg = input.style.background;
-            input.style.background = '#d4edda';
-            setTimeout(() => {
-                input.style.background = originalBg;
-            }, 1000);
+            // Update display
+            const displaySpan = document.getElementById(`speaker-display-${videoId}`);
+            const editBtn = document.getElementById(`speaker-edit-btn-${videoId}`);
+            const editContainer = document.getElementById(`speaker-edit-container-${videoId}`);
 
-            console.log('Speaker saved:', speaker);
+            if (displaySpan && editContainer) {
+                displaySpan.textContent = speaker;
+                displaySpan.style.display = 'inline';
+                editBtn.style.display = 'inline-block';
+                editContainer.style.display = 'none';
+            }
+
+            // Show success message briefly
+            const statusSpan = document.createElement('span');
+            statusSpan.textContent = ' ✅ Salvo!';
+            statusSpan.style.color = '#10b981';
+            statusSpan.style.marginLeft = '0.5rem';
+            displaySpan.parentNode.appendChild(statusSpan);
+            setTimeout(() => statusSpan.remove(), 2000);
         } else {
             alert('Erro ao salvar pregador: ' + (data.detail || 'Erro desconhecido'));
         }
     } catch (error) {
         console.error('Error saving speaker:', error);
-        alert('Erro ao salvar pregador. Verifique sua conexão.');
+        alert('Erro ao salvar pregador: ' + error.message + '. Verifique sua conexão.');
+    }
+}
+
+// Cancel speaker edit
+function cancelSpeakerEdit(videoId) {
+    const displaySpan = document.getElementById(`speaker-display-${videoId}`);
+    const editBtn = document.getElementById(`speaker-edit-btn-${videoId}`);
+    const editContainer = document.getElementById(`speaker-edit-container-${videoId}`);
+    const input = document.getElementById(`speaker-${videoId}`);
+
+    // Restore original value
+    if (input.dataset.originalValue !== undefined) {
+        input.value = input.dataset.originalValue;
+    }
+
+    // Return to display mode
+    displaySpan.style.display = 'inline';
+    editBtn.style.display = 'inline-block';
+    editContainer.style.display = 'none';
+
+    // Hide suggestions
+    const suggestions = document.getElementById(`speaker-suggestions-${videoId}`);
+    if (suggestions) {
+        suggestions.style.display = 'none';
     }
 }
 
@@ -1656,21 +1807,29 @@ let speakerDebounceTimers = {};
 async function handleSpeakerInput(videoId, value) {
     const suggestionsDiv = document.getElementById(`speaker-suggestions-${videoId}`);
 
-    // Clear previous timer for this video
+    // Clear previous timer
     if (speakerDebounceTimers[videoId]) {
         clearTimeout(speakerDebounceTimers[videoId]);
     }
 
-    // Hide suggestions if empty
-    if (!value || value.trim().length < 2) {
+    const trimmedValue = (value || '').trim();
+
+    // Only hide if exactly 1 character (waiting for more input)
+    // Allow 0 characters (show popular) and 2+ characters (search)
+    if (trimmedValue.length === 1) {
         suggestionsDiv.style.display = 'none';
         return;
     }
 
-    // Debounce: wait 300ms before fetching
+    // No debounce for empty query (show popular immediately)
+    // Regular debounce for typed queries
+    const debounceDelay = trimmedValue.length === 0 ? 0 : 300;
+
     speakerDebounceTimers[videoId] = setTimeout(async () => {
         try {
-            const response = await fetch(`/api/speakers/autocomplete?q=${encodeURIComponent(value.trim())}`);
+            // Empty query gets popular speakers, typed query gets filtered results
+            const query = trimmedValue.length >= 2 ? encodeURIComponent(trimmedValue) : '';
+            const response = await fetch(`/api/speakers/autocomplete?q=${query}&limit=5`);
             const data = await response.json();
 
             if (data.suggestions && data.suggestions.length > 0) {
@@ -1688,8 +1847,9 @@ async function handleSpeakerInput(videoId, value) {
             }
         } catch (error) {
             console.error('Error fetching speaker suggestions:', error);
+            suggestionsDiv.style.display = 'none';
         }
-    }, 300);
+    }, debounceDelay);
 }
 
 function selectSpeaker(videoId, name) {
