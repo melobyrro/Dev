@@ -5,14 +5,14 @@
 {% block content %}
 <div class="card">
     <h1>🔐 Painel Administrativo - Importar Vídeos</h1>
-    <p style="color: #666; margin-top: 0.5rem;">Esta área é restrita a administradores. Importe vídeos do canal configurado.</p>
+    <p style="color: var(--text-muted); margin-top: 0.5rem;">Esta área é restrita a administradores. Importe vídeos do canal configurado.</p>
 </div>
 
 <!-- Channel Header -->
 {% if channel %}
-<div class="card" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; margin-bottom: 2rem;">
-    <h2 style="color: white; margin-bottom: 0.5rem;">📺 {{ channel.title }}</h2>
-    <p style="opacity: 0.9; margin-bottom: 1rem;">{{ channel.youtube_url }}</p>
+<div class="card channel-header-banner">
+    <h2 style="margin-bottom: 0.5rem;">📺 {{ channel.title }}</h2>
+    <p class="text-secondary" style="margin-bottom: 1rem;">{{ channel.youtube_url }}</p>
     <div style="display: flex; gap: 1rem; font-size: 0.95rem;">
         <div>📊 <strong>{{ total_videos }}</strong> vídeos</div>
         <div>✅ <strong>{{ completed_videos }}</strong> processados</div>
@@ -46,7 +46,7 @@
     <!-- Single Video Import -->
     <div class="card">
         <h2>📹 Importar 1 Vídeo</h2>
-        <p style="color: #666; margin-bottom: 1rem;">Adicione um vídeo específico pela URL do YouTube</p>
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">Adicione um vídeo específico pela URL do YouTube</p>
         <form id="transcribeForm">
             <div class="form-group">
                 <label for="url">URL do Vídeo</label>
@@ -61,7 +61,7 @@
     <!-- Bulk Channel Import -->
     <div class="card">
         <h2>📚 Importar do Canal</h2>
-        <p style="color: #666; margin-bottom: 1rem;">Importe vários vídeos publicados em um período específico</p>
+        <p style="color: var(--text-muted); margin-bottom: 1rem;">Importe vários vídeos publicados em um período específico</p>
         <form id="bulkImportForm">
             <div class="form-group">
                 <label for="dateStart">Data Início (publicação no YouTube)</label>
@@ -74,7 +74,7 @@
             <div class="form-group">
                 <label for="maxVideos">Limite de Vídeos (opcional)</label>
                 <input type="number" id="maxVideos" min="1" max="500" placeholder="Ex: 50">
-                <small style="color: #666;">Deixe vazio para importar todos do período</small>
+                <small style="color: var(--text-muted);">Deixe vazio para importar todos do período</small>
             </div>
             <button type="submit" class="btn">Iniciar Importação</button>
         </form>
@@ -92,6 +92,77 @@
 
 {% block extra_css %}
 <style>
+/* Channel Header Banner */
+.channel-header-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: white;
+    margin: -1.5rem -1.5rem 2rem -1.5rem;
+    padding: 2rem;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .channel-header-banner {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+/* Semantic Status Classes */
+.status-info {
+    color: #3b82f6;
+}
+
+.status-success {
+    color: #10b981;
+}
+
+.status-error {
+    color: #ef4444;
+}
+
+[data-theme="dark"] .status-info {
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .status-success {
+    color: #34d399;
+}
+
+[data-theme="dark"] .status-error {
+    color: #f87171;
+}
+
+/* Progress Item Classes */
+.progress-item {
+    background: var(--surface);
+    border-left: 4px solid #3b82f6;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+}
+
+[data-theme="dark"] .progress-item {
+    border-left-color: #60a5fa;
+}
+
+.progress-item-header {
+    background: var(--muted);
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.progress-item-bar {
+    background: #3b82f6;
+    height: 4px;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .progress-item-bar {
+    background: #60a5fa;
+}
+
+/* Progress Indicator */
 .progress-indicator {
     display: inline-block;
     width: 16px;
@@ -103,6 +174,7 @@
     margin-right: 0.5rem;
     vertical-align: middle;
 }
+
 @keyframes spin {
     to { transform: rotate(360deg); }
 }
@@ -111,19 +183,21 @@
 .progress-tracker {
     margin-top: 1.5rem;
     padding: 1.5rem;
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
 }
+
 .progress-step {
     display: flex;
     align-items: center;
     margin-bottom: 1rem;
     padding: 0.75rem;
-    background: white;
+    background: var(--muted);
     border-radius: 4px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border);
 }
+
 .step-icon {
     width: 32px;
     height: 32px;
@@ -135,53 +209,76 @@
     font-size: 16px;
     flex-shrink: 0;
 }
+
 .step-icon.pending {
-    background: #e0e0e0;
-    color: #666;
+    background: var(--muted);
+    color: var(--text-muted);
 }
+
 .step-icon.running {
     background: #f39c12;
     color: white;
     animation: pulse 1.5s ease-in-out infinite;
 }
+
 .step-icon.completed {
-    background: #2ecc71;
+    background: #10b981;
     color: white;
 }
+
+[data-theme="dark"] .step-icon.completed {
+    background: #10b981;
+}
+
 .step-icon.failed {
-    background: #e74c3c;
+    background: #ef4444;
     color: white;
 }
+
+[data-theme="dark"] .step-icon.failed {
+    background: #ef4444;
+}
+
+[data-theme="dark"] .step-icon.running {
+    background: #f39c12;
+}
+
 @keyframes pulse {
     0%, 100% { transform: scale(1); }
     50% { transform: scale(1.1); }
 }
+
 .step-content {
     flex: 1;
 }
+
 .step-name {
     font-weight: bold;
     margin-bottom: 0.25rem;
 }
+
 .step-estimate {
     font-size: 0.85rem;
-    color: #666;
+    color: var(--text-muted);
 }
+
 .progress-bar-container {
     width: 100%;
     height: 8px;
-    background: #e0e0e0;
+    background: var(--muted);
     border-radius: 4px;
     overflow: hidden;
     margin-top: 0.5rem;
 }
+
 .progress-bar {
     height: 100%;
     background: #3498db;
     transition: width 0.3s ease;
 }
+
 .progress-bar.completed {
-    background: #2ecc71;
+    background: #10b981;
 }
 </style>
 {% endblock %}
@@ -201,7 +298,7 @@ document.getElementById('setupChannelForm')?.addEventListener('submit', async (e
     const url = document.getElementById('channelUrl').value;
     const statusDiv = document.getElementById('setupStatus');
 
-    statusDiv.innerHTML = '<p style="color: blue;">⏳ Configurando canal...</p>';
+    statusDiv.innerHTML = '<p class="status-info">⏳ Configurando canal...</p>';
 
     try {
         const response = await fetch('/api/channels/setup', {
@@ -213,13 +310,13 @@ document.getElementById('setupChannelForm')?.addEventListener('submit', async (e
         const data = await response.json();
 
         if (data.success) {
-            statusDiv.innerHTML = '<p style="color: green;">✅ Canal configurado! Recarregando...</p>';
+            statusDiv.innerHTML = '<p class="status-success">✅ Canal configurado! Recarregando...</p>';
             setTimeout(() => window.location.reload(), 1500);
         } else {
-            statusDiv.innerHTML = `<p style="color: red;">❌ Erro: ${data.detail || 'Falha ao configurar canal'}</p>`;
+            statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${data.detail || 'Falha ao configurar canal'}</p>`;
         }
     } catch (error) {
-        statusDiv.innerHTML = `<p style="color: red;">❌ Erro: ${error.message}</p>`;
+        statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${error.message}</p>`;
     }
 });
 {% endif %}
@@ -233,7 +330,7 @@ document.getElementById('transcribeForm').addEventListener('submit', async (e) =
     const statusDiv = document.getElementById('singleStatus');
     const progressTracker = document.getElementById('progressTracker');
 
-    statusDiv.innerHTML = '<p style="color: blue;"><span class="progress-indicator"></span>Iniciando transcrição...</p>';
+    statusDiv.innerHTML = '<p class="status-info"><span class="progress-indicator"></span>Iniciando transcrição...</p>';
     progressTracker.style.display = 'none';
 
     try {
@@ -246,7 +343,7 @@ document.getElementById('transcribeForm').addEventListener('submit', async (e) =
         const data = await response.json();
 
         if (data.success) {
-            statusDiv.innerHTML = `<p style="color: green;"><span class="progress-indicator"></span>Transcrição iniciada! Acompanhe o progresso abaixo...</p>`;
+            statusDiv.innerHTML = `<p class="status-success"><span class="progress-indicator"></span>Transcrição iniciada! Acompanhe o progresso abaixo...</p>`;
             activeJobIds.add(data.job_id);
 
             // Show progress tracker with initial steps
@@ -269,10 +366,10 @@ document.getElementById('transcribeForm').addEventListener('submit', async (e) =
             startPolling();
             document.getElementById('url').value = '';
         } else {
-            statusDiv.innerHTML = `<p style="color: red;">Erro: ${data.detail || 'Falha ao iniciar transcrição'}</p>`;
+            statusDiv.innerHTML = `<p class="status-error">Erro: ${data.detail || 'Falha ao iniciar transcrição'}</p>`;
         }
     } catch (error) {
-        statusDiv.innerHTML = `<p style="color: red;">Erro: ${error.message}</p>`;
+        statusDiv.innerHTML = `<p class="status-error">Erro: ${error.message}</p>`;
     }
 });
 
@@ -285,7 +382,7 @@ document.getElementById('bulkImportForm').addEventListener('submit', async (e) =
     const maxVideos = document.getElementById('maxVideos').value || null;
     const statusDiv = document.getElementById('bulkStatus');
 
-    statusDiv.innerHTML = '<p style="color: blue;">⏳ Iniciando importação em lote...</p>';
+    statusDiv.innerHTML = '<p class="status-info">⏳ Iniciando importação em lote...</p>';
 
     try {
         const response = await fetch('/api/channels/bulk-import', {
@@ -302,7 +399,7 @@ document.getElementById('bulkImportForm').addEventListener('submit', async (e) =
         const data = await response.json();
 
         if (data.success && data.job_id) {
-            statusDiv.innerHTML = `<p style="color: green;">✅ Importação iniciada! Monitorando progresso...</p>`;
+            statusDiv.innerHTML = `<p class="status-success">✅ Importação iniciada! Monitorando progresso...</p>`;
 
             // Clear form
             document.getElementById('dateStart').value = '';
@@ -312,10 +409,10 @@ document.getElementById('bulkImportForm').addEventListener('submit', async (e) =
             // Start polling for progress
             pollBulkImportProgress(data.job_id, statusDiv);
         } else {
-            statusDiv.innerHTML = `<p style="color: red;">❌ Erro: ${data.detail || 'Falha ao iniciar importação'}</p>`;
+            statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${data.detail || 'Falha ao iniciar importação'}</p>`;
         }
     } catch (error) {
-        statusDiv.innerHTML = `<p style="color: red;">❌ Erro: ${error.message}</p>`;
+        statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${error.message}</p>`;
     }
 });
 
@@ -343,12 +440,12 @@ async function pollBulkImportProgress(jobId, statusDiv) {
                 const videoTitle = meta.current_video_title || '';
 
                 let progressHtml = `
-                    <div style="padding: 1rem; background: #f8f9fa; border-left: 4px solid #3498db; margin: 0.5rem 0;">
+                    <div class="progress-item">
                         <p style="margin: 0.5rem 0;"><strong>Status:</strong> ${message}</p>
-                        <div style="background: #e9ecef; height: 24px; border-radius: 4px; overflow: hidden; margin: 0.5rem 0;">
-                            <div style="background: #3498db; height: 100%; width: ${progress}%; transition: width 0.3s;"></div>
+                        <div class="progress-item-header">
+                            <div class="progress-item-bar" style="width: ${progress}%"></div>
                         </div>
-                        <p style="margin: 0.5rem 0; font-size: 0.9em; color: #666;">${progress}% concluído</p>
+                        <p style="margin: 0.5rem 0; font-size: 0.9em;" class="text-secondary">${progress}% concluído</p>
                 `;
 
                 if (totalVideos > 0) {
@@ -358,7 +455,7 @@ async function pollBulkImportProgress(jobId, statusDiv) {
                 if (newVideos > 0 && currentVideo > 0) {
                     progressHtml += `
                         <p style="margin: 0.5rem 0;"><strong>Processando:</strong> Vídeo ${currentVideo} de ${newVideos}</p>
-                        <p style="margin: 0.5rem 0; font-size: 0.9em; color: #555;">${videoTitle}</p>
+                        <p style="margin: 0.5rem 0; font-size: 0.9em;" class="text-secondary">${videoTitle}</p>
                     `;
                 }
 
@@ -370,7 +467,7 @@ async function pollBulkImportProgress(jobId, statusDiv) {
                 const meta = data.metadata || {};
                 const newVideos = meta.new_videos || 0;
                 statusDiv.innerHTML = `
-                    <p style="color: green;">✅ Importação concluída! ${newVideos} vídeos foram enfileirados para transcrição.</p>
+                    <p class="status-success">✅ Importação concluída! ${newVideos} vídeos foram enfileirados para transcrição.</p>
                 `;
                 setTimeout(() => {
                     statusDiv.innerHTML = '';
@@ -378,7 +475,7 @@ async function pollBulkImportProgress(jobId, statusDiv) {
 
             } else if (data.status === 'failed') {
                 clearInterval(bulkImportPollInterval);
-                statusDiv.innerHTML = `<p style="color: red;">❌ Importação falhou: ${data.error || 'Erro desconhecido'}</p>`;
+                statusDiv.innerHTML = `<p class="status-error">❌ Importação falhou: ${data.error || 'Erro desconhecido'}</p>`;
             }
         } catch (error) {
             console.error('Error polling job status:', error);
@@ -466,20 +563,20 @@ async function pollJobStatuses() {
 
             if (data.status === 'completed') {
                 activeJobIds.delete(jobId);
-                statusDiv.innerHTML = '<p style="color: green;">✅ Transcrição concluída com sucesso!</p>';
+                statusDiv.innerHTML = '<p class="status-success">✅ Transcrição concluída com sucesso!</p>';
                 progressTracker.style.display = 'none';
                 setTimeout(() => statusDiv.innerHTML = '', 5000);
             } else if (data.status === 'failed') {
                 activeJobIds.delete(jobId);
-                statusDiv.innerHTML = `<p style="color: red;">❌ Transcrição falhou: ${data.error || 'Erro desconhecido'}</p>`;
+                statusDiv.innerHTML = `<p class="status-error">❌ Transcrição falhou: ${data.error || 'Erro desconhecido'}</p>`;
                 progressTracker.style.display = 'none';
             } else if (data.status === 'running') {
-                statusDiv.innerHTML = `<p style="color: blue;"><span class="progress-indicator"></span>${data.progress || 'Processando...'}</p>`;
+                statusDiv.innerHTML = `<p class="status-info"><span class="progress-indicator"></span>${data.progress || 'Processando...'}</p>`;
                 if (data.metadata) {
                     progressTracker.innerHTML = renderProgressTracker(data.metadata);
                 }
             } else if (data.status === 'queued') {
-                statusDiv.innerHTML = '<p style="color: blue;">📋 Aguardando na fila...</p>';
+                statusDiv.innerHTML = '<p class="status-info">📋 Aguardando na fila...</p>';
             }
         } catch (error) {
             console.error('Error polling job:', error);
