@@ -84,10 +84,21 @@ class GeminiClient:
             "max_output_tokens": max_output_tokens,
         }
 
-        # Initialize model
+        # Safety settings - less restrictive for sermon content
+        from google.generativeai.types import HarmCategory, HarmBlockThreshold
+
+        safety_settings = {
+            HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+            HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_ONLY_HIGH,
+        }
+
+        # Initialize model with safety settings
         self.model = genai.GenerativeModel(
             model_name=self.model_name,
-            generation_config=self.generation_config
+            generation_config=self.generation_config,
+            safety_settings=safety_settings
         )
 
         # Rate limiting tracking
@@ -176,11 +187,42 @@ class GeminiClient:
                 # Generate content
                 response = self.model.generate_content(prompt)
 
-                # Extract text
-                if not response.parts:
-                    raise ValueError("Empty response from Gemini API")
+                # Check for safety blocking first
+                if response.candidates:
+                    candidate = response.candidates[0]
+                    if hasattr(candidate, 'finish_reason'):
+                        finish_reason = candidate.finish_reason
+                        logger.info(f"Gemini finish_reason: {finish_reason}")
 
-                text = response.text
+                        # Check for safety blocking
+                        if finish_reason and 'SAFETY' in str(finish_reason):
+                            logger.warning(f"Content blocked by safety filters: {finish_reason}")
+                            if hasattr(candidate, 'safety_ratings'):
+                                logger.warning(f"Safety ratings: {candidate.safety_ratings}")
+                            # Raise error for safety blocking
+                            raise ValueError(f"Content blocked by safety filters: {finish_reason}")
+
+                # Extract text from response - handle both simple and multi-part responses
+                # Gemini 2.5+ returns multi-part responses, need to access parts correctly
+                try:
+                    # Try simple text accessor first
+                    text = response.text
+                except (ValueError, AttributeError) as e:
+                    # Multi-part response - extract text from all parts
+                    if not response.candidates or not response.candidates[0].content.parts:
+                        logger.warning(f"Empty response structure: candidates={bool(response.candidates)}")
+                        raise ValueError("Empty response from Gemini API")
+
+                    # Concatenate all text parts
+                    parts = response.candidates[0].content.parts
+                    text = "".join(part.text for part in parts if hasattr(part, 'text'))
+
+                    if not text or not text.strip():
+                        logger.warning(f"Empty text after extraction. Parts count: {len(parts)}")
+                        # Log part types to debug
+                        part_types = [type(part).__name__ for part in parts]
+                        logger.warning(f"Part types: {part_types}")
+                        raise ValueError("Empty text extracted from multi-part Gemini response")
 
                 # Track usage (estimate tokens since API doesn't always return counts)
                 input_tokens = self._estimate_tokens(prompt)
@@ -303,7 +345,7 @@ def get_gemini_client() -> GeminiClient:
 
     if _gemini_instance is None:
         # Read configuration from environment
-        model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
         temperature = float(os.getenv("GEMINI_TEMPERATURE", "0.7"))
 
         _gemini_instance = GeminiClient(

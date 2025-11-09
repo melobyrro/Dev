@@ -51,7 +51,7 @@ class LLMClient:
         if gemini_api_key:
             try:
                 configure(api_key=gemini_api_key)
-                gemini_model_name = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+                gemini_model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
                 self.gemini_model = GenerativeModel(gemini_model_name)
                 logger.info(f"✅ Gemini client initialized with model: {gemini_model_name}")
             except Exception as e:
@@ -156,12 +156,22 @@ class LLMClient:
         logger.info(f"🔵 Calling Gemini API - model: {gemini_model}, prompt_length: {len(full_prompt)}, max_tokens: {max_tokens}, temp: {temperature}")
         logger.debug(f"Prompt preview: {full_prompt[:200]}...")
 
-        response = self.gemini_model.generate_content(
-            full_prompt,
-            generation_config={
-                "max_output_tokens": max_tokens,
-                "temperature": temperature
+        content = [
+            {
+                "role": "user",
+                "parts": [
+                    {"text": full_prompt}
+                ]
             }
+        ]
+
+        generation_config = {
+            "temperature": temperature
+        }
+
+        response = self.gemini_model.generate_content(
+            content,
+            generation_config=generation_config
         )
 
         logger.info(f"✅ Gemini API response received")
@@ -191,6 +201,9 @@ class LLMClient:
         logger.info(f"🎯 Final extracted text length: {len(text)} chars")
         if len(text) < 200:
             logger.warning(f"⚠️ Short response: '{text}'")
+
+        if not text.strip():
+            raise ValueError("Gemini returned empty response")
 
         return {
             "text": text,

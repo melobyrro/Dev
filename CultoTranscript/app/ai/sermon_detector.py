@@ -1,11 +1,11 @@
 """
 Sermon Detection Module
-Uses Gemini AI to detect when the sermon actually begins in a worship service video
+Uses unified LLM client (Gemini or Ollama) to detect when the sermon actually begins in a worship service video
 """
 import logging
 import re
 from typing import Optional, Tuple
-from app.ai.gemini_client import get_gemini_client
+from app.ai.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -64,20 +64,26 @@ def detect_sermon_start(transcript_text: str, duration_sec: int) -> Optional[int
         max_chars = 30 * 600  # ~18000 chars
         truncated_text = transcript_text[:max_chars] if len(transcript_text) > max_chars else transcript_text
 
-        # Get Gemini client
-        client = get_gemini_client()
+        # Get unified LLM client
+        llm = get_llm_client()
 
         # Generate prompt
         prompt = SERMON_DETECTION_PROMPT.format(transcript=truncated_text)
 
-        # Call Gemini
-        logger.info("Calling Gemini to detect sermon start time...")
-        response = client.generate_content(prompt)
+        # Call LLM
+        logger.info("Calling LLM to detect sermon start time...")
+        llm_response = llm.generate(
+            prompt=prompt,
+            max_tokens=20,
+            temperature=0.3
+        )
+        response = llm_response["text"]
+        backend_used = llm_response["backend"]
 
         # Parse response - extract first number found
         match = re.search(r'\d+', response.strip())
         if not match:
-            logger.warning(f"Could not parse sermon start time from Gemini response: {response}")
+            logger.warning(f"Could not parse sermon start time from LLM response: {response}")
             return None
 
         minutes = int(match.group())
@@ -88,7 +94,7 @@ def detect_sermon_start(transcript_text: str, duration_sec: int) -> Optional[int
             logger.warning(f"Detected sermon start ({seconds}s) exceeds video duration ({duration_sec}s), using 0")
             return 0
 
-        logger.info(f"Detected sermon start: {minutes} minutes ({seconds} seconds)")
+        logger.info(f"✅ Detected sermon start using {backend_used} backend: {minutes} minutes ({seconds} seconds)")
         return seconds
 
     except Exception as e:
