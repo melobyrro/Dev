@@ -19,7 +19,9 @@ from starlette.middleware.sessions import SessionMiddleware
 
 from app.web.auth import AuthMiddleware, verify_password, get_current_user, require_auth
 from app.web.routes import api, channels, videos, reports
-from app.common.database import engine, Base
+from app.routers import llm_status, database
+from app.common.database import engine, Base, get_db
+from app.common.models import Job
 
 # Import Backend components
 try:
@@ -49,7 +51,7 @@ if BACKEND_AVAILABLE:
 if BACKEND_AVAILABLE:
     app.add_middleware(
         CSRFMiddleware,
-        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast"]
+        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast", "/api/channels/"]
     )
 
 # Add auth middleware (added first so it runs second)
@@ -70,6 +72,8 @@ app.include_router(api.router, prefix="/api", tags=["API"])
 app.include_router(channels.router, prefix="/channels", tags=["Channels"])
 app.include_router(videos.router, prefix="/videos", tags=["Videos"])
 app.include_router(reports.router, prefix="/reports", tags=["Reports"])
+app.include_router(llm_status.router, tags=["LLM Status"])
+app.include_router(database.router, prefix="/api/database", tags=["Database"])
 
 # Include Backend v2 API routers (if available)
 if BACKEND_AVAILABLE:
@@ -132,40 +136,39 @@ async def index(request: Request, user: str = Depends(get_current_user)):
     })
 
 
-@app.get("/admin/import", response_class=HTMLResponse)
-async def admin_import(request: Request, user: str = Depends(require_auth)):
-    """Admin import page - requires authentication"""
+@app.get("/admin", response_class=HTMLResponse)
+async def admin_page(request: Request, user: str = Depends(require_auth)):
+    """Unified admin page with tabs - requires authentication"""
     from app.common.database import get_db_session
-    from app.common.models import Channel, Video
+    from app.common.models import Channel
 
     # Get the first active channel (single-channel mode for now)
     with next(get_db_session()) as db:
         channel = db.query(Channel).filter(Channel.active == True).first()
 
-        if channel:
-            # Get video stats for this channel
-            total_videos = db.query(Video).filter(Video.channel_id == channel.id).count()
-            completed_videos = db.query(Video).filter(
-                Video.channel_id == channel.id,
-                Video.status == 'completed'
-            ).count()
-        else:
-            total_videos = 0
-            completed_videos = 0
-
-    return templates.TemplateResponse("admin_import.html", {
+    return templates.TemplateResponse("admin.html", {
         "request": request,
         "user": user,
-        "channel": channel,
-        "total_videos": total_videos,
-        "completed_videos": completed_videos
+        "channel": channel
     })
 
 
+@app.get("/admin/import", response_class=HTMLResponse)
+async def admin_import_redirect(user: str = Depends(require_auth)):
+    """Redirect to unified admin page - import tab (backward compatibility)"""
+    return RedirectResponse(url="/admin#importar", status_code=303)
+
+
 @app.get("/admin/schedule", response_class=HTMLResponse)
-async def admin_schedule(request: Request, user: str = Depends(require_auth)):
-    """Admin schedule configuration page - requires authentication"""
-    return templates.TemplateResponse("admin_schedule.html", {
+async def admin_schedule_redirect(user: str = Depends(require_auth)):
+    """Redirect to unified admin page - schedule tab (backward compatibility)"""
+    return RedirectResponse(url="/admin#agendamento", status_code=303)
+
+
+@app.get("/database", response_class=HTMLResponse)
+async def database_page(request: Request, user: str = Depends(require_auth)):
+    """Database viewer page - requires authentication"""
+    return templates.TemplateResponse("database.html", {
         "request": request,
         "user": user
     })
@@ -205,6 +208,35 @@ async def logout(request: Request):
 async def health_check():
     """Health check endpoint (public, no auth)"""
     return {"status": "ok", "service": "culto-web"}
+
+
+@app.get("/api/health/worker")
+def worker_health():
+    """Check for stuck jobs and worker health"""
+    from datetime import datetime, timedelta
+
+    with get_db() as db:
+        stuck_jobs = db.query(Job).filter(
+            Job.status == 'running',
+            Job.started_at < datetime.now() - timedelta(minutes=30)
+        ).all()
+
+        stuck_details = [
+            {
+                "job_id": job.id,
+                "video_id": job.video_id,
+                "started_at": job.started_at.isoformat() if job.started_at else None,
+                "duration_minutes": int((datetime.now() - job.started_at).total_seconds() / 60) if job.started_at else 0
+            }
+            for job in stuck_jobs
+        ]
+
+        return {
+            "healthy": len(stuck_jobs) == 0,
+            "stuck_job_count": len(stuck_jobs),
+            "stuck_jobs": stuck_details,
+            "message": f"{len(stuck_jobs)} jobs stuck for > 30 minutes" if stuck_jobs else "All jobs running normally"
+        }
 
 
 if __name__ == "__main__":

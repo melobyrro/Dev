@@ -1,0 +1,746 @@
+{% extends "base.html" %}
+
+{% block title %}Database Viewer - CultoTranscript{% endblock %}
+
+{% block extra_css %}
+<style>
+/* === LAYOUT === */
+.database-container {
+    display: grid;
+    grid-template-columns: 250px 1fr;
+    gap: 1.5rem;
+    margin-top: 2rem;
+}
+
+/* === SIDEBAR === */
+.sidebar {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    height: fit-content;
+    position: sticky;
+    top: 100px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+}
+
+.sidebar h3 {
+    margin-top: 0;
+    margin-bottom: 1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+}
+
+.table-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.table-item {
+    padding: 0.75rem;
+    margin-bottom: 0.25rem;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9rem;
+}
+
+.table-item:hover {
+    background: var(--muted);
+}
+
+.table-item.active {
+    background: var(--primary);
+    color: white;
+}
+
+.table-count {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    background: var(--muted);
+    padding: 0.15rem 0.5rem;
+    border-radius: 12px;
+}
+
+.table-item.active .table-count {
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+/* === MAIN CONTENT === */
+.main-content {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+}
+
+.toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    gap: 1rem;
+    flex-wrap: wrap;
+}
+
+.search-box {
+    flex: 1;
+    min-width: 250px;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.search-box:focus {
+    outline: none;
+    border-color: var(--primary);
+}
+
+.btn-toolbar {
+    padding: 0.75rem 1.5rem;
+    background: var(--primary);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.btn-toolbar:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+}
+
+.btn-toolbar:disabled {
+    background: var(--muted);
+    color: var(--text-muted);
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* === TABLE === */
+.data-table-container {
+    overflow-x: auto;
+    margin-bottom: 1.5rem;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th {
+    cursor: pointer;
+    user-select: none;
+    position: relative;
+    white-space: nowrap;
+}
+
+.data-table th:hover {
+    background: var(--border);
+}
+
+.sort-indicator {
+    margin-left: 0.5rem;
+    font-size: 0.75rem;
+    color: var(--text-muted);
+}
+
+.data-table tbody tr {
+    cursor: pointer;
+}
+
+.data-table td {
+    max-width: 300px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* === PAGINATION === */
+.pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 1.5rem;
+}
+
+.page-btn {
+    padding: 0.5rem 1rem;
+    background: var(--surface);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.page-btn:hover:not(:disabled) {
+    background: var(--muted);
+    border-color: var(--primary);
+}
+
+.page-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.page-btn.active {
+    background: var(--primary);
+    color: white;
+    border-color: var(--primary);
+}
+
+/* === MODAL === */
+.modal {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.5);
+    z-index: 1000;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal.active {
+    display: flex;
+}
+
+.modal-content {
+    background: var(--surface);
+    border-radius: 8px;
+    padding: 2rem;
+    max-width: 800px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px var(--shadow);
+    position: relative;
+}
+
+.modal-close {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    background: var(--muted);
+    border: none;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 1.25rem;
+    line-height: 1;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.modal-close:hover {
+    background: var(--border);
+}
+
+.modal-title {
+    margin-top: 0;
+    margin-bottom: 1.5rem;
+    color: var(--text);
+}
+
+.json-viewer {
+    background: var(--muted);
+    padding: 1rem;
+    border-radius: 4px;
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+
+.json-key {
+    color: #0EA5E9;
+    font-weight: 600;
+}
+
+.json-string {
+    color: #10B981;
+}
+
+.json-number {
+    color: #F59E0B;
+}
+
+.json-null {
+    color: #EF4444;
+}
+
+/* === LOADING & EMPTY STATES === */
+.loading {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.spinner {
+    display: inline-block;
+    width: 40px;
+    height: 40px;
+    border: 4px solid var(--muted);
+    border-top-color: var(--primary);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-bottom: 1rem;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.empty-state {
+    text-align: center;
+    padding: 3rem;
+    color: var(--text-muted);
+}
+
+.empty-state h3 {
+    color: var(--text);
+    margin-bottom: 0.5rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-top: 2rem;">
+    <h1>🗄️ Database Viewer</h1>
+    <p style="color: var(--text-muted); margin-top: 0.5rem;">
+        Read-only database inspection and export tool. Click on any table to view its data.
+    </p>
+</div>
+
+<div class="database-container">
+    <!-- Sidebar: Table List -->
+    <div class="sidebar">
+        <h3>📋 Tables</h3>
+        <ul class="table-list" id="tableList">
+            <li class="loading">
+                <div class="spinner"></div>
+                <p>Loading tables...</p>
+            </li>
+        </ul>
+    </div>
+
+    <!-- Main Content: Table Data -->
+    <div class="main-content">
+        <div id="emptyState" class="empty-state">
+            <h3>Select a Table</h3>
+            <p>Choose a table from the sidebar to view its data</p>
+        </div>
+
+        <div id="tableViewer" style="display: none;">
+            <!-- Toolbar -->
+            <div class="toolbar">
+                <input
+                    type="text"
+                    id="searchInput"
+                    class="search-box"
+                    placeholder="Search across all columns..."
+                />
+                <button id="exportBtn" class="btn-toolbar">📥 Export CSV</button>
+            </div>
+
+            <!-- Table -->
+            <div class="data-table-container">
+                <table class="data-table" id="dataTable">
+                    <thead id="tableHead"></thead>
+                    <tbody id="tableBody"></tbody>
+                </table>
+            </div>
+
+            <!-- Pagination -->
+            <div class="pagination" id="pagination"></div>
+        </div>
+
+        <div id="loadingState" class="loading" style="display: none;">
+            <div class="spinner"></div>
+            <p>Loading data...</p>
+        </div>
+    </div>
+</div>
+
+<!-- Row Details Modal -->
+<div class="modal" id="rowModal">
+    <div class="modal-content">
+        <button class="modal-close" onclick="closeModal()">×</button>
+        <h2 class="modal-title">Row Details</h2>
+        <div class="json-viewer" id="modalContent"></div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <p style="text-align: center; margin: 0;">
+        <a href="/admin" class="btn btn-secondary">← Back to Admin</a>
+    </p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// === STATE ===
+let currentTable = null;
+let currentPage = 1;
+let currentSearch = '';
+let currentSortBy = null;
+let currentSortOrder = 'asc';
+let searchTimeout = null;
+
+// === INITIALIZATION ===
+document.addEventListener('DOMContentLoaded', () => {
+    loadTables();
+
+    // Search with debounce
+    document.getElementById('searchInput').addEventListener('input', (e) => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            currentSearch = e.target.value;
+            currentPage = 1;
+            loadTableData();
+        }, 500);
+    });
+
+    // Export button
+    document.getElementById('exportBtn').addEventListener('click', exportToCSV);
+
+    // Close modal on outside click
+    document.getElementById('rowModal').addEventListener('click', (e) => {
+        if (e.target.id === 'rowModal') {
+            closeModal();
+        }
+    });
+});
+
+// === LOAD TABLES ===
+async function loadTables() {
+    try {
+        const response = await fetch('/api/database/tables');
+        const data = await response.json();
+
+        const tableList = document.getElementById('tableList');
+        tableList.innerHTML = '';
+
+        if (data.tables && data.tables.length > 0) {
+            data.tables.forEach(table => {
+                const li = document.createElement('li');
+                li.className = 'table-item';
+                li.innerHTML = `
+                    <span>${table.name}</span>
+                    <span class="table-count">${table.count.toLocaleString()}</span>
+                `;
+                li.onclick = () => selectTable(table.name);
+                tableList.appendChild(li);
+            });
+        } else {
+            tableList.innerHTML = '<li class="empty-state"><p>No tables found</p></li>';
+        }
+    } catch (error) {
+        console.error('Error loading tables:', error);
+        document.getElementById('tableList').innerHTML = `
+            <li class="empty-state">
+                <p style="color: var(--error);">Error loading tables</p>
+            </li>
+        `;
+    }
+}
+
+// === SELECT TABLE ===
+function selectTable(tableName) {
+    currentTable = tableName;
+    currentPage = 1;
+    currentSearch = '';
+    currentSortBy = null;
+    currentSortOrder = 'asc';
+
+    // Update UI
+    document.querySelectorAll('.table-item').forEach(item => {
+        item.classList.remove('active');
+        if (item.textContent.trim().startsWith(tableName)) {
+            item.classList.add('active');
+        }
+    });
+
+    document.getElementById('searchInput').value = '';
+    document.getElementById('emptyState').style.display = 'none';
+    document.getElementById('tableViewer').style.display = 'block';
+
+    loadTableData();
+}
+
+// === LOAD TABLE DATA ===
+async function loadTableData() {
+    if (!currentTable) return;
+
+    document.getElementById('loadingState').style.display = 'block';
+    document.getElementById('dataTable').style.display = 'none';
+    document.getElementById('pagination').style.display = 'none';
+
+    try {
+        const params = new URLSearchParams({
+            page: currentPage,
+            limit: 100
+        });
+
+        if (currentSearch) {
+            params.append('search', currentSearch);
+        }
+
+        if (currentSortBy) {
+            params.append('sort_by', currentSortBy);
+            params.append('sort_order', currentSortOrder);
+        }
+
+        const response = await fetch(`/api/database/table/${currentTable}?${params}`);
+        const data = await response.json();
+
+        if (data.columns && data.rows) {
+            renderTable(data);
+            renderPagination(data);
+        }
+
+        document.getElementById('loadingState').style.display = 'none';
+        document.getElementById('dataTable').style.display = 'table';
+        document.getElementById('pagination').style.display = 'flex';
+    } catch (error) {
+        console.error('Error loading table data:', error);
+        document.getElementById('loadingState').innerHTML = `
+            <p style="color: var(--error);">Error loading data: ${error.message}</p>
+        `;
+    }
+}
+
+// === RENDER TABLE ===
+function renderTable(data) {
+    const thead = document.getElementById('tableHead');
+    const tbody = document.getElementById('tableBody');
+
+    // Render header
+    thead.innerHTML = '';
+    const headerRow = document.createElement('tr');
+    data.columns.forEach(col => {
+        const th = document.createElement('th');
+        th.textContent = col.name;
+        th.onclick = () => sortBy(col.name);
+
+        if (currentSortBy === col.name) {
+            const indicator = document.createElement('span');
+            indicator.className = 'sort-indicator';
+            indicator.textContent = currentSortOrder === 'asc' ? '▲' : '▼';
+            th.appendChild(indicator);
+        }
+
+        headerRow.appendChild(th);
+    });
+    thead.appendChild(headerRow);
+
+    // Render body
+    tbody.innerHTML = '';
+    if (data.rows.length === 0) {
+        const emptyRow = document.createElement('tr');
+        const emptyCell = document.createElement('td');
+        emptyCell.colSpan = data.columns.length;
+        emptyCell.style.textAlign = 'center';
+        emptyCell.style.padding = '2rem';
+        emptyCell.style.color = 'var(--text-muted)';
+        emptyCell.textContent = currentSearch ? 'No results found' : 'No data in this table';
+        emptyRow.appendChild(emptyCell);
+        tbody.appendChild(emptyRow);
+        return;
+    }
+
+    data.rows.forEach(row => {
+        const tr = document.createElement('tr');
+        tr.onclick = () => showRowDetails(row);
+
+        data.columns.forEach(col => {
+            const td = document.createElement('td');
+            const value = row[col.name];
+
+            if (value === null || value === undefined) {
+                td.textContent = '';
+                td.style.color = 'var(--text-muted)';
+                td.style.fontStyle = 'italic';
+            } else if (typeof value === 'boolean') {
+                td.textContent = value ? '✓' : '✗';
+                td.style.textAlign = 'center';
+            } else {
+                td.textContent = value;
+            }
+
+            tr.appendChild(td);
+        });
+
+        tbody.appendChild(tr);
+    });
+}
+
+// === RENDER PAGINATION ===
+function renderPagination(data) {
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+
+    // Previous button
+    const prevBtn = document.createElement('button');
+    prevBtn.className = 'page-btn';
+    prevBtn.textContent = '← Previous';
+    prevBtn.disabled = currentPage === 1;
+    prevBtn.onclick = () => {
+        currentPage--;
+        loadTableData();
+    };
+    pagination.appendChild(prevBtn);
+
+    // Page info
+    const pageInfo = document.createElement('span');
+    pageInfo.style.color = 'var(--text-muted)';
+    pageInfo.textContent = `Page ${currentPage} of ${data.pages} (${data.total.toLocaleString()} rows)`;
+    pagination.appendChild(pageInfo);
+
+    // Next button
+    const nextBtn = document.createElement('button');
+    nextBtn.className = 'page-btn';
+    nextBtn.textContent = 'Next →';
+    nextBtn.disabled = currentPage === data.pages;
+    nextBtn.onclick = () => {
+        currentPage++;
+        loadTableData();
+    };
+    pagination.appendChild(nextBtn);
+}
+
+// === SORT BY COLUMN ===
+function sortBy(columnName) {
+    if (currentSortBy === columnName) {
+        // Toggle sort order
+        currentSortOrder = currentSortOrder === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortBy = columnName;
+        currentSortOrder = 'asc';
+    }
+
+    currentPage = 1;
+    loadTableData();
+}
+
+// === SHOW ROW DETAILS ===
+function showRowDetails(row) {
+    const modal = document.getElementById('rowModal');
+    const content = document.getElementById('modalContent');
+
+    // Format as pretty JSON
+    const formatted = formatJSON(row);
+    content.innerHTML = formatted;
+
+    modal.classList.add('active');
+}
+
+// === CLOSE MODAL ===
+function closeModal() {
+    document.getElementById('rowModal').classList.remove('active');
+}
+
+// === FORMAT JSON ===
+function formatJSON(obj, indent = 0) {
+    const indentStr = '  '.repeat(indent);
+    let html = '{<br>';
+
+    const keys = Object.keys(obj);
+    keys.forEach((key, index) => {
+        const value = obj[key];
+        html += `${indentStr}  <span class="json-key">"${key}"</span>: `;
+
+        if (value === null) {
+            html += '<span class="json-null">null</span>';
+        } else if (typeof value === 'string') {
+            html += `<span class="json-string">"${escapeHtml(value)}"</span>`;
+        } else if (typeof value === 'number') {
+            html += `<span class="json-number">${value}</span>`;
+        } else if (typeof value === 'boolean') {
+            html += `<span class="json-number">${value}</span>`;
+        } else if (typeof value === 'object') {
+            html += formatJSON(value, indent + 1);
+        } else {
+            html += `<span class="json-string">"${escapeHtml(String(value))}"</span>`;
+        }
+
+        if (index < keys.length - 1) {
+            html += ',';
+        }
+        html += '<br>';
+    });
+
+    html += `${indentStr}}`;
+    return html;
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// === EXPORT TO CSV ===
+async function exportToCSV() {
+    if (!currentTable) return;
+
+    const btn = document.getElementById('exportBtn');
+    btn.disabled = true;
+    btn.textContent = '⏳ Exporting...';
+
+    try {
+        const params = new URLSearchParams();
+
+        if (currentSearch) {
+            params.append('search', currentSearch);
+        }
+
+        if (currentSortBy) {
+            params.append('sort_by', currentSortBy);
+            params.append('sort_order', currentSortOrder);
+        }
+
+        const response = await fetch(`/api/database/table/${currentTable}/export?${params}`);
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${currentTable}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        } else {
+            alert('Export failed. Please try again.');
+        }
+    } catch (error) {
+        console.error('Export error:', error);
+        alert('Export failed: ' + error.message);
+    } finally {
+        btn.disabled = false;
+        btn.textContent = '📥 Export CSV';
+    }
+}
+</script>
+{% endblock %}
