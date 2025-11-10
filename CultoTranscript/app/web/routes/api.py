@@ -1,7 +1,7 @@
 """
 API routes for AJAX calls and programmatic access
 """
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List
 import redis
@@ -9,12 +9,13 @@ import json
 
 from app.web.auth import get_current_user, require_auth, verify_password
 from app.common.database import get_db_session
-from app.common.models import Video, Job, Channel, ExcludedVideo, Transcript, SermonReport, ChannelRollup, ScheduleConfig, Speaker
+from app.common.models import Video, Job, Channel, ExcludedVideo, Transcript, SermonReport, ChannelRollup, ScheduleConfig, Speaker, YouTubeSubscription
 from app.worker.report_generators import generate_daily_sermon_report, generate_channel_rollup
+from app.worker.youtube_subscription_service import get_subscription_service
 from app.ai.chatbot_service import ChatbotService
 import os
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,10 @@ class TranscribeRequest(BaseModel):
 
 class TranscriptUpdateRequest(BaseModel):
     text: str
+
+
+class SermonDateUpdateRequest(BaseModel):
+    sermon_actual_date: Optional[date]
 
 
 class ReprocessRequest(BaseModel):
@@ -151,6 +156,7 @@ async def list_videos(
                 "status": v.status,
                 "duration_sec": v.duration_sec,
                 "published_at": v.published_at.isoformat(),
+                "sermon_actual_date": v.sermon_actual_date.isoformat() if v.sermon_actual_date else None,
                 "created_at": v.created_at.isoformat()
             }
             for v in videos
@@ -206,6 +212,7 @@ async def list_channels(
                 "id": c.id,
                 "title": c.title,
                 "youtube_url": c.youtube_url,
+                "youtube_channel_id": c.youtube_channel_id,
                 "active": c.active
             }
             for c in channels
@@ -530,7 +537,8 @@ async def get_detailed_report(
                 "cached": True,
                 "report": cached_report.report_json,
                 "video_info": {
-                    "speaker": video.speaker
+                    "speaker": video.speaker,
+                    "sermon_actual_date": video.sermon_actual_date.isoformat() if video.sermon_actual_date else None
                 }
             }
 
@@ -543,7 +551,8 @@ async def get_detailed_report(
             "cached": False,
             "report": report,
             "video_info": {
-                "speaker": video.speaker
+                "speaker": video.speaker,
+                "sermon_actual_date": video.sermon_actual_date.isoformat() if video.sermon_actual_date else None
             }
         }
 
@@ -1027,6 +1036,38 @@ async def update_video_speaker(
         raise HTTPException(status_code=500, detail=f"Erro ao atualizar pregador: {str(e)}")
 
 
+@router.put("/videos/{video_id}/sermon-date")
+async def update_sermon_actual_date(
+    video_id: int,
+    request: SermonDateUpdateRequest,
+    db=Depends(get_db_session)
+):
+    """
+    Update the sermon_actual_date for a video. This allows aligning the service date
+    when the upload happens on a different day (e.g., Monday).
+    """
+    video = db.query(Video).filter(Video.id == video_id).first()
+
+    if not video:
+        raise HTTPException(status_code=404, detail="Vídeo não encontrado")
+
+    try:
+        video.sermon_actual_date = request.sermon_actual_date
+        db.commit()
+        logger.info(f"Sermon date updated for video {video_id}: {video.sermon_actual_date}")
+
+        return {
+            "success": True,
+            "video_id": video.id,
+            "sermon_actual_date": video.sermon_actual_date.isoformat() if video.sermon_actual_date else None
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating sermon date for video {video_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Erro ao atualizar data do culto: {str(e)}")
+
+
 @router.get("/schedule-config", response_model=ScheduleConfigResponse)
 async def get_schedule_config(
     db=Depends(get_db_session),
@@ -1122,3 +1163,287 @@ async def update_schedule_config(
             "enabled": config.enabled
         }
     }
+
+
+@router.get("/scheduler-status")
+async def get_scheduler_status(
+    db=Depends(get_db_session),
+    user: str = Depends(get_current_user)
+):
+    """Get current scheduler status and next run time."""
+    try:
+        # Try to reach scheduler health endpoint
+        import requests
+        response = requests.get("http://culto_scheduler:8001/health", timeout=2)
+        scheduler_data = response.json()
+
+        # Get schedule config from database
+        schedule_config = db.query(ScheduleConfig).filter(
+            ScheduleConfig.schedule_type == "weekly_check"
+        ).first()
+
+        # Get last check time from channels
+        last_check = db.query(Channel.last_checked_at).filter(
+            Channel.active == True
+        ).order_by(Channel.last_checked_at.desc()).first()
+
+        return {
+            "scheduler_running": True,
+            "next_run": scheduler_data.get("next_run"),
+            "last_check": last_check[0].isoformat() if last_check and last_check[0] else None,
+            "schedule_enabled": schedule_config.enabled if schedule_config else False,
+            "schedule_config": {
+                "day_of_week": schedule_config.day_of_week if schedule_config else None,
+                "time_of_day": str(schedule_config.time_of_day)[:5] if schedule_config else None  # HH:MM format
+            }
+        }
+    except Exception as e:
+        logger.error(f"Failed to get scheduler status: {e}")
+        return {
+            "scheduler_running": False,
+            "error": str(e),
+            "next_run": None,
+            "last_check": None,
+            "schedule_enabled": False,
+            "schedule_config": {
+                "day_of_week": None,
+                "time_of_day": None
+            }
+        }
+
+
+@router.get("/websub/subscriptions")
+async def list_websub_subscriptions(
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """List all YouTube WebSub subscriptions (Admin only)."""
+    subscriptions = db.query(YouTubeSubscription).join(Channel).all()
+
+    return {
+        "subscriptions": [
+            {
+                "id": sub.id,
+                "channel_id": sub.channel_id,
+                "channel_name": sub.channel.title if sub.channel else None,
+                "youtube_channel_id": sub.youtube_channel_id,
+                "status": sub.subscription_status,
+                "last_notification": sub.last_notification_at.isoformat() if sub.last_notification_at else None,
+                "notification_count": sub.notification_count,
+                "expires_at": sub.expires_at.isoformat() if sub.expires_at else None,
+                "last_subscribed_at": sub.last_subscribed_at.isoformat() if sub.last_subscribed_at else None
+            }
+            for sub in subscriptions
+        ]
+    }
+
+
+@router.post("/websub/subscribe/{channel_id}")
+async def subscribe_channel_websub(
+    channel_id: int,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Manually subscribe to a channel's WebSub notifications (Admin only)."""
+    channel = db.query(Channel).filter_by(id=channel_id).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Canal não encontrado")
+
+    if not channel.youtube_channel_id:
+        raise HTTPException(status_code=400, detail="Canal não possui youtube_channel_id")
+
+    service = get_subscription_service()
+    result = service.subscribe_to_channel(channel_id, channel.youtube_channel_id, db=db)
+
+    if result.get("success"):
+        return {
+            "success": True,
+            "channel_id": channel_id,
+            "youtube_channel_id": channel.youtube_channel_id,
+            "message": result.get("message", "Inscrição realizada com sucesso")
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("error", "Erro ao realizar inscrição")
+        )
+
+
+@router.post("/websub/unsubscribe/{channel_id}")
+async def unsubscribe_channel_websub(
+    channel_id: int,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Manually unsubscribe from a channel's WebSub notifications (Admin only)."""
+    channel = db.query(Channel).filter_by(id=channel_id).first()
+    if not channel:
+        raise HTTPException(status_code=404, detail="Canal não encontrado")
+
+    if not channel.youtube_channel_id:
+        raise HTTPException(status_code=400, detail="Canal não possui youtube_channel_id")
+
+    service = get_subscription_service()
+    result = service.unsubscribe_from_channel(channel.youtube_channel_id, db=db)
+
+    if result.get("success"):
+        return {
+            "success": True,
+            "channel_id": channel_id,
+            "youtube_channel_id": channel.youtube_channel_id,
+            "message": result.get("message", "Desinscrição realizada com sucesso")
+        }
+    else:
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("error", "Erro ao realizar desinscrição")
+        )
+
+
+# ============================================================================
+# API Configuration Endpoints
+# ============================================================================
+
+@router.get("/admin/settings/api-config")
+async def get_api_config(
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Get current API configuration with masked credentials"""
+    from app.common.models import SystemSettings
+
+    # Retrieve from database
+    ai_service_setting = db.query(SystemSettings).filter(
+        SystemSettings.setting_key == "ai_service_provider"
+    ).first()
+
+    gemini_key_setting = db.query(SystemSettings).filter(
+        SystemSettings.setting_key == "gemini_api_key"
+    ).first()
+
+    # Mask API key for security
+    gemini_key = os.getenv("GEMINI_API_KEY") or (
+        gemini_key_setting.setting_value if gemini_key_setting else None
+    )
+    masked_key = None
+    if gemini_key and len(gemini_key) > 4:
+        masked_key = f"...{gemini_key[-4:]}"
+
+    # Get usage stats from LLM client
+    try:
+        from app.ai.llm_client import get_llm_client
+        llm_client = get_llm_client()
+        stats = llm_client.get_stats()
+    except Exception as e:
+        logger.error(f"Error getting LLM stats: {e}")
+        stats = {}
+
+    return {
+        "ai_service": ai_service_setting.setting_value if ai_service_setting else "gemini",
+        "gemini_api_key": masked_key,
+        "gemini_stats": {
+            "tokens_input": stats.get("gemini_tokens", 0),
+            "tokens_output": 0,  # Not tracked separately currently
+            "total_calls": stats.get("gemini_calls", 0),
+            "fallback_count": stats.get("fallback_count", 0),
+            "model_name": os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+        }
+    }
+
+
+@router.post("/admin/settings/api-config")
+async def update_api_config(
+    request: Request,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Update API configuration settings"""
+    from app.common.models import SystemSettings
+
+    try:
+        data = await request.json()
+        ai_service = data.get("ai_service")
+        gemini_api_key = data.get("gemini_api_key")
+
+        # Validate AI service
+        if ai_service and ai_service not in ["gemini", "ollama"]:
+            return {"success": False, "message": "Serviço de IA inválido. Use 'gemini' ou 'ollama'."}
+
+        # Update AI service provider
+        if ai_service:
+            service_setting = db.query(SystemSettings).filter(
+                SystemSettings.setting_key == "ai_service_provider"
+            ).first()
+
+            if service_setting:
+                service_setting.setting_value = ai_service
+                service_setting.updated_at = datetime.utcnow()
+                service_setting.updated_by = user
+            else:
+                service_setting = SystemSettings(
+                    setting_key="ai_service_provider",
+                    setting_value=ai_service,
+                    encrypted=False,
+                    updated_by=user,
+                    description="Primary AI service (gemini or ollama)"
+                )
+                db.add(service_setting)
+
+        # Update Gemini API key
+        if gemini_api_key:
+            key_setting = db.query(SystemSettings).filter(
+                SystemSettings.setting_key == "gemini_api_key"
+            ).first()
+
+            if key_setting:
+                key_setting.setting_value = gemini_api_key
+                key_setting.updated_at = datetime.utcnow()
+                key_setting.updated_by = user
+            else:
+                key_setting = SystemSettings(
+                    setting_key="gemini_api_key",
+                    setting_value=gemini_api_key,
+                    encrypted=True,
+                    updated_by=user,
+                    description="Google Gemini API key"
+                )
+                db.add(key_setting)
+
+            # Also update environment variable for immediate effect
+            os.environ["GEMINI_API_KEY"] = gemini_api_key
+
+        db.commit()
+
+        return {
+            "success": True,
+            "message": "Configurações salvas com sucesso!"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating API config: {e}")
+        return {
+            "success": False,
+            "message": f"Erro ao salvar configurações: {str(e)}"
+        }
+
+
+@router.get("/admin/gemini-usage")
+async def get_gemini_usage(user: str = Depends(require_auth)):
+    """Get Gemini API token usage statistics"""
+    try:
+        from app.ai.llm_client import get_llm_client
+        llm_client = get_llm_client()
+        stats = llm_client.get_stats()
+
+        return {
+            "tokens_input": stats.get("gemini_tokens", 0),
+            "tokens_output": 0,  # Not tracked separately
+            "total_calls": stats.get("gemini_calls", 0),
+            "fallback_count": stats.get("fallback_count", 0),
+            "model_name": os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
+            "active_backend": "gemini" if stats.get("gemini_calls", 0) > 0 else "ollama"
+        }
+    except Exception as e:
+        logger.error(f"Error getting Gemini usage: {e}")
+        return {"error": str(e)}

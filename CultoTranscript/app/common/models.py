@@ -1,7 +1,8 @@
 """
 SQLAlchemy ORM models matching the database schema
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON
+from datetime import datetime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, Date, Text, Float, ForeignKey, CheckConstraint, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -31,6 +32,7 @@ class Channel(Base):
     title = Column(String(500), nullable=False)
     youtube_url = Column(String(500), nullable=False)
     channel_id = Column(String(100), unique=True, nullable=False)
+    youtube_channel_id = Column(String(100), comment='YouTube channel ID extracted from channel URL')
     created_by = Column(Integer, ForeignKey("users.id"))
     schedule_cron = Column(String(100))
     active = Column(Boolean, default=True)
@@ -43,6 +45,7 @@ class Channel(Base):
     creator = relationship("User", back_populates="channels")
     videos = relationship("Video", back_populates="channel", cascade="all, delete-orphan")
     jobs = relationship("Job", back_populates="channel")
+    youtube_subscription = relationship("YouTubeSubscription", back_populates="channel", uselist=False, cascade="all, delete-orphan")
 
 
 class Video(Base):
@@ -60,6 +63,7 @@ class Video(Base):
     title = Column(String(500), nullable=False)
     published_at = Column(DateTime(timezone=True), nullable=False, index=True)
     video_created_at = Column(DateTime(timezone=True), nullable=True, index=True, comment='Video creation/recording date from YouTube (same as published_at, used for display)')
+    sermon_actual_date = Column(Date, nullable=True, comment='Actual sermon date (previous Sunday) used for filtering')
     duration_sec = Column(Integer, nullable=False)
     has_auto_cc = Column(Boolean, default=False)
     status = Column(String(50), nullable=False, default='pending', index=True)
@@ -357,7 +361,7 @@ class SensitivityFlag(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), index=True)
-    term = Column(String(200), nullable=False)
+    term = Column(Text, nullable=False)
     context_before = Column(Text)
     context_after = Column(Text)
     flag_reason = Column(Text, nullable=False)
@@ -490,3 +494,54 @@ class Speaker(Base):
     last_seen_at = Column(DateTime(timezone=True), server_default=func.now())
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+# ============================================================================
+# YOUTUBE WEBSUB (PUBSUBHUBBUB) MODELS
+# ============================================================================
+
+class YouTubeSubscription(Base):
+    """
+    Tracks YouTube PubSubHubbub subscriptions for real-time video notifications.
+    Each channel can have one active subscription.
+    """
+    __tablename__ = "youtube_subscriptions"
+    __table_args__ = (
+        CheckConstraint(
+            "subscription_status IN ('pending', 'active', 'expired', 'failed', 'unsubscribed')",
+            name="check_youtube_subscription_status"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    youtube_channel_id = Column(String(100), nullable=False, unique=True, comment='YouTube channel ID (e.g., UCxxxxx)')
+    callback_url = Column(String(500), nullable=False, comment='Webhook callback URL for notifications')
+    hub_url = Column(String(500), default="https://pubsubhubbub.appspot.com/subscribe", comment='PubSubHubbub hub URL')
+    topic_url = Column(String(500), nullable=False, comment='YouTube channel feed URL')
+    subscription_status = Column(String(50), default="pending", index=True, comment='Current status: pending, active, expired, failed, unsubscribed')
+    last_subscribed_at = Column(DateTime(timezone=True), comment='When subscription was last confirmed')
+    expires_at = Column(DateTime(timezone=True), index=True, comment='Subscription expiration (typically 10 days)')
+    last_notification_at = Column(DateTime(timezone=True), comment='Last time a notification was received')
+    notification_count = Column(Integer, default=0, comment='Total notifications received')
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    channel = relationship("Channel", back_populates="youtube_subscription")
+
+
+class SystemSettings(Base):
+    """System-wide configuration settings"""
+    __tablename__ = 'system_settings'
+
+    id = Column(Integer, primary_key=True)
+    setting_key = Column(String(100), unique=True, nullable=False, index=True)
+    setting_value = Column(Text)
+    encrypted = Column(Boolean, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+    updated_by = Column(String(100))
+    description = Column(Text)
+
+    def __repr__(self):
+        return f"<SystemSettings(key='{self.setting_key}', value='{'***' if self.encrypted else self.setting_value}')>"

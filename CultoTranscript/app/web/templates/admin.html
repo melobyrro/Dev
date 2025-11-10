@@ -1,0 +1,1272 @@
+{% extends "base.html" %}
+
+{% block title %}Painel Administrativo - CultoTranscript{% endblock %}
+
+{% block extra_css %}
+<style>
+/* === TAB NAVIGATION === */
+.admin-tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 2rem;
+    border-bottom: 2px solid var(--border);
+}
+
+.tab-button {
+    padding: 1rem 1.5rem;
+    background: transparent;
+    color: var(--text-muted);
+    border: none;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: all 0.2s ease;
+    position: relative;
+    margin-bottom: -2px;
+}
+
+.tab-button:hover {
+    color: var(--primary);
+    background: var(--muted);
+}
+
+.tab-button.active {
+    color: var(--primary);
+    border-bottom-color: var(--primary);
+}
+
+/* === TAB CONTENT === */
+.tab-content {
+    margin-top: 2rem;
+}
+
+.tab-pane {
+    display: none;
+}
+
+.tab-pane.active {
+    display: block;
+}
+
+/* === CHANNEL HEADER BANNER === */
+.channel-header-banner {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: white;
+    margin: -1.5rem -1.5rem 2rem -1.5rem;
+    padding: 2rem;
+    border-radius: 0 0 12px 12px;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="dark"] .channel-header-banner {
+    background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+}
+
+/* === STATUS CLASSES === */
+.status-info {
+    color: #3b82f6;
+}
+
+.status-success {
+    color: #10b981;
+}
+
+.status-error {
+    color: #ef4444;
+}
+
+[data-theme="dark"] .status-info {
+    color: #60a5fa;
+}
+
+[data-theme="dark"] .status-success {
+    color: #34d399;
+}
+
+[data-theme="dark"] .status-error {
+    color: #f87171;
+}
+
+/* === PROGRESS COMPONENTS === */
+.progress-item {
+    background: var(--surface);
+    border-left: 4px solid #3b82f6;
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+    border-radius: 4px;
+}
+
+[data-theme="dark"] .progress-item {
+    border-left-color: #60a5fa;
+}
+
+.progress-item-header {
+    background: var(--muted);
+    padding: 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+}
+
+.progress-item-bar {
+    background: #3b82f6;
+    height: 4px;
+    border-radius: 2px;
+    transition: width 0.3s ease;
+}
+
+[data-theme="dark"] .progress-item-bar {
+    background: #60a5fa;
+}
+
+.progress-indicator {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #f39c12;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 0.5rem;
+    vertical-align: middle;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.progress-tracker {
+    margin-top: 1.5rem;
+    padding: 1.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+}
+
+.progress-step {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: var(--muted);
+    border-radius: 4px;
+    border: 1px solid var(--border);
+}
+
+.step-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 1rem;
+    font-size: 16px;
+    flex-shrink: 0;
+}
+
+.step-icon.pending {
+    background: var(--muted);
+    color: var(--text-muted);
+}
+
+.step-icon.running {
+    background: #f39c12;
+    color: white;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.step-icon.completed {
+    background: #10b981;
+    color: white;
+}
+
+.step-icon.failed {
+    background: #ef4444;
+    color: white;
+}
+
+@keyframes pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.1); }
+}
+
+.step-content {
+    flex: 1;
+}
+
+.step-name {
+    font-weight: bold;
+    margin-bottom: 0.25rem;
+}
+
+.step-estimate {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.progress-bar-container {
+    width: 100%;
+    height: 8px;
+    background: var(--muted);
+    border-radius: 4px;
+    overflow: hidden;
+    margin-top: 0.5rem;
+}
+
+.progress-bar {
+    height: 100%;
+    background: #3498db;
+    transition: width 0.3s ease;
+}
+
+.progress-bar.completed {
+    background: #10b981;
+}
+
+/* === SCHEDULE CONFIG STYLES === */
+.config-form {
+    max-width: 600px;
+    margin: 2rem auto;
+    background: var(--surface);
+    padding: 2rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px var(--shadow);
+}
+
+.form-section {
+    margin-bottom: 1.5rem;
+}
+
+.form-section label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+}
+
+.form-section select,
+.form-section input {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    font-size: 1rem;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.form-section .help-text {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    margin-top: 0.25rem;
+}
+
+.checkbox-wrapper {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+    width: auto;
+    margin: 0;
+}
+
+.save-button {
+    width: 100%;
+    padding: 1rem;
+    background: #27ae60;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.save-button:hover {
+    background: #229954;
+}
+
+.save-button:disabled {
+    background: #95a5a6;
+    cursor: not-allowed;
+}
+
+.status-message {
+    padding: 1rem;
+    border-radius: 4px;
+    margin-bottom: 1rem;
+    text-align: center;
+}
+
+.status-message.success {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+}
+
+.status-message.error {
+    background: #f8d7da;
+    color: #721c24;
+    border: 1px solid #f5c6cb;
+}
+
+[data-theme="dark"] .status-message.success {
+    background: #155724;
+    color: #d4edda;
+    border: 1px solid #0e4620;
+}
+
+[data-theme="dark"] .status-message.error {
+    background: #721c24;
+    color: #f8d7da;
+    border: 1px solid #5a0e18;
+}
+
+.loading {
+    text-align: center;
+    padding: 2rem;
+}
+
+.day-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 0.5rem;
+}
+
+.day-option {
+    padding: 0.75rem;
+    border: 2px solid var(--border);
+    border-radius: 4px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--surface);
+    color: var(--text);
+}
+
+.day-option:hover {
+    border-color: var(--primary);
+    background: var(--muted);
+}
+
+.day-option.selected {
+    border-color: var(--primary);
+    background: var(--primary);
+    color: white;
+    font-weight: bold;
+}
+
+/* === FORM GROUPS === */
+.form-group {
+    margin-bottom: 1rem;
+}
+
+.form-group label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+}
+
+.form-group input,
+.form-group select {
+    width: 100%;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.form-group small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="card" style="margin-top: 2rem;">
+    <h1>🔐 Painel Administrativo</h1>
+    <p style="color: var(--text-muted); margin-top: 0.5rem;">Gerencie importações, agendamentos e configurações do sistema.</p>
+</div>
+
+<!-- Tab Navigation -->
+<div class="admin-tabs">
+    <button class="tab-button active" onclick="showTab('importar')">📥 Importar</button>
+    <button class="tab-button" onclick="showTab('agendamento')">📅 Agendamento</button>
+    <button class="tab-button" onclick="showTab('configuracao')">⚙️ Configuração</button>
+</div>
+
+<!-- Tab Content -->
+<div class="tab-content">
+    <!-- IMPORTAR TAB -->
+    <div id="importar-tab" class="tab-pane active">
+        <!-- Channel Header -->
+        {% if channel %}
+        <div class="card channel-header-banner">
+            <h2 style="margin-bottom: 0.5rem;">📺 {{ channel.title }}</h2>
+            <p class="text-secondary" style="margin-bottom: 1rem;">{{ channel.youtube_url }}</p>
+            <div style="display: flex; gap: 1rem; font-size: 0.95rem;">
+                <div>📊 <strong>{{ total_videos }}</strong> vídeos</div>
+                <div>✅ <strong>{{ completed_videos }}</strong> processados</div>
+                {% if channel.last_checked_at %}
+                <div>🔄 Última verificação: {{ channel.last_checked_at.strftime('%m/%d/%Y %H:%M') }}</div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <h2>⚙️ Configurar Canal</h2>
+            <p>Nenhum canal configurado. Configure um canal para começar a importar vídeos.</p>
+            <form id="setupChannelForm" style="margin-top: 1rem;">
+                <div class="form-group">
+                    <label for="channelTitle">Nome do Canal</label>
+                    <input type="text" id="channelTitle" placeholder="Ex: Igreja Exemplo" required>
+                </div>
+                <div class="form-group">
+                    <label for="channelUrl">URL do Canal no YouTube</label>
+                    <input type="url" id="channelUrl" placeholder="https://www.youtube.com/@nome_do_canal" required>
+                </div>
+                <button type="submit" class="btn">Configurar Canal</button>
+            </form>
+            <div id="setupStatus" style="margin-top: 1rem;"></div>
+        </div>
+        {% endif %}
+
+        <!-- Import Options -->
+        {% if channel %}
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <!-- Single Video Import -->
+            <div class="card">
+                <h2>📹 Importar 1 Vídeo</h2>
+                <p style="color: var(--text-muted); margin-bottom: 1rem;">Adicione um vídeo específico pela URL do YouTube</p>
+                <form id="transcribeForm">
+                    <div class="form-group">
+                        <label for="url">URL do Vídeo</label>
+                        <input type="url" id="url" name="url" placeholder="https://www.youtube.com/watch?v=..." required>
+                    </div>
+                    <button type="submit" class="btn">Importar Vídeo</button>
+                </form>
+                <div id="singleStatus" style="margin-top: 1rem;"></div>
+                <div id="progressTracker" style="display: none;"></div>
+            </div>
+
+            <!-- Bulk Channel Import -->
+            <div class="card">
+                <h2>📚 Importar do Canal</h2>
+                <p style="color: var(--text-muted); margin-bottom: 1rem;">Importe vários vídeos publicados em um período específico</p>
+                <form id="bulkImportForm">
+                    <div class="form-group">
+                        <label for="dateStart">Data Início (publicação no YouTube)</label>
+                        <input type="date" id="dateStart" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="dateEnd">Data Fim</label>
+                        <input type="date" id="dateEnd" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="maxVideos">Limite de Vídeos (opcional)</label>
+                        <input type="number" id="maxVideos" min="1" max="500" placeholder="Ex: 50">
+                        <small style="color: var(--text-muted);">Deixe vazio para importar todos do período</small>
+                    </div>
+                    <button type="submit" class="btn">Iniciar Importação</button>
+                </form>
+                <div id="bulkStatus" style="margin-top: 1rem;"></div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- AGENDAMENTO TAB -->
+    <div id="agendamento-tab" class="tab-pane">
+        <div class="card">
+            <h2>⏰ Configuração de Agendamento Automático</h2>
+            <p>Configure quando o sistema deve verificar o canal para novos vídeos automaticamente.</p>
+        </div>
+
+        <div class="config-form">
+            <div id="statusMessage" style="display: none;"></div>
+
+            <div id="loadingIndicator" class="loading">
+                <div class="progress-indicator"></div>
+                Carregando configurações...
+            </div>
+
+            <form id="scheduleForm" style="display: none;">
+                <div class="form-section">
+                    <label>Dia da Semana</label>
+                    <div class="day-grid">
+                        <div class="day-option" data-day="0">Segunda</div>
+                        <div class="day-option" data-day="1">Terça</div>
+                        <div class="day-option" data-day="2">Quarta</div>
+                        <div class="day-option" data-day="3">Quinta</div>
+                        <div class="day-option" data-day="4">Sexta</div>
+                        <div class="day-option" data-day="5">Sábado</div>
+                        <div class="day-option" data-day="6">Domingo</div>
+                    </div>
+                    <p class="help-text">Selecione o dia da semana para verificar novos vídeos</p>
+                </div>
+
+                <div class="form-section">
+                    <label for="timeInput">Horário</label>
+                    <input type="time" id="timeInput" required>
+                    <p class="help-text">Horário em que a verificação será executada</p>
+                </div>
+
+                <div class="form-section">
+                    <div class="checkbox-wrapper">
+                        <input type="checkbox" id="enabledCheckbox">
+                        <label for="enabledCheckbox" style="margin: 0;">Agendamento ativo</label>
+                    </div>
+                    <p class="help-text">Desmarque para desativar temporariamente</p>
+                </div>
+
+                <button type="submit" class="save-button" id="saveButton">
+                    Salvar Configuração
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- CONFIGURAÇÃO TAB -->
+    <div id="configuracao-tab" class="tab-pane">
+        <!-- WebSub Real-Time Notifications -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <h2>🔔 Notificações em Tempo Real</h2>
+            <p style="color: var(--text-muted); margin-top: 1rem;">
+                Configure notificações automáticas quando novos vídeos forem publicados nos seus canais do YouTube.
+            </p>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">
+                O sistema WebSub (PubSubHubbub) permite receber notificações instantâneas, sem precisar verificar manualmente.
+            </p>
+            <div style="margin-top: 1.5rem;">
+                <a href="/admin/websub" class="btn" style="background: var(--primary); color: white; padding: 0.75rem 1.5rem; border-radius: 6px; text-decoration: none; display: inline-block;">
+                    Gerenciar Inscrições WebSub →
+                </a>
+            </div>
+        </div>
+
+        <!-- API Configuration Section -->
+        <div class="card mb-6">
+            <h3 class="text-xl font-semibold mb-4 text-gray-900 dark:text-white">
+                🤖 Configuração de IA
+            </h3>
+
+            <div class="space-y-4">
+                <!-- AI Service Selection -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Serviço de IA
+                    </label>
+                    <select id="ai-service" onchange="toggleGeminiConfig()" class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white">
+                        <option value="gemini">Google Gemini</option>
+                        <option value="ollama">Ollama (Local)</option>
+                    </select>
+                </div>
+
+                <!-- Gemini API Key -->
+                <div id="gemini-config" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                            Chave API do Gemini
+                        </label>
+                        <div class="flex gap-2">
+                            <input
+                                type="password"
+                                id="gemini-api-key"
+                                placeholder="Insira a chave API"
+                                class="flex-1 p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                            />
+                            <button
+                                onclick="toggleApiKeyVisibility()"
+                                class="px-4 py-2 bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-500"
+                            >
+                                👁️
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Token Usage Display -->
+                    <div class="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                        <h4 class="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                            📊 Uso de Tokens (Sessão Atual)
+                        </h4>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-700 dark:text-gray-300">Tokens de Entrada:</span>
+                                <span id="tokens-input" class="font-semibold text-gray-900 dark:text-white">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-700 dark:text-gray-300">Total de Chamadas:</span>
+                                <span id="total-calls" class="font-semibold text-gray-900 dark:text-white">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-700 dark:text-gray-300">Fallbacks (Ollama):</span>
+                                <span id="fallback-count" class="font-semibold text-orange-600 dark:text-orange-400">-</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-700 dark:text-gray-300">Modelo Ativo:</span>
+                                <span id="model-name" class="font-semibold text-gray-900 dark:text-white">-</span>
+                            </div>
+                        </div>
+                        <button
+                            onclick="refreshGeminiUsage()"
+                            class="mt-3 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                            🔄 Atualizar
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Save Button -->
+                <div class="flex justify-end">
+                    <button
+                        onclick="saveApiConfig()"
+                        class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        💾 Salvar Configurações
+                    </button>
+                </div>
+
+                <div id="api-config-message" class="hidden mt-3"></div>
+            </div>
+        </div>
+
+        <!-- Future System Settings -->
+        <div class="card">
+            <h2>⚙️ Outras Configurações do Sistema</h2>
+            <p style="color: var(--text-muted); margin-top: 1rem;">Em breve: configurações avançadas do sistema</p>
+            <ul style="margin-top: 1rem; color: var(--text-muted);">
+                <li>Limites de processamento</li>
+                <li>Backup e restauração</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="card" style="margin-top: 2rem;">
+    <p style="text-align: center; margin: 2rem 0;">
+        <a href="/" class="btn btn-secondary">← Voltar ao Dashboard</a>
+    </p>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// ==================================================
+// TAB SWITCHING LOGIC
+// ==================================================
+function showTab(tabName) {
+    // Remove active class from all buttons
+    document.querySelectorAll('.tab-button').forEach(btn => {
+        btn.classList.remove('active');
+    });
+
+    // Remove active class from all panes
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        pane.classList.remove('active');
+    });
+
+    // Add active class to clicked button
+    event.target.classList.add('active');
+
+    // Show corresponding tab pane
+    document.getElementById(tabName + '-tab').classList.add('active');
+
+    // Update URL hash
+    window.location.hash = tabName;
+
+    // If switching to agendamento tab, load config
+    if (tabName === 'agendamento') {
+        loadScheduleConfig();
+    }
+}
+
+// Initialize tab from URL hash on page load
+document.addEventListener('DOMContentLoaded', () => {
+    const hash = window.location.hash.substring(1);
+    if (hash && ['importar', 'agendamento', 'configuracao'].includes(hash)) {
+        // Remove active from default tab
+        document.querySelector('.tab-button.active').classList.remove('active');
+        document.querySelector('.tab-pane.active').classList.remove('active');
+
+        // Activate tab from hash
+        document.querySelector(`[onclick="showTab('${hash}')"]`).classList.add('active');
+        document.getElementById(hash + '-tab').classList.add('active');
+
+        // Load config if agendamento tab
+        if (hash === 'agendamento') {
+            loadScheduleConfig();
+        }
+    }
+});
+
+// ==================================================
+// IMPORT TAB - CHANNEL SETUP & VIDEO IMPORT
+// ==================================================
+const CHANNEL_ID = {{ channel.id if channel else 'null' }};
+let activeJobIds = new Set();
+let pollInterval = null;
+
+// Handle channel setup form (when no channel exists)
+{% if not channel %}
+document.getElementById('setupChannelForm')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const title = document.getElementById('channelTitle').value;
+    const url = document.getElementById('channelUrl').value;
+    const statusDiv = document.getElementById('setupStatus');
+
+    statusDiv.innerHTML = '<p class="status-info">⏳ Configurando canal...</p>';
+
+    try {
+        const response = await fetch('/api/channels/setup', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ title, youtube_url: url })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            statusDiv.innerHTML = '<p class="status-success">✅ Canal configurado! Recarregando...</p>';
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${data.detail || 'Falha ao configurar canal'}</p>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${error.message}</p>`;
+    }
+});
+{% endif %}
+
+// Handle single video transcription form
+{% if channel %}
+document.getElementById('transcribeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const url = document.getElementById('url').value;
+    const statusDiv = document.getElementById('singleStatus');
+    const progressTracker = document.getElementById('progressTracker');
+
+    statusDiv.innerHTML = '<p class="status-info"><span class="progress-indicator"></span>Iniciando transcrição...</p>';
+    progressTracker.style.display = 'none';
+
+    try {
+        const response = await fetch('/api/transcribe', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ url, channel_id: CHANNEL_ID })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            statusDiv.innerHTML = `<p class="status-success"><span class="progress-indicator"></span>Transcrição iniciada! Acompanhe o progresso abaixo...</p>`;
+            activeJobIds.add(data.job_id);
+
+            // Show progress tracker with initial steps
+            progressTracker.style.display = 'block';
+            progressTracker.innerHTML = renderProgressTracker({
+                total_steps: 6,
+                current_step: "1",
+                step_status: "queued",
+                step_message: "Aguardando início do processamento...",
+                steps: {
+                    "1": {"name": "Extrair metadados", "status": "pending", "estimate": "5-10s"},
+                    "2": {"name": "Validar duração", "status": "pending", "estimate": "1s"},
+                    "3": {"name": "Obter transcrição", "status": "pending", "estimate": "10-30s"},
+                    "4": {"name": "Detectar início do sermão", "status": "pending", "estimate": "5-10s"},
+                    "5": {"name": "Análise avançada com IA", "status": "pending", "estimate": "30-60s"},
+                    "6": {"name": "Gerar embeddings", "status": "pending", "estimate": "10-20s"}
+                }
+            });
+
+            startPolling();
+            document.getElementById('url').value = '';
+        } else {
+            statusDiv.innerHTML = `<p class="status-error">Erro: ${data.detail || 'Falha ao iniciar transcrição'}</p>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<p class="status-error">Erro: ${error.message}</p>`;
+    }
+});
+
+// Handle bulk channel import form
+document.getElementById('bulkImportForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const dateStart = document.getElementById('dateStart').value;
+    const dateEnd = document.getElementById('dateEnd').value;
+    const maxVideos = document.getElementById('maxVideos').value || null;
+    const statusDiv = document.getElementById('bulkStatus');
+
+    statusDiv.innerHTML = '<p class="status-info">⏳ Iniciando importação em lote...</p>';
+
+    try {
+        const response = await fetch('/api/channels/bulk-import', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                channel_id: CHANNEL_ID,
+                date_start: dateStart,
+                date_end: dateEnd,
+                max_videos: maxVideos ? parseInt(maxVideos) : null
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success && data.job_id) {
+            statusDiv.innerHTML = `<p class="status-success">✅ Importação iniciada! Monitorando progresso...</p>`;
+
+            // Clear form
+            document.getElementById('dateStart').value = '';
+            document.getElementById('dateEnd').value = '';
+            document.getElementById('maxVideos').value = '';
+
+            // Start polling for progress
+            pollBulkImportProgress(data.job_id, statusDiv);
+        } else {
+            statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${data.detail || 'Falha ao iniciar importação'}</p>`;
+        }
+    } catch (error) {
+        statusDiv.innerHTML = `<p class="status-error">❌ Erro: ${error.message}</p>`;
+    }
+});
+
+// Poll bulk import progress
+let bulkImportPollInterval = null;
+async function pollBulkImportProgress(jobId, statusDiv) {
+    // Clear any existing interval
+    if (bulkImportPollInterval) {
+        clearInterval(bulkImportPollInterval);
+    }
+
+    const updateProgress = async () => {
+        try {
+            const response = await fetch(`/api/jobs/${jobId}/status`);
+            const data = await response.json();
+
+            if (data.status === 'running' || data.status === 'queued') {
+                const meta = data.metadata || {};
+                const progress = meta.progress || 0;
+                const message = meta.message || 'Processando...';
+                const details = meta.details || '';
+                const currentVideo = meta.current_video || 0;
+                const newVideos = meta.new_videos || 0;
+                const totalVideos = meta.total_videos || 0;
+                const videoTitle = meta.current_video_title || '';
+
+                let progressHtml = `
+                    <div class="progress-item">
+                        <p style="margin: 0.5rem 0;"><strong>Status:</strong> ${message}</p>
+                        <div class="progress-item-header">
+                            <div class="progress-item-bar" style="width: ${progress}%"></div>
+                        </div>
+                        <p style="margin: 0.5rem 0; font-size: 0.9em;" class="text-secondary">${progress}% concluído</p>
+                `;
+
+                if (totalVideos > 0) {
+                    progressHtml += `<p style="margin: 0.5rem 0; font-size: 0.9em;"><strong>Total encontrado:</strong> ${totalVideos} vídeos</p>`;
+                }
+
+                if (newVideos > 0 && currentVideo > 0) {
+                    progressHtml += `
+                        <p style="margin: 0.5rem 0;"><strong>Processando:</strong> Vídeo ${currentVideo} de ${newVideos}</p>
+                        <p style="margin: 0.5rem 0; font-size: 0.9em;" class="text-secondary">${videoTitle}</p>
+                    `;
+                }
+
+                progressHtml += `</div>`;
+                statusDiv.innerHTML = progressHtml;
+
+            } else if (data.status === 'completed') {
+                clearInterval(bulkImportPollInterval);
+                const meta = data.metadata || {};
+                const newVideos = meta.new_videos || 0;
+                statusDiv.innerHTML = `
+                    <p class="status-success">✅ Importação concluída! ${newVideos} vídeos foram enfileirados para transcrição.</p>
+                `;
+                setTimeout(() => {
+                    statusDiv.innerHTML = '';
+                }, 5000);
+
+            } else if (data.status === 'failed') {
+                clearInterval(bulkImportPollInterval);
+                statusDiv.innerHTML = `<p class="status-error">❌ Importação falhou: ${data.error || 'Erro desconhecido'}</p>`;
+            }
+        } catch (error) {
+            console.error('Error polling job status:', error);
+        }
+    };
+
+    // Initial update
+    await updateProgress();
+
+    // Poll every 1 second
+    bulkImportPollInterval = setInterval(updateProgress, 1000);
+}
+{% endif %}
+
+// Render progress tracker
+function renderProgressTracker(metadata) {
+    if (!metadata || !metadata.steps) return '';
+
+    const totalSteps = metadata.total_steps || 6;
+    const currentStep = parseInt(metadata.current_step || 0);
+    const overallProgress = (currentStep / totalSteps) * 100;
+
+    let stepsHtml = '';
+    for (let i = 1; i <= totalSteps; i++) {
+        const step = metadata.steps[i.toString()];
+        if (!step) continue;
+
+        const status = step.status || 'pending';
+        const icon = {
+            'pending': '⏸️',
+            'running': '⏳',
+            'completed': '✅',
+            'failed': '❌'
+        }[status] || '•';
+
+        stepsHtml += `
+            <div class="progress-step">
+                <div class="step-icon ${status}">
+                    ${icon}
+                </div>
+                <div class="step-content">
+                    <div class="step-name">${i}. ${step.name}</div>
+                    <div class="step-estimate">Tempo estimado: ${step.estimate}</div>
+                    ${status === 'running' ? `
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: 50%;"></div>
+                        </div>
+                    ` : ''}
+                    ${status === 'completed' ? `
+                        <div class="progress-bar-container">
+                            <div class="progress-bar completed" style="width: 100%;"></div>
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    return `
+        <div class="progress-tracker">
+            <h3>Progresso da Transcrição</h3>
+            <p><strong>Etapa atual:</strong> ${metadata.step_message || 'Processando...'}</p>
+            <div class="progress-bar-container" style="margin-bottom: 1.5rem;">
+                <div class="progress-bar" style="width: ${overallProgress}%;"></div>
+            </div>
+            ${stepsHtml}
+        </div>
+    `;
+}
+
+// Poll job statuses
+async function pollJobStatuses() {
+    if (activeJobIds.size === 0) {
+        stopPolling();
+        return;
+    }
+
+    for (const jobId of activeJobIds) {
+        try {
+            const response = await fetch(`/api/jobs/${jobId}/status`);
+            const data = await response.json();
+
+            const statusDiv = document.getElementById('singleStatus');
+            const progressTracker = document.getElementById('progressTracker');
+
+            if (data.status === 'completed') {
+                activeJobIds.delete(jobId);
+                statusDiv.innerHTML = '<p class="status-success">✅ Transcrição concluída com sucesso!</p>';
+                progressTracker.style.display = 'none';
+                setTimeout(() => statusDiv.innerHTML = '', 5000);
+            } else if (data.status === 'failed') {
+                activeJobIds.delete(jobId);
+                statusDiv.innerHTML = `<p class="status-error">❌ Transcrição falhou: ${data.error || 'Erro desconhecido'}</p>`;
+                progressTracker.style.display = 'none';
+            } else if (data.status === 'running') {
+                statusDiv.innerHTML = `<p class="status-info"><span class="progress-indicator"></span>${data.progress || 'Processando...'}</p>`;
+                if (data.metadata) {
+                    progressTracker.innerHTML = renderProgressTracker(data.metadata);
+                }
+            } else if (data.status === 'queued') {
+                statusDiv.innerHTML = '<p class="status-info">📋 Aguardando na fila...</p>';
+            }
+        } catch (error) {
+            console.error('Error polling job:', error);
+        }
+    }
+}
+
+function startPolling() {
+    if (!pollInterval) {
+        pollInterval = setInterval(pollJobStatuses, 2000); // Poll every 2 seconds
+    }
+}
+
+function stopPolling() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+        pollInterval = null;
+    }
+}
+
+// ==================================================
+// AGENDAMENTO TAB - SCHEDULE CONFIGURATION
+// ==================================================
+let selectedDay = 0;
+let csrfToken = null;
+
+// Refresh CSRF token
+async function refreshCsrfToken() {
+    try {
+        const response = await fetch('/api/csrf-token');
+        const data = await response.json();
+        csrfToken = data.csrf_token;
+        console.log('CSRF token refreshed');
+    } catch (error) {
+        console.error('Error refreshing CSRF token:', error);
+    }
+}
+
+// Load current configuration
+async function loadScheduleConfig() {
+    try {
+        const response = await fetch('/api/schedule-config');
+        const data = await response.json();
+
+        if (data) {
+            selectedDay = data.day_of_week !== null ? data.day_of_week : 0;
+
+            // Set selected day
+            document.querySelectorAll('.day-option').forEach(opt => {
+                const day = parseInt(opt.dataset.day);
+                if (day === selectedDay) {
+                    opt.classList.add('selected');
+                }
+            });
+
+            // Set time (remove seconds if present)
+            const time = data.time_of_day.substring(0, 5);  // HH:MM:SS -> HH:MM
+            document.getElementById('timeInput').value = time;
+
+            // Set enabled
+            document.getElementById('enabledCheckbox').checked = data.enabled;
+
+            // Refresh CSRF token after loading config
+            await refreshCsrfToken();
+
+            // Show form
+            document.getElementById('loadingIndicator').style.display = 'none';
+            document.getElementById('scheduleForm').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading config:', error);
+        showMessage('Erro ao carregar configuração', 'error');
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+// Day selection
+document.querySelectorAll('.day-option').forEach(option => {
+    option.addEventListener('click', function() {
+        // Remove selection from all
+        document.querySelectorAll('.day-option').forEach(opt => {
+            opt.classList.remove('selected');
+        });
+
+        // Add selection to clicked
+        this.classList.add('selected');
+        selectedDay = parseInt(this.dataset.day);
+    });
+});
+
+// Form submission
+document.getElementById('scheduleForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+
+    const timeValue = document.getElementById('timeInput').value;
+    const enabled = document.getElementById('enabledCheckbox').checked;
+    const saveButton = document.getElementById('saveButton');
+
+    // Disable button
+    saveButton.disabled = true;
+    saveButton.textContent = 'Salvando...';
+
+    try {
+        // Refresh CSRF token before save
+        await refreshCsrfToken();
+
+        const response = await fetch('/api/schedule-config', {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
+            body: JSON.stringify({
+                day_of_week: selectedDay,
+                time_of_day: timeValue,
+                enabled: enabled
+            })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            showMessage('✓ Configuração salva com sucesso! O agendador será atualizado automaticamente.', 'success');
+        } else {
+            showMessage('Erro: ' + (data.detail || 'Erro desconhecido'), 'error');
+        }
+    } catch (error) {
+        console.error('Error saving config:', error);
+        showMessage('Erro ao salvar configuração. Verifique sua conexão.', 'error');
+    } finally {
+        // Re-enable button
+        saveButton.disabled = false;
+        saveButton.textContent = 'Salvar Configuração';
+    }
+});
+
+function showMessage(message, type) {
+    const statusDiv = document.getElementById('statusMessage');
+    statusDiv.className = 'status-message ' + type;
+    statusDiv.textContent = message;
+    statusDiv.style.display = 'block';
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        statusDiv.style.display = 'none';
+    }, 5000);
+}
+
+// ============================================================================
+// API Configuration Functions
+// ============================================================================
+
+async function loadApiConfig() {
+    try {
+        const response = await fetch('/api/admin/settings/api-config');
+        const data = await response.json();
+
+        document.getElementById('ai-service').value = data.ai_service || 'gemini';
+        if (data.gemini_api_key) {
+            document.getElementById('gemini-api-key').placeholder = data.gemini_api_key;
+        }
+
+        toggleGeminiConfig();
+
+        if (data.ai_service === 'gemini' && data.gemini_stats) {
+            loadGeminiUsage(data.gemini_stats);
+        }
+    } catch (error) {
+        console.error('Error loading API config:', error);
+    }
+}
+
+async function saveApiConfig() {
+    const aiService = document.getElementById('ai-service').value;
+    const apiKey = document.getElementById('gemini-api-key').value;
+
+    const messageDiv = document.getElementById('api-config-message');
+
+    try {
+        const response = await fetch('/api/admin/settings/api-config', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                ai_service: aiService,
+                gemini_api_key: apiKey || undefined
+            })
+        });
+
+        const result = await response.json();
+
+        messageDiv.className = result.success
+            ? 'mt-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg text-green-800 dark:text-green-200'
+            : 'mt-3 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200';
+        messageDiv.textContent = result.message;
+        messageDiv.classList.remove('hidden');
+
+        setTimeout(() => messageDiv.classList.add('hidden'), 5000);
+
+        if (result.success && aiService === 'gemini') {
+            await loadApiConfig();
+        }
+    } catch (error) {
+        messageDiv.className = 'mt-3 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200';
+        messageDiv.textContent = 'Erro ao salvar configurações';
+        messageDiv.classList.remove('hidden');
+    }
+}
+
+function loadGeminiUsage(stats) {
+    if (!stats) return;
+
+    document.getElementById('tokens-input').textContent = formatNumber(stats.tokens_input || 0);
+    document.getElementById('total-calls').textContent = formatNumber(stats.total_calls || 0);
+    document.getElementById('fallback-count').textContent = formatNumber(stats.fallback_count || 0);
+    document.getElementById('model-name').textContent = stats.model_name || 'gemini-1.5-flash';
+}
+
+async function refreshGeminiUsage() {
+    try {
+        const response = await fetch('/api/admin/gemini-usage');
+        const data = await response.json();
+
+        if (data.error) {
+            console.error('Error fetching usage:', data.error);
+            return;
+        }
+
+        loadGeminiUsage(data);
+    } catch (error) {
+        console.error('Error refreshing Gemini usage:', error);
+    }
+}
+
+function toggleGeminiConfig() {
+    const service = document.getElementById('ai-service').value;
+    const geminiConfig = document.getElementById('gemini-config');
+    geminiConfig.style.display = service === 'gemini' ? 'block' : 'none';
+}
+
+function toggleApiKeyVisibility() {
+    const input = document.getElementById('gemini-api-key');
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
+
+function formatNumber(num) {
+    return new Intl.NumberFormat('pt-BR').format(num);
+}
+
+// Load API config when page loads (on configuracao tab)
+document.addEventListener('DOMContentLoaded', function() {
+    // Load on page load if configuracao tab is active
+    if (window.location.hash === '#configuracao') {
+        loadApiConfig();
+    }
+});
+
+// Also load when switching to configuracao tab
+const originalShowTab = showTab;
+showTab = function(tabName) {
+    originalShowTab(tabName);
+    if (tabName === 'configuracao') {
+        loadApiConfig();
+    }
+};
+</script>
+{% endblock %}
