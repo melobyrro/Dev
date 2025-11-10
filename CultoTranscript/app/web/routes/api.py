@@ -699,6 +699,12 @@ class BulkImportRequest(BaseModel):
     max_videos: Optional[int] = None
 
 
+class MergeVideosRequest(BaseModel):
+    video_ids: List[int]
+    primary_video_id: int
+    password: str
+
+
 @router.post("/channels/{channel_id}/chat")
 async def chat_with_channel(
     channel_id: int,
@@ -1447,3 +1453,364 @@ async def get_gemini_usage(user: str = Depends(require_auth)):
     except Exception as e:
         logger.error(f"Error getting Gemini usage: {e}")
         return {"error": str(e)}
+
+
+@router.get("/admin/settings/video-duration")
+async def get_video_duration_settings(
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Get current min/max video duration settings."""
+    from app.common.models import SystemSettings
+
+    min_setting = db.query(SystemSettings).filter(
+        SystemSettings.setting_key == "min_video_duration_sec"
+    ).first()
+
+    max_setting = db.query(SystemSettings).filter(
+        SystemSettings.setting_key == "max_video_duration_sec"
+    ).first()
+
+    min_sec = int(min_setting.setting_value) if min_setting else 300
+    max_sec = int(max_setting.setting_value) if max_setting else 9000
+
+    return {
+        "min_duration_sec": min_sec,
+        "max_duration_sec": max_sec,
+        "min_duration_min": min_sec / 60,
+        "max_duration_min": max_sec / 60
+    }
+
+
+@router.put("/admin/settings/video-duration")
+async def update_video_duration_settings(
+    request: Request,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Update video duration thresholds."""
+    from app.common.models import SystemSettings
+
+    try:
+        data = await request.json()
+        min_sec = data.get("min_duration_sec")
+        max_sec = data.get("max_duration_sec")
+
+        # Validation
+        if min_sec is None or max_sec is None:
+            raise HTTPException(400, "Ambos min_duration_sec e max_duration_sec são obrigatórios")
+
+        if min_sec < 0 or min_sec > 3600:
+            raise HTTPException(400, "Duração mínima deve estar entre 0 e 3600 segundos (60 min)")
+
+        if max_sec < 300 or max_sec > 18000:
+            raise HTTPException(400, "Duração máxima deve estar entre 300 e 18000 segundos (300 min)")
+
+        if min_sec >= max_sec:
+            raise HTTPException(400, "Duração mínima deve ser menor que a máxima")
+
+        # Update min duration
+        min_setting = db.query(SystemSettings).filter(
+            SystemSettings.setting_key == "min_video_duration_sec"
+        ).first()
+
+        if min_setting:
+            min_setting.setting_value = str(min_sec)
+            min_setting.updated_at = datetime.utcnow()
+            min_setting.updated_by = user
+        else:
+            min_setting = SystemSettings(
+                setting_key="min_video_duration_sec",
+                setting_value=str(min_sec),
+                encrypted=False,
+                updated_by=user,
+                description="Duração mínima de vídeo em segundos"
+            )
+            db.add(min_setting)
+
+        # Update max duration
+        max_setting = db.query(SystemSettings).filter(
+            SystemSettings.setting_key == "max_video_duration_sec"
+        ).first()
+
+        if max_setting:
+            max_setting.setting_value = str(max_sec)
+            max_setting.updated_at = datetime.utcnow()
+            max_setting.updated_by = user
+        else:
+            max_setting = SystemSettings(
+                setting_key="max_video_duration_sec",
+                setting_value=str(max_sec),
+                encrypted=False,
+                updated_by=user,
+                description="Duração máxima de vídeo em segundos"
+            )
+            db.add(max_setting)
+
+        db.commit()
+
+        return {"success": True, "message": "Configurações atualizadas com sucesso"}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error updating video duration settings: {e}")
+        raise HTTPException(500, f"Erro ao salvar configurações: {str(e)}")
+
+
+@router.post("/videos/merge")
+async def merge_videos(
+    request: MergeVideosRequest,
+    db=Depends(get_db_session),
+    user: str = Depends(get_current_user)
+):
+    """
+    Merge multiple videos into one
+
+    - Validates videos belong to same channel
+    - Concatenates transcripts in chronological order
+    - Merges basic analytics (verses, themes)
+    - Deletes advanced analytics (will regenerate)
+    - Deletes secondary videos
+    - Queues re-analysis job
+    """
+    from app.common.models import (
+        Verse, Theme,
+        BiblicalPassage, SermonThemeV2, SermonInconsistency,
+        SermonSuggestion, SermonHighlight, DiscussionQuestion,
+        SensitivityFlag, TranscriptionError, SermonClassification,
+        TranscriptEmbedding, AuditLog
+    )
+    from sqlalchemy import func
+
+    # Verify password
+    if not verify_password(request.password):
+        raise HTTPException(status_code=401, detail="Senha incorreta")
+
+    # Validate inputs
+    if len(request.video_ids) < 2:
+        raise HTTPException(status_code=400, detail="Selecione pelo menos 2 vídeos para mesclar")
+
+    if request.primary_video_id not in request.video_ids:
+        raise HTTPException(status_code=400, detail="Vídeo principal deve estar na lista de vídeos selecionados")
+
+    try:
+        # Fetch all videos
+        videos = db.query(Video).filter(Video.id.in_(request.video_ids)).all()
+
+        if len(videos) != len(request.video_ids):
+            raise HTTPException(status_code=404, detail="Alguns vídeos não foram encontrados")
+
+        # Validate same channel
+        channels = set(v.channel_id for v in videos)
+        if len(channels) > 1:
+            raise HTTPException(status_code=400, detail="Todos os vídeos devem ser do mesmo canal")
+
+        # Validate all have transcripts
+        for video in videos:
+            transcript = db.query(Transcript).filter(Transcript.video_id == video.id).first()
+            if not transcript:
+                raise HTTPException(
+                    status_code=400,
+                    detail=f"Vídeo '{video.title}' não possui transcrição"
+                )
+
+        # Get primary and secondary videos
+        primary = next(v for v in videos if v.id == request.primary_video_id)
+        secondaries = [v for v in videos if v.id != request.primary_video_id]
+
+        # Sort by published_at for chronological merge
+        sorted_videos = sorted(videos, key=lambda v: v.published_at)
+
+        logger.info(f"Starting merge of {len(videos)} videos into primary video {primary.id}")
+
+        # ========== BEGIN TRANSACTION ==========
+
+        # 1. Merge transcripts (concatenate)
+        merged_text_parts = []
+        total_word_count = 0
+        total_char_count = 0
+
+        for video in sorted_videos:
+            transcript = db.query(Transcript).filter(Transcript.video_id == video.id).first()
+            merged_text_parts.append(
+                f"\n\n=== {video.title} ({video.published_at.strftime('%d/%m/%Y')}) ===\n\n"
+            )
+            merged_text_parts.append(transcript.text)
+            total_word_count += transcript.word_count or 0
+            total_char_count += transcript.char_count or 0
+
+        merged_text = "".join(merged_text_parts)
+
+        # Update primary video's transcript
+        primary_transcript = db.query(Transcript).filter(
+            Transcript.video_id == primary.id
+        ).first()
+        primary_transcript.text = merged_text
+        primary_transcript.word_count = total_word_count
+        primary_transcript.char_count = total_char_count
+        primary_transcript.source = 'merged'
+
+        # 2. Update primary video metadata (keep title and speaker, reset timestamps)
+        primary.duration_sec = sum(v.duration_sec for v in videos)
+        primary.published_at = min(v.published_at for v in videos)
+        primary.video_created_at = primary.published_at
+
+        # Sermon date - keep earliest if exists
+        sermon_dates = [v.sermon_actual_date for v in videos if v.sermon_actual_date]
+        if sermon_dates:
+            primary.sermon_actual_date = min(sermon_dates)
+
+        # Reset metadata timestamps
+        primary.ingested_at = func.now()
+        primary.created_at = func.now()
+        primary.updated_at = func.now()
+
+        # Reset AI-generated fields
+        primary.wpm = 0
+        primary.ai_summary = None
+        primary.sermon_start_time = 0
+        primary.transcript_hash = None
+        primary.status = 'completed'
+
+        # 3. Merge Verses (deduplicate and sum counts)
+        verse_map = {}
+        for video in videos:
+            verses = db.query(Verse).filter(Verse.video_id == video.id).all()
+            for verse in verses:
+                key = (verse.book, verse.chapter, verse.verse)
+                if key in verse_map:
+                    verse_map[key]['count'] += verse.count
+                else:
+                    verse_map[key] = {
+                        'book': verse.book,
+                        'chapter': verse.chapter,
+                        'verse': verse.verse,
+                        'count': verse.count
+                    }
+
+        # Delete all verses for primary and re-insert merged
+        db.query(Verse).filter(Verse.video_id == primary.id).delete()
+        for verse_data in verse_map.values():
+            new_verse = Verse(
+                video_id=primary.id,
+                book=verse_data['book'],
+                chapter=verse_data['chapter'],
+                verse=verse_data['verse'],
+                count=verse_data['count']
+            )
+            db.add(new_verse)
+
+        # 4. Merge Themes (deduplicate and average scores)
+        theme_map = {}
+        for video in videos:
+            themes = db.query(Theme).filter(Theme.video_id == video.id).all()
+            for theme in themes:
+                if theme.tag in theme_map:
+                    theme_map[theme.tag]['scores'].append(theme.score)
+                else:
+                    theme_map[theme.tag] = {'scores': [theme.score]}
+
+        # Delete all themes for primary and re-insert merged
+        db.query(Theme).filter(Theme.video_id == primary.id).delete()
+        for tag, data in theme_map.items():
+            avg_score = sum(data['scores']) / len(data['scores'])
+            new_theme = Theme(
+                video_id=primary.id,
+                tag=tag,
+                score=avg_score
+            )
+            db.add(new_theme)
+
+        # 5. Delete advanced analytics (will be regenerated)
+        # These tables will regenerate via re-analysis job
+        for video in videos:
+            db.query(BiblicalPassage).filter(BiblicalPassage.video_id == video.id).delete()
+            db.query(SermonThemeV2).filter(SermonThemeV2.video_id == video.id).delete()
+            db.query(SermonInconsistency).filter(SermonInconsistency.video_id == video.id).delete()
+            db.query(SermonSuggestion).filter(SermonSuggestion.video_id == video.id).delete()
+            db.query(SermonHighlight).filter(SermonHighlight.video_id == video.id).delete()
+            db.query(DiscussionQuestion).filter(DiscussionQuestion.video_id == video.id).delete()
+            db.query(SensitivityFlag).filter(SensitivityFlag.video_id == video.id).delete()
+            db.query(TranscriptionError).filter(TranscriptionError.video_id == video.id).delete()
+            db.query(SermonReport).filter(SermonReport.video_id == video.id).delete()
+            db.query(SermonClassification).filter(SermonClassification.video_id == video.id).delete()
+            db.query(TranscriptEmbedding).filter(TranscriptEmbedding.video_id == video.id).delete()
+
+        # 6. Delete secondary videos (cascade will handle remaining relations)
+        for video in secondaries:
+            logger.info(f"Deleting secondary video {video.id}: {video.title}")
+            db.delete(video)
+
+        # 7. Create audit log entry
+        audit_entry = AuditLog(
+            user_id=user if user != "anonymous" else None,
+            action="merge_videos",
+            target_type="video",
+            target_id=primary.id,
+            meta={
+                "merged_video_ids": request.video_ids,
+                "primary_video_id": primary.id,
+                "video_titles": [v.title for v in videos],
+                "total_duration_sec": primary.duration_sec,
+                "total_word_count": total_word_count
+            }
+        )
+        db.add(audit_entry)
+
+        # Commit transaction
+        db.commit()
+
+        # ========== END TRANSACTION ==========
+
+        logger.info(f"Successfully merged {len(videos)} videos into video {primary.id}")
+
+        # 8. Queue re-analysis job (post-transaction)
+        try:
+            job = Job(
+                job_type="transcribe_video",
+                status="queued",
+                video_id=primary.id,
+                channel_id=primary.channel_id,
+                meta={"reprocess": True, "merged": True, "youtube_id": primary.youtube_id}
+            )
+            db.add(job)
+            db.commit()
+            db.refresh(job)
+
+            # Queue in Redis
+            job_data = {
+                "job_id": job.id,
+                "video_id": primary.id,
+                "youtube_id": primary.youtube_id,
+                "reprocess": True,
+                "merged": True
+            }
+            redis_client.rpush("transcription_queue", json.dumps(job_data))
+
+            logger.info(f"Queued re-analysis job {job.id} for merged video {primary.id}")
+        except Exception as e:
+            logger.error(f"Failed to queue re-analysis job: {e}")
+            # Non-fatal - merge was successful
+
+        return {
+            "success": True,
+            "merged_video_id": primary.id,
+            "message": f"{len(videos)} vídeos mesclados com sucesso!",
+            "details": {
+                "total_duration": primary.duration_sec,
+                "total_word_count": total_word_count,
+                "videos_merged": [v.title for v in videos]
+            }
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error merging videos: {e}", exc_info=True)
+        raise HTTPException(
+            status_code=500,
+            detail=f"Erro ao mesclar vídeos: {str(e)}"
+        )

@@ -67,10 +67,24 @@
     </div>
 </form>
 
+<!-- Bulk Actions Bar (hidden by default) -->
+<div id="bulk-actions-bar" style="display: none;" class="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-4">
+    <span id="selected-count" class="font-semibold text-blue-900 dark:text-blue-100">0 vídeos selecionados</span>
+    <button onclick="openMergeModal()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+        Mesclar Vídeos Selecionados
+    </button>
+    <button onclick="clearSelection()" class="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors">
+        Limpar Seleção
+    </button>
+</div>
+
 <div class="overflow-hidden">
     <table class="w-full">
         <thead class="bg-secondary text-primary">
             <tr>
+                <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                    <input type="checkbox" id="select-all-videos" onchange="toggleSelectAll()" class="rounded">
+                </th>
                 <th class="px-4 py-3 text-left">
                     <a href="/videos?sort=title&order={% if current_sort == 'title' and current_order == 'asc' %}desc{% else %}asc{% endif %}&search={{ current_search }}&speaker={{ current_speaker }}&status={{ current_status }}&date_start={{ current_date_start }}&date_end={{ current_date_end }}"
                        style="color: inherit; text-decoration: none; display: flex; align-items: center; gap: 0.25rem;">
@@ -123,6 +137,16 @@
         <tbody>
             {% for video in videos %}
             <tr>
+                <td class="px-4 py-3">
+                    <input type="checkbox"
+                           class="video-checkbox rounded"
+                           data-video-id="{{ video.id }}"
+                           data-channel-id="{{ video.channel_id }}"
+                           data-status="{{ video.status }}"
+                           data-title="{{ video.title }}"
+                           data-duration="{{ video.duration_sec }}"
+                           onchange="updateMergeButton()">
+                </td>
                 <td class="px-4 py-3 text-sm">{{ video.title }}</td>
                 <td class="px-4 py-3 text-sm text-secondary font-mono">{{ video.youtube_id }}</td>
                 <!-- Speaker column with inline editor -->
@@ -163,7 +187,21 @@
                 <td class="px-4 py-3"><span class="status status-{{ video.status }}">{{ video.status }}</span></td>
                 <td class="px-4 py-3 text-sm text-secondary">{{ (video.duration_sec / 60)|int }} min</td>
                 <td class="px-4 py-3 text-sm">
-                    <div>{{ (video.video_created_at or video.published_at).strftime('%m/%d/%Y') }}</div>
+                    <div><strong>Publicado:</strong> {{ (video.published_at).strftime('%m/%d/%Y') }}</div>
+                    <div>
+                        <strong>Data do culto:</strong>
+                        <span id="sermon-date-display-{{ video.id }}" data-iso="{{ video.sermon_actual_date.strftime('%Y-%m-%d') if video.sermon_actual_date else '' }}">
+                            {% if video.sermon_actual_date %}
+                                {{ video.sermon_actual_date.strftime('%m/%d/%Y') }}
+                            {% else %}
+                                Não definido
+                            {% endif %}
+                        </span>
+                        <button onclick="editSermonDateInline({{ video.id }})"
+                                style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 0.2rem;">
+                            ✏️
+                        </button>
+                    </div>
                     <div style="font-size: 0.75rem; color: #6b7280;">Adicionado: {{ (video.ingested_at or video.created_at).strftime('%m/%d/%Y') }}</div>
                 </td>
                 <td class="px-4 py-3" onclick="event.stopPropagation();">
@@ -199,11 +237,142 @@
     </a>
     {% endif %}
 </div>
+
+<!-- Video Merge Modal -->
+<div id="merge-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4" style="max-height: 90vh; overflow-y: auto;">
+
+        <!-- Step 1: Select Primary Video -->
+        <div id="merge-step-1">
+            <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Mesclar Vídeos - Etapa 1/2</h2>
+            <p class="mb-4 text-gray-700 dark:text-gray-300">Selecione qual vídeo será o principal (manterá YouTube ID, título, speaker, etc.):</p>
+
+            <div id="primary-video-selection" class="space-y-2 mb-6">
+                <!-- Radio buttons will be inserted here by JavaScript -->
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="mergeStep2()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+                    Próximo →
+                </button>
+                <button onclick="closeMergeModal()" class="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+
+        <!-- Step 2: Confirm Merge -->
+        <div id="merge-step-2" style="display: none;">
+            <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Mesclar Vídeos - Etapa 2/2</h2>
+
+            <div class="mb-4">
+                <p class="font-semibold text-gray-900 dark:text-white">Vídeo Principal:</p>
+                <p id="primary-video-title" class="text-gray-700 dark:text-gray-300 ml-4"></p>
+            </div>
+
+            <div class="mb-4">
+                <p class="font-semibold text-gray-900 dark:text-white">Vídeos que serão mesclados e excluídos:</p>
+                <ul id="secondary-videos-list" class="text-gray-700 dark:text-gray-300 ml-4 list-disc list-inside">
+                    <!-- Will be populated by JavaScript -->
+                </ul>
+            </div>
+
+            <div class="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
+                <p class="font-bold text-yellow-900 dark:text-yellow-100 mb-2">⚠️ Atenção:</p>
+                <ul class="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
+                    <li>• As transcrições serão concatenadas em ordem cronológica</li>
+                    <li id="total-duration-info">• Duração total: <span id="total-duration"></span></li>
+                    <li>• Os vídeos secundários serão <strong>excluídos permanentemente</strong></li>
+                    <li>• Esta ação <strong>NÃO pode ser desfeita</strong></li>
+                    <li id="status-warning" style="display: none;">• <strong>Aviso</strong>: Os vídeos têm status diferentes!</li>
+                </ul>
+            </div>
+
+            <div class="mb-4">
+                <label class="block font-medium text-gray-900 dark:text-white mb-2">Digite a senha de admin para confirmar:</label>
+                <input type="password"
+                       id="merge-password"
+                       placeholder="Senha"
+                       class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                       onkeypress="if(event.key === 'Enter') executeMerge()">
+            </div>
+
+            <div class="flex gap-3">
+                <button onclick="executeMerge()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+                    ✓ Confirmar Mesclagem
+                </button>
+                <button onclick="mergeStep1()" class="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors">
+                    ← Voltar
+                </button>
+                <button onclick="closeMergeModal()" class="px-6 py-2 bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors">
+                    Cancelar
+                </button>
+            </div>
+
+            <div id="merge-message" class="mt-4" style="display: none;"></div>
+        </div>
+
+        <!-- Step 3: Progress -->
+        <div id="merge-step-3" style="display: none;">
+            <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Mesclando Vídeos...</h2>
+            <div class="mb-4">
+                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
+                    <div id="merge-progress" class="bg-green-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            <p id="merge-status" class="text-center text-gray-700 dark:text-gray-300">Processando...</p>
+        </div>
+
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
 <script>
 let csrfToken = null;
+
+function formatDateLabel(dateStr) {
+    if (!dateStr) return 'Não definido';
+    const [year, month, day] = dateStr.split('-');
+    return `${month}/${day}/${year}`;
+}
+
+async function editSermonDateInline(videoId) {
+    const display = document.getElementById(`sermon-date-display-${videoId}`);
+    if (!display) return;
+
+    const currentIso = display.dataset.iso || '';
+    const newValue = prompt("Informe a data real do culto (YYYY-MM-DD). Deixe vazio para remover.", currentIso);
+
+    if (newValue === null) {
+        return;
+    }
+
+    const trimmed = newValue.trim();
+    if (trimmed && !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        alert("Formato inválido. Use YYYY-MM-DD.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/videos/${videoId}/sermon-date`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ sermon_actual_date: trimmed || null })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            display.dataset.iso = data.sermon_actual_date || '';
+            display.textContent = formatDateLabel(data.sermon_actual_date);
+            alert('Data do culto atualizada!');
+        } else {
+            alert(data.detail || 'Erro ao atualizar data do culto');
+        }
+    } catch (error) {
+        alert(`Erro ao atualizar data do culto: ${error.message}`);
+    }
+}
 
 // Refresh CSRF token from server
 async function refreshCSRFToken() {
@@ -398,8 +567,8 @@ async function handleSpeakerInput(videoId, value) {
             const response = await fetch(`/api/speakers/autocomplete?q=${encodeURIComponent(value)}`);
             const data = await response.json();
 
-            if (data.speakers && data.speakers.length > 0) {
-                suggestionsDiv.innerHTML = data.speakers.map(speaker => `
+            if (data.suggestions && data.suggestions.length > 0) {
+                suggestionsDiv.innerHTML = data.suggestions.map(speaker => `
                     <div onclick="selectSpeaker(${videoId}, '${speaker.name.replace(/'/g, "\\'")}')"
                          style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #e5e7eb;"
                          onmouseover="this.style.background='#f3f4f6'"
@@ -431,5 +600,209 @@ function selectSpeaker(videoId, name) {
 document.addEventListener('DOMContentLoaded', function() {
     refreshCSRFToken();
 });
+
+// ============================================================================
+// Video Merge Functionality
+// ============================================================================
+
+let selectedVideos = new Set();
+let mergeData = {
+    primaryVideoId: null,
+    videos: []
+};
+
+function toggleSelectAll() {
+    const selectAll = document.getElementById('select-all-videos');
+    const checkboxes = document.querySelectorAll('.video-checkbox');
+
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+    });
+
+    updateMergeButton();
+}
+
+function updateMergeButton() {
+    const checkboxes = document.querySelectorAll('.video-checkbox:checked');
+    const bulkBar = document.getElementById('bulk-actions-bar');
+    const countSpan = document.getElementById('selected-count');
+
+    selectedVideos.clear();
+
+    checkboxes.forEach(cb => {
+        selectedVideos.add({
+            id: parseInt(cb.dataset.videoId),
+            channelId: parseInt(cb.dataset.channelId),
+            status: cb.dataset.status,
+            title: cb.dataset.title,
+            duration: parseInt(cb.dataset.duration)
+        });
+    });
+
+    if (selectedVideos.size >= 2) {
+        bulkBar.style.display = 'flex';
+        countSpan.textContent = `${selectedVideos.size} vídeos selecionados`;
+    } else {
+        bulkBar.style.display = 'none';
+    }
+}
+
+function clearSelection() {
+    document.querySelectorAll('.video-checkbox').forEach(cb => cb.checked = false);
+    document.getElementById('select-all-videos').checked = false;
+    updateMergeButton();
+}
+
+function openMergeModal() {
+    // Validate same channel
+    const channels = new Set([...selectedVideos].map(v => v.channelId));
+    if (channels.size > 1) {
+        alert('Erro: Todos os vídeos devem ser do mesmo canal!');
+        return;
+    }
+
+    mergeData.videos = Array.from(selectedVideos);
+
+    // Show modal
+    document.getElementById('merge-modal').style.display = 'flex';
+
+    // Populate primary selection
+    const selectionDiv = document.getElementById('primary-video-selection');
+    selectionDiv.innerHTML = '';
+
+    mergeData.videos.forEach(video => {
+        const div = document.createElement('div');
+        div.className = 'p-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer';
+        div.innerHTML = `
+            <label class="flex items-center cursor-pointer">
+                <input type="radio" name="primary-video" value="${video.id}" class="mr-3">
+                <span class="text-gray-900 dark:text-white">${video.title}</span>
+                <span class="ml-auto text-sm text-gray-500 dark:text-gray-400">(${video.status})</span>
+            </label>
+        `;
+        selectionDiv.appendChild(div);
+    });
+
+    // Show step 1
+    document.getElementById('merge-step-1').style.display = 'block';
+    document.getElementById('merge-step-2').style.display = 'none';
+    document.getElementById('merge-step-3').style.display = 'none';
+}
+
+function closeMergeModal() {
+    document.getElementById('merge-modal').style.display = 'none';
+    mergeData = { primaryVideoId: null, videos: [] };
+}
+
+function mergeStep1() {
+    document.getElementById('merge-step-1').style.display = 'block';
+    document.getElementById('merge-step-2').style.display = 'none';
+}
+
+function mergeStep2() {
+    // Get selected primary
+    const selectedRadio = document.querySelector('input[name="primary-video"]:checked');
+    if (!selectedRadio) {
+        alert('Por favor, selecione o vídeo principal!');
+        return;
+    }
+
+    mergeData.primaryVideoId = parseInt(selectedRadio.value);
+    const primary = mergeData.videos.find(v => v.id === mergeData.primaryVideoId);
+    const secondaries = mergeData.videos.filter(v => v.id !== mergeData.primaryVideoId);
+
+    // Update step 2 UI
+    document.getElementById('primary-video-title').textContent = primary.title;
+
+    const secondaryList = document.getElementById('secondary-videos-list');
+    secondaryList.innerHTML = '';
+    secondaries.forEach(video => {
+        const li = document.createElement('li');
+        li.textContent = video.title;
+        secondaryList.appendChild(li);
+    });
+
+    // Check if different statuses
+    const statuses = new Set(mergeData.videos.map(v => v.status));
+    if (statuses.size > 1) {
+        document.getElementById('status-warning').style.display = 'list-item';
+    } else {
+        document.getElementById('status-warning').style.display = 'none';
+    }
+
+    // Calculate total duration
+    const totalDurationSec = mergeData.videos.reduce((sum, v) => sum + v.duration, 0);
+    const totalMinutes = Math.floor(totalDurationSec / 60);
+    const totalHours = Math.floor(totalMinutes / 60);
+    const remainingMinutes = totalMinutes % 60;
+
+    let durationText = '';
+    if (totalHours > 0) {
+        durationText = `${totalHours}h ${remainingMinutes}min`;
+    } else {
+        durationText = `${totalMinutes}min`;
+    }
+    document.getElementById('total-duration').textContent = durationText;
+
+    // Show step 2
+    document.getElementById('merge-step-1').style.display = 'none';
+    document.getElementById('merge-step-2').style.display = 'block';
+    document.getElementById('merge-password').focus();
+}
+
+async function executeMerge() {
+    const password = document.getElementById('merge-password').value;
+
+    if (!password) {
+        alert('Por favor, digite a senha de admin!');
+        return;
+    }
+
+    // Show progress step
+    document.getElementById('merge-step-2').style.display = 'none';
+    document.getElementById('merge-step-3').style.display = 'block';
+    document.getElementById('merge-progress').style.width = '30%';
+    document.getElementById('merge-status').textContent = 'Enviando requisição...';
+
+    try {
+        const response = await fetch('/api/videos/merge', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                video_ids: mergeData.videos.map(v => v.id),
+                primary_video_id: mergeData.primaryVideoId,
+                password: password
+            })
+        });
+
+        document.getElementById('merge-progress').style.width = '70%';
+        document.getElementById('merge-status').textContent = 'Processando mesclagem...';
+
+        const result = await response.json();
+
+        if (response.ok && result.success) {
+            document.getElementById('merge-progress').style.width = '100%';
+            document.getElementById('merge-status').innerHTML = `
+                <span class="text-green-600 dark:text-green-400 font-semibold">✓ ${result.message}</span><br>
+                <span class="text-sm text-gray-600 dark:text-gray-400">Atualizando página...</span>
+            `;
+
+            // Reload page after 2 seconds
+            setTimeout(() => {
+                window.location.reload();
+            }, 2000);
+        } else {
+            throw new Error(result.message || result.detail || 'Erro desconhecido');
+        }
+    } catch (error) {
+        document.getElementById('merge-progress').style.width = '0%';
+        document.getElementById('merge-status').innerHTML = `
+            <span class="text-red-600 dark:text-red-400 font-semibold">✗ Erro: ${error.message}</span><br>
+            <button onclick="mergeStep2()" class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg">Tentar Novamente</button>
+        `;
+    }
+}
 </script>
 {% endblock %}
