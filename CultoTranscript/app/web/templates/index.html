@@ -421,8 +421,20 @@
     background: #3498db; /* Blue for citations */
 }
 
+@media (prefers-color-scheme: dark) {
+    .bible-ref-citation {
+        background: #60A5FA; /* Lighter blue for dark mode */
+    }
+}
+
 .bible-ref-mention {
     background: #f39c12; /* Orange for mentions */
+}
+
+@media (prefers-color-scheme: dark) {
+    .bible-ref-mention {
+        background: #FB923C; /* Lighter orange for dark mode */
+    }
 }
 .highlight-item, .question-item {
     background: var(--surface);
@@ -1923,10 +1935,10 @@ async function handleSpeakerInput(videoId, value) {
             if (data.suggestions && data.suggestions.length > 0) {
                 suggestionsDiv.innerHTML = data.suggestions.map(s => `
                     <div onclick="selectSpeaker(${videoId}, '${s.name.replace(/'/g, "\\'")}')"
-                         style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid rgba(28, 25, 23, 0.08); transition: background 0.2s; color: #1C1917;"
-                         onmouseover="this.style.background='rgba(15, 118, 110, 0.05)'"
-                         onmouseout="this.style.background='white'">
-                        ${s.name} <small style="color: #6B7280;">(${s.video_count} vídeos)</small>
+                         style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border); transition: background 0.2s; color: var(--text);"
+                         onmouseover="this.style.background='var(--muted)'"
+                         onmouseout="this.style.background='var(--surface)'">
+                        ${s.name} <small style="color: var(--text-muted);">(${s.video_count} vídeos)</small>
                     </div>
                 `).join('');
                 suggestionsDiv.style.display = 'block';

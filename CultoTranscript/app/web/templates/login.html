@@ -50,9 +50,9 @@
         }
     </style>
 </head>
-<body class="bg-gradient-to-br from-primary to-primary-dark min-h-screen flex items-center justify-center p-4 antialiased">
+<body class="bg-gradient-to-br from-primary to-primary-dark dark:from-gray-900 dark:to-gray-800 min-h-screen flex items-center justify-center p-4 antialiased">
     <div class="w-full max-w-md">
-        <div class="bg-white p-8 rounded-xl shadow-2xl animate-slide-up">
+        <div class="bg-white dark:bg-gray-800 p-8 rounded-xl shadow-2xl animate-slide-up">
             <!-- Header -->
             <div class="text-center mb-8">
                 <!-- Icon -->
@@ -62,13 +62,13 @@
                     </svg>
                 </div>
                 <!-- Title -->
-                <h1 class="text-2xl font-semibold text-gray-900 mb-2 tracking-tight">CultoTranscript</h1>
-                <p class="text-sm text-gray-600">Sistema de Transcrição e Análise</p>
+                <h1 class="text-2xl font-semibold text-gray-900 dark:text-white mb-2 tracking-tight">CultoTranscript</h1>
+                <p class="text-sm text-gray-600 dark:text-gray-300">Sistema de Transcrição e Análise</p>
             </div>
 
             <!-- Error Alert -->
             {% if error %}
-            <div class="bg-red-50 border-l-4 border-red-500 text-red-900 p-4 rounded-md mb-6 text-sm animate-shake">
+            <div class="bg-red-50 dark:bg-red-900/30 border-l-4 border-red-500 dark:border-red-700 text-red-900 dark:text-red-200 p-4 rounded-md mb-6 text-sm animate-shake">
                 {{ error }}
             </div>
             {% endif %}
@@ -76,7 +76,7 @@
             <!-- Login Form -->
             <form method="POST" action="/login">
                 <div class="mb-6">
-                    <label for="password" class="block mb-2 font-medium text-sm text-gray-900">Senha de Administrador</label>
+                    <label for="password" class="block mb-2 font-medium text-sm text-gray-900 dark:text-white">Senha de Administrador</label>
                     <input
                         type="password"
                         id="password"
@@ -84,7 +84,7 @@
                         placeholder="Digite sua senha"
                         required
                         autofocus
-                        class="w-full px-3 py-3 border border-gray-300 rounded-md text-sm text-gray-900 transition-all duration-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 hover:border-gray-400"
+                        class="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-md text-sm text-gray-900 dark:text-white dark:bg-gray-700 dark:placeholder-gray-400 transition-all duration-200 focus:outline-none focus:border-primary focus:ring-4 focus:ring-primary/10 hover:border-gray-400 dark:hover:border-gray-500"
                     >
                 </div>
                 <button

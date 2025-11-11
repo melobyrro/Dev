@@ -7,7 +7,7 @@
 .config-form {
     max-width: 600px;
     margin: 2rem auto;
-    background: white;
+    background: var(--surface);
     padding: 2rem;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0,0,0,0.1);
@@ -21,21 +21,23 @@
     display: block;
     font-weight: bold;
     margin-bottom: 0.5rem;
-    color: #2c3e50;
+    color: var(--text);
 }
 
 .form-section select,
 .form-section input {
     width: 100%;
     padding: 0.75rem;
-    border: 1px solid #ddd;
+    border: 1px solid var(--border);
     border-radius: 4px;
     font-size: 1rem;
+    background: var(--surface);
+    color: var(--text);
 }
 
 .form-section .help-text {
     font-size: 0.875rem;
-    color: #7f8c8d;
+    color: var(--text-muted);
     margin-top: 0.25rem;
 }
 
@@ -104,21 +106,23 @@
 
 .day-option {
     padding: 0.75rem;
-    border: 2px solid #ddd;
+    border: 2px solid var(--border);
     border-radius: 4px;
     text-align: center;
     cursor: pointer;
     transition: all 0.2s;
+    background: var(--surface);
+    color: var(--text);
 }
 
 .day-option:hover {
-    border-color: #3498db;
-    background: #ecf0f1;
+    border-color: var(--primary);
+    background: var(--muted);
 }
 
 .day-option.selected {
-    border-color: #3498db;
-    background: #3498db;
+    border-color: var(--primary);
+    background: var(--primary);
     color: white;
     font-weight: bold;
 }
@@ -129,6 +133,36 @@
 <div class="card">
     <h2>⏰ Configuração de Agendamento Automático</h2>
     <p>Configure quando o sistema deve verificar o canal para novos vídeos automaticamente.</p>
+</div>
+
+<!-- Scheduler Status Widget -->
+<div class="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 mb-6" style="max-width: 600px; margin: 2rem auto;">
+    <h3 class="text-lg font-semibold mb-4 text-gray-900 dark:text-white">
+        Status do Agendamento
+    </h3>
+
+    <div id="scheduler-status" class="space-y-3">
+        <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-600 dark:text-gray-400">Status:</span>
+            <span id="status-indicator" class="px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+                Carregando...
+            </span>
+        </div>
+
+        <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-600 dark:text-gray-400">Última verificação:</span>
+            <span id="last-check" class="text-sm font-medium text-gray-900 dark:text-white">
+                --
+            </span>
+        </div>
+
+        <div class="flex items-center justify-between">
+            <span class="text-sm text-gray-600 dark:text-gray-400">Próxima verificação:</span>
+            <span id="next-run" class="text-sm font-medium text-gray-900 dark:text-white">
+                --
+            </span>
+        </div>
+    </div>
 </div>
 
 <div class="config-form">
@@ -176,6 +210,19 @@
 
 <script>
 let selectedDay = 0;
+let csrfToken = null;
+
+// Refresh CSRF token
+async function refreshCsrfToken() {
+    try {
+        const response = await fetch('/api/csrf-token');
+        const data = await response.json();
+        csrfToken = data.csrf_token;
+        console.log('CSRF token refreshed');
+    } catch (error) {
+        console.error('Error refreshing CSRF token:', error);
+    }
+}
 
 // Load current configuration
 async function loadConfig() {
@@ -200,6 +247,9 @@ async function loadConfig() {
 
             // Set enabled
             document.getElementById('enabledCheckbox').checked = data.enabled;
+
+            // Refresh CSRF token after loading config
+            await refreshCsrfToken();
 
             // Show form
             document.getElementById('loadingIndicator').style.display = 'none';
@@ -239,10 +289,14 @@ document.getElementById('scheduleForm').addEventListener('submit', async functio
     saveButton.textContent = 'Salvando...';
 
     try {
+        // Refresh CSRF token before save
+        await refreshCsrfToken();
+
         const response = await fetch('/api/schedule-config', {
             method: 'PUT',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
             },
             body: JSON.stringify({
                 day_of_week: selectedDay,
@@ -279,6 +333,49 @@ function showMessage(message, type) {
         statusDiv.style.display = 'none';
     }, 5000);
 }
+
+// Scheduler status update
+async function updateSchedulerStatus() {
+    try {
+        const response = await fetch('/api/scheduler-status');
+        const data = await response.json();
+
+        const statusIndicator = document.getElementById('status-indicator');
+        const lastCheck = document.getElementById('last-check');
+        const nextRun = document.getElementById('next-run');
+
+        if (data.scheduler_running) {
+            statusIndicator.textContent = 'Ativo';
+            statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200';
+        } else {
+            statusIndicator.textContent = 'Inativo';
+            statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-medium bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200';
+        }
+
+        if (data.last_check) {
+            const lastCheckDate = new Date(data.last_check);
+            lastCheck.textContent = lastCheckDate.toLocaleString('pt-BR');
+        } else {
+            lastCheck.textContent = 'Nunca';
+        }
+
+        if (data.next_run) {
+            const nextRunDate = new Date(data.next_run);
+            nextRun.textContent = nextRunDate.toLocaleString('pt-BR');
+        } else {
+            nextRun.textContent = data.schedule_enabled ? 'Aguardando...' : 'Desabilitado';
+        }
+    } catch (error) {
+        console.error('Failed to fetch scheduler status:', error);
+        const statusIndicator = document.getElementById('status-indicator');
+        statusIndicator.textContent = 'Erro';
+        statusIndicator.className = 'px-3 py-1 rounded-full text-sm font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200';
+    }
+}
+
+// Update on page load and every 30 seconds
+updateSchedulerStatus();
+setInterval(updateSchedulerStatus, 30000);
 
 // Load on page load
 loadConfig();

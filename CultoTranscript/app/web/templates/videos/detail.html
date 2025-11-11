@@ -7,14 +7,14 @@
 .video-header {
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #ddd;
+    border-bottom: 2px solid var(--border);
 }
 .video-meta {
     display: flex;
     gap: 2rem;
     margin-top: 1rem;
     font-size: 0.95rem;
-    color: #666;
+    color: var(--text-muted);
 }
 .video-meta > div {
     display: flex;
@@ -22,8 +22,8 @@
     gap: 0.5rem;
 }
 .transcript-box {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    background: var(--muted);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 1.5rem;
     max-height: 600px;
@@ -31,7 +31,7 @@
     line-height: 2;
     font-size: 1.05rem;
     font-family: 'Georgia', 'Times New Roman', serif;
-    color: #2c3e50;
+    color: var(--text);
 }
 .transcript-box p {
     margin-bottom: 1.5rem;
@@ -40,7 +40,7 @@
 .transcript-box .timestamp {
     display: inline-block;
     font-family: 'Monaco', 'Courier New', monospace;
-    background: #3498db;
+    background: var(--primary);
     color: white;
     padding: 0.15rem 0.4rem;
     border-radius: 3px;
@@ -52,12 +52,14 @@
     width: 100%;
     min-height: 600px;
     padding: 1.5rem;
-    border: 2px solid #3498db;
+    border: 2px solid var(--primary);
     border-radius: 6px;
     font-size: 1.05rem;
     font-family: 'Georgia', 'Times New Roman', serif;
     line-height: 2;
     resize: vertical;
+    background: var(--surface);
+    color: var(--text);
 }
 .analytics-grid {
     display: grid;
@@ -66,21 +68,21 @@
     margin-bottom: 2rem;
 }
 .analytics-card {
-    background: white;
-    border: 1px solid #ddd;
+    background: var(--surface);
+    border: 1px solid var(--border);
     border-radius: 6px;
     padding: 1rem;
 }
 .analytics-card h3 {
     margin-bottom: 1rem;
-    color: #2c3e50;
+    color: var(--text);
     font-size: 1.1rem;
 }
 .theme-tag {
     display: inline-block;
     padding: 0.35rem 0.75rem;
     margin: 0.25rem;
-    background: #3498db;
+    background: var(--primary);
     color: white;
     border-radius: 4px;
     font-size: 0.9rem;
@@ -113,8 +115,20 @@
     background: #3498db; /* Blue for citations */
 }
 
+@media (prefers-color-scheme: dark) {
+    .bible-ref-citation {
+        background: #60A5FA; /* Lighter blue for dark mode */
+    }
+}
+
 .bible-ref-mention {
     background: #f39c12; /* Orange for mentions */
+}
+
+@media (prefers-color-scheme: dark) {
+    .bible-ref-mention {
+        background: #FB923C; /* Lighter orange for dark mode */
+    }
 }
 .book-list {
     list-style: none;
@@ -122,15 +136,16 @@
 }
 .book-list li {
     padding: 0.5rem 0;
-    border-bottom: 1px solid #eee;
+    border-bottom: 1px solid var(--border);
     display: flex;
     justify-content: space-between;
+    color: var(--text);
 }
 .book-list li:last-child {
     border-bottom: none;
 }
 .badge {
-    background: #95a5a6;
+    background: var(--text-muted);
     color: white;
     padding: 0.2rem 0.5rem;
     border-radius: 3px;
@@ -230,11 +245,22 @@
             <span id="speakerDisplay">{{ video.speaker if video.speaker else 'Não identificado' }}</span>
             <button id="editSpeakerBtn" class="btn btn-secondary" style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; font-size: 0.85rem;" onclick="toggleSpeakerEdit()">✏️</button>
         </p>
+        <p>
+            <strong>Data real do culto:</strong>
+            <span id="sermonDateDisplay">
+                {% if video.sermon_actual_date %}
+                    {{ video.sermon_actual_date.strftime('%m/%d/%Y') }}
+                {% else %}
+                    Não definido
+                {% endif %}
+            </span>
+            <button class="btn btn-secondary" style="margin-left: 0.5rem; padding: 0.2rem 0.5rem; font-size: 0.85rem;" onclick="editSermonDate()">✏️</button>
+        </p>
         <div id="speakerEditContainer" style="display: none; position: relative;">
             <div style="display: flex; gap: 0.5rem; align-items: stretch;">
                 <div style="flex: 1; position: relative;">
-                    <input type="text" id="speakerInput" class="transcript-editor" style="min-height: auto; height: 2.75rem; width: 100%; padding: 0.5rem; margin: 0; border: 2px solid #3498db; border-radius: 6px;" placeholder="Digite o nome do pregador..." value="{{ video.speaker if video.speaker else '' }}" />
-                    <div id="speakerSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; margin-top: 0.25rem;"></div>
+                    <input type="text" id="speakerInput" class="transcript-editor" style="min-height: auto; height: 2.75rem; width: 100%; padding: 0.5rem; margin: 0; border: 2px solid var(--primary); border-radius: 6px;" placeholder="Digite o nome do pregador..." value="{{ video.speaker if video.speaker else '' }}" />
+                    <div id="speakerSuggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; max-height: 200px; overflow-y: auto; z-index: 1000; display: none; margin-top: 0.25rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
                 </div>
                 <button class="btn" onclick="saveSpeaker()" style="height: 2.75rem; padding: 0 1.25rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #10b981; color: white; border: none; border-radius: 6px; cursor: pointer; font-weight: 500;">💾 Salvar</button>
                 <button class="btn btn-secondary" onclick="cancelSpeakerEdit()" style="height: 2.75rem; padding: 0 1rem; font-size: 0.95rem; white-space: nowrap; display: flex; align-items: center; justify-content: center; background: #6b7280; color: white; border: none; border-radius: 6px; cursor: pointer;">❌</button>
@@ -459,10 +485,10 @@ async function loadPopularSpeakers() {
 
         if (data.suggestions && data.suggestions.length > 0) {
             suggestions.innerHTML = data.suggestions.map(s =>
-                `<div style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #eee;"
-                      onmouseover="this.style.background='#f0f0f0'"
-                      onmouseout="this.style.background='white'"
-                      onclick="selectSpeaker('${s.name.replace(/'/g, "\\'")}')">${s.name} <small style="color: #666;">(${s.video_count} vídeos)</small></div>`
+                `<div style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border); color: var(--text);"
+                      onmouseover="this.style.background='var(--muted)'"
+                      onmouseout="this.style.background='var(--surface)'"
+                      onclick="selectSpeaker('${s.name.replace(/'/g, "\\'")}')">${s.name} <small style="color: var(--text-muted);">(${s.video_count} vídeos)</small></div>`
             ).join('');
             suggestions.style.display = 'block';
         } else {
@@ -565,10 +591,10 @@ document.getElementById('speakerInput')?.addEventListener('input', async functio
 
             if (data.suggestions && data.suggestions.length > 0) {
                 suggestions.innerHTML = data.suggestions.map(s =>
-                    `<div style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #eee;"
-                          onmouseover="this.style.background='#f0f0f0'"
-                          onmouseout="this.style.background='white'"
-                          onclick="selectSpeaker('${s.name.replace(/'/g, "\\'")}')">${s.name} <small style="color: #666;">(${s.video_count} vídeos)</small></div>`
+                    `<div style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border); color: var(--text);"
+                          onmouseover="this.style.background='var(--muted)'"
+                          onmouseout="this.style.background='var(--surface)'"
+                          onclick="selectSpeaker('${s.name.replace(/'/g, "\\'")}')">${s.name} <small style="color: var(--text-muted);">(${s.video_count} vídeos)</small></div>`
                 ).join('');
                 suggestions.style.display = 'block';
             } else {
@@ -593,6 +619,47 @@ document.addEventListener('click', function(e) {
         suggestions.style.display = 'none';
     }
 });
+
+function formatSermonDateDisplay(dateStr) {
+    if (!dateStr) {
+        return 'Não definido';
+    }
+    const [year, month, day] = dateStr.split('-');
+    return `${month}/${day}/${year}`;
+}
+
+async function editSermonDate() {
+    const currentIso = "{{ video.sermon_actual_date.strftime('%Y-%m-%d') if video.sermon_actual_date else '' }}";
+    const newValue = prompt("Informe a data real do culto (YYYY-MM-DD). Deixe vazio para remover.", currentIso);
+
+    if (newValue === null) {
+        return;
+    }
+
+    const trimmed = newValue.trim();
+    if (trimmed && !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        alert("Formato inválido. Use YYYY-MM-DD.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/videos/{{ video.id }}/sermon-date`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ sermon_actual_date: trimmed || null })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            document.getElementById('sermonDateDisplay').textContent = formatSermonDateDisplay(data.sermon_actual_date);
+            alert('Data do culto atualizada!');
+        } else {
+            alert(data.detail || 'Erro ao atualizar data do culto');
+        }
+    } catch (error) {
+        alert(`Erro ao atualizar data do culto: ${error.message}`);
+    }
+}
 </script>
 {% endif %}
 

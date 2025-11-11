@@ -152,11 +152,11 @@
                 <!-- Speaker column with inline editor -->
                 <td class="px-4 py-3 text-sm">
                     <div id="speaker-display-{{ video.id }}" style="display: flex; align-items: center; gap: 0.5rem;">
-                        <span id="speaker-text-{{ video.id }}" style="color: #374151;">
+                        <span id="speaker-text-{{ video.id }}" style="color: var(--text);">
                             {{ video.speaker or "Não definido" }}
                         </span>
                         <button onclick="toggleSpeakerEdit({{ video.id }})"
-                                style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 0.25rem;">
+                                style="background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 0.25rem;">
                             <svg width="14" height="14" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"/>
                             </svg>
@@ -169,7 +169,7 @@
                                    value="{{ video.speaker or '' }}"
                                    oninput="handleSpeakerInput({{ video.id }}, this.value)"
                                    placeholder="Digite o nome do pregador..."
-                                   style="flex: 1; padding: 0.25rem 0.5rem; border: 1px solid #d1d5db; border-radius: 4px; font-size: 0.875rem;">
+                                   style="flex: 1; padding: 0.25rem 0.5rem; border: 1px solid var(--border); border-radius: 4px; font-size: 0.875rem; background: var(--surface); color: var(--text);">
                             <button onclick="saveSpeaker({{ video.id }})"
                                     style="padding: 0.25rem 0.5rem; background: #10b981; color: white; border: none; border-radius: 4px; font-size: 0.75rem; cursor: pointer;">
                                 Salvar
@@ -180,7 +180,7 @@
                             </button>
                         </div>
                         <div id="speaker-suggestions-{{ video.id }}"
-                             style="position: absolute; background: white; border: 1px solid #d1d5db; border-radius: 4px; margin-top: 0.25rem; max-height: 200px; overflow-y: auto; z-index: 10; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+                             style="position: absolute; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; margin-top: 0.25rem; max-height: 200px; overflow-y: auto; z-index: 10; display: none; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
                         </div>
                     </div>
                 </td>
@@ -198,11 +198,11 @@
                             {% endif %}
                         </span>
                         <button onclick="editSermonDateInline({{ video.id }})"
-                                style="background: none; border: none; cursor: pointer; color: #6b7280; padding: 0.2rem;">
+                                style="background: none; border: none; cursor: pointer; color: var(--text-muted); padding: 0.2rem;">
                             ✏️
                         </button>
                     </div>
-                    <div style="font-size: 0.75rem; color: #6b7280;">Adicionado: {{ (video.ingested_at or video.created_at).strftime('%m/%d/%Y') }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted);">Adicionado: {{ (video.ingested_at or video.created_at).strftime('%m/%d/%Y') }}</div>
                 </td>
                 <td class="px-4 py-3" onclick="event.stopPropagation();">
                     <a href="/?expand={{ video.id }}" class="btn" style="padding: 0.3rem 0.6rem; font-size: 0.85rem; background: #3498db; color: white; text-decoration: none; border-radius: 4px;">Ver</a>
@@ -570,11 +570,11 @@ async function handleSpeakerInput(videoId, value) {
             if (data.suggestions && data.suggestions.length > 0) {
                 suggestionsDiv.innerHTML = data.suggestions.map(speaker => `
                     <div onclick="selectSpeaker(${videoId}, '${speaker.name.replace(/'/g, "\\'")}')"
-                         style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid #e5e7eb;"
-                         onmouseover="this.style.background='#f3f4f6'"
-                         onmouseout="this.style.background='white'">
+                         style="padding: 0.5rem; cursor: pointer; border-bottom: 1px solid var(--border); color: var(--text);"
+                         onmouseover="this.style.background='var(--muted)'"
+                         onmouseout="this.style.background='var(--surface)'">
                         <div style="font-weight: 500;">${speaker.name}</div>
-                        <div style="font-size: 0.75rem; color: #6b7280;">${speaker.video_count} vídeos</div>
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${speaker.video_count} vídeos</div>
                     </div>
                 `).join('');
                 suggestionsDiv.style.display = 'block';
