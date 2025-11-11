@@ -1,11 +1,13 @@
 """
 Theme Analyzer V2
-ML-based thematic analysis using Google Gemini AI
+ML-based thematic analysis using unified LLM client (Gemini or Ollama)
 """
 import logging
 import re
 from typing import List, Dict, Optional
 from dataclasses import dataclass
+from app.ai.llm_client import get_llm_client
+from app.ai.json_parser import parse_llm_json
 
 logger = logging.getLogger(__name__)
 
@@ -69,15 +71,12 @@ class ThemeAnalyzerV2:
     SEGMENT_SIZE = 2500
     OVERLAP = 50  # Words of overlap between segments (reduced from 100)
 
-    def __init__(self, gemini_client):
+    def __init__(self):
         """
-        Initialize theme analyzer
-
-        Args:
-            gemini_client: GeminiClient instance
+        Initialize theme analyzer with unified LLM client
         """
-        self.gemini = gemini_client
-        logger.info("Theme analyzer v2 initialized with Gemini AI")
+        self.llm = get_llm_client()
+        logger.info("Theme analyzer v2 initialized with unified LLM client")
 
     def analyze_themes(self, text: str, word_count: int) -> List[ThemeDetection]:
         """
@@ -160,10 +159,11 @@ class ThemeAnalyzerV2:
         prompt = f"""
 Analise o seguinte segmento de sermão e identifique os temas teológicos presentes.
 
-Para cada tema identificado, forneça:
-1. Nome do tema (da lista abaixo)
-2. Pontuação de confiança (0.0 a 1.0)
-3. Evidência-chave (citação de 1-2 frases que suportam o tema)
+IMPORTANTE - FORMATO DE RESPOSTA:
+- Responda APENAS com um array JSON válido
+- Use aspas duplas (") para strings, NUNCA aspas simples (')
+- NÃO adicione texto explicativo antes ou depois do JSON
+- NÃO adicione vírgula após o último elemento do array
 
 TEMAS POSSÍVEIS:
 {', '.join(self.THEMES)}
@@ -171,33 +171,33 @@ TEMAS POSSÍVEIS:
 TEXTO DO SERMÃO:
 {text[:3000]}
 
-FORMATO DE RESPOSTA (JSON):
+FORMATO EXATO (copie esta estrutura):
 [
   {{
     "tema": "Cristo-cêntrica",
     "confianca": 0.85,
-    "evidencia": "Citação relevante do texto"
-  }},
-  ...
+    "evidencia": "Citação relevante"
+  }}
 ]
 
-Responda APENAS com o JSON, sem explicações adicionais.
-Se nenhum tema forte for identificado, retorne lista vazia [].
+Se nenhum tema forte for identificado, retorne: []
 """
 
         try:
-            response = self.gemini.generate_content(prompt)
+            llm_response = self.llm.generate(
+                prompt=prompt,
+                max_tokens=1500,
+                temperature=0.5
+            )
+            response = llm_response["text"]
+            backend_used = llm_response["backend"]
 
-            # Parse JSON response
-            import json
+            # Parse JSON response using robust parser
+            themes_data = parse_llm_json(response, expected_type=list)
 
-            # Extract JSON from response (handle cases where AI adds extra text)
-            json_match = re.search(r'\[.*\]', response, re.DOTALL)
-            if not json_match:
-                logger.warning("No JSON found in Gemini response")
-                return []
-
-            themes_data = json.loads(json_match.group())
+            if not themes_data:
+                logger.warning("No themes returned by LLM, using fallback")
+                return self._fallback_keyword_analysis(text, start_word, end_word)
 
             # Convert to ThemeDetection objects
             detections = []
@@ -226,16 +226,11 @@ Se nenhum tema forte for identificado, retorne lista vazia [].
                 )
                 detections.append(detection)
 
+            logger.info(f"✅ Theme analysis completed using {backend_used} backend")
             return detections
 
         except Exception as e:
-            error_str = str(e)
-            # Check if it's a quota error (429)
-            if "429" in error_str or "quota" in error_str.lower():
-                logger.warning(f"Gemini API quota exhausted, using keyword-based fallback: {e}")
-            else:
-                logger.error(f"Error analyzing segment with Gemini: {e}")
-
+            logger.error(f"Error analyzing segment with LLM: {e}")
             # Fallback to keyword-based detection
             return self._fallback_keyword_analysis(text, start_word, end_word)
 
@@ -329,9 +324,11 @@ Se nenhum tema forte for identificado, retorne lista vazia [].
                 if d.key_evidence
             )
 
-            # Use earliest segment start
-            min_start = min(d.segment_start for d in detections if d.segment_start)
-            max_end = max(d.segment_end for d in detections if d.segment_end)
+            # Use earliest segment start (with safety check for empty sequences)
+            segment_starts = [d.segment_start for d in detections if d.segment_start]
+            segment_ends = [d.segment_end for d in detections if d.segment_end]
+            min_start = min(segment_starts) if segment_starts else 0
+            max_end = max(segment_ends) if segment_ends else 0
 
             aggregated.append(ThemeDetection(
                 theme_tag=theme_tag,

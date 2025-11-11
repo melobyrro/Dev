@@ -14,7 +14,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         # Always public paths (no auth required)
-        public_paths = ["/login", "/static", "/health", "/api/v2/events"]
+        public_paths = ["/login", "/static", "/health", "/api/v2/events", "/api/websub"]
 
         # Public view paths (GET only)
         public_view_paths = ["/", "/videos", "/channels", "/reports"]
@@ -28,14 +28,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/api/v2/videos",  # Backend v2 videos API
         ]
 
+        # Public chatbot endpoints (POST allowed for public chat)
+        if "/chat" in request.url.path and request.method == "POST":
+            return await call_next(request)
+
         # Check if path is always public
         if any(request.url.path.startswith(path) for path in public_paths):
             return await call_next(request)
 
         # Check if endpoint has self-authentication (password verification in endpoint)
         # These endpoints verify password in request body or via require_auth dependency
-        if "/reprocess" in request.url.path or (request.method == "DELETE" and request.url.path.startswith("/api/videos/")):
+        if "/reprocess" in request.url.path or \
+           "/speaker" in request.url.path or \
+           (request.method == "DELETE" and request.url.path.startswith("/api/videos/")):
             # Reprocess endpoint has password verification in body
+            # Speaker endpoint allows public updates (CSRF protected)
             # DELETE endpoints use require_auth dependency for verification
             return await call_next(request)
 

@@ -6,8 +6,9 @@ import sys
 import logging
 import json
 import time
+import random
 import redis
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
@@ -37,11 +38,56 @@ logger = logging.getLogger(__name__)
 REDIS_URL = os.getenv("REDIS_URL", "redis://redis:6379/0")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
 
+# Feature flags
+ENABLE_LAZY_ANALYTICS = os.getenv("ENABLE_LAZY_ANALYTICS", "false").lower() == "true"
+
 # Services
 transcription_service = TranscriptionService()
 analytics_service = AnalyticsService()  # Legacy v1
 advanced_analytics_service = AdvancedAnalyticsService()  # New v2
 embedding_service = EmbeddingService()
+
+
+def cleanup_abandoned_jobs(db):
+    """Reset abandoned jobs from previous worker crashes"""
+    logger.info("Checking for abandoned jobs...")
+    try:
+        abandoned = db.query(Job).filter(
+            Job.status == 'running',
+            Job.started_at < datetime.now() - timedelta(minutes=10)
+        ).all()
+
+        for job in abandoned:
+            logger.warning(f"Resetting abandoned job {job.id} for video {job.video_id}")
+            job.status = 'failed'
+            job.error_message = 'Job abandoned due to worker restart'
+            job.completed_at = datetime.now()
+
+            # Also update the video status if needed
+            if job.video_id:
+                video = db.query(Video).filter_by(id=job.video_id).first()
+                if video and video.status == 'processing':
+                    # Check if there's a completed job for this video
+                    completed_job = db.query(Job).filter(
+                        Job.video_id == job.video_id,
+                        Job.status == 'completed',
+                        Job.job_type == 'transcribe_video'
+                    ).first()
+
+                    if completed_job:
+                        logger.info(f"Setting video {video.id} to completed (has completed job)")
+                        video.status = 'completed'
+                    else:
+                        logger.info(f"Setting video {video.id} to failed (no completed jobs)")
+                        video.status = 'failed'
+
+        db.commit()
+        logger.info(f"Reset {len(abandoned)} abandoned jobs")
+        return len(abandoned)
+    except Exception as e:
+        logger.error(f"Error cleaning up abandoned jobs: {e}")
+        db.rollback()
+        return 0
 
 
 def update_job_progress(job_id: int, step: str, status: str, message: str):
@@ -171,7 +217,46 @@ def process_transcription_job(job_data: dict):
             logger.error(f"Sermon detection failed: {e}", exc_info=True)
             # Non-critical, continue with processing
 
-        # Step 5: Advanced Analytics
+        # Check if lazy analytics is enabled
+        if ENABLE_LAZY_ANALYTICS:
+            logger.info(f"LAZY ANALYTICS ENABLED: Skipping analytics for video {video_id}")
+            logger.info("Analytics will be triggered on first view")
+
+            # Set video status to 'transcribed' (intermediate state)
+            with get_db() as db:
+                video = db.query(Video).filter(Video.id == video_id).first()
+                if video:
+                    video.status = 'transcribed'
+                    db.commit()
+
+            # Update job as completed (without analytics)
+            with get_db() as db:
+                job = db.query(Job).filter(Job.id == job_id).first()
+                if job:
+                    job.status = "completed"
+                    job.completed_at = datetime.now()
+                    job.video_id = video_id
+                    job.meta = {
+                        "total_steps": 4,
+                        "current_step": "4",
+                        "step_status": "completed",
+                        "step_message": "Transcrição concluída (análise adiada)",
+                        "transcript_source": transcription_result.get("transcript_source"),
+                        "lazy_analytics": True,
+                        "steps": {
+                            "1": {"name": "Extrair metadados", "status": "completed"},
+                            "2": {"name": "Validar duração", "status": "completed"},
+                            "3": {"name": "Obter transcrição", "status": "completed"},
+                            "4": {"name": "Detectar início do sermão", "status": "completed"}
+                        }
+                    }
+                    db.commit()
+
+            broadcast_processed(video_id, "Transcrição concluída (análise será feita ao visualizar)")
+            logger.info(f"Job {job_id} completed with lazy analytics")
+            return
+
+        # Step 5: Advanced Analytics (only if lazy loading disabled)
         update_job_progress(job_id, "5", "running", "Executando análise avançada com IA")
         logger.info(f"Step 5/6: Running advanced analytics for video {video_id}")
         broadcast_processing(video_id, "Executando análise avançada com IA", 70)
@@ -335,14 +420,24 @@ def process_channel_import_job(job_data: dict):
         if result.returncode != 0:
             raise Exception(f"Falha ao listar vídeos: {result.stderr}")
 
-        # Parse video list
+        # Parse video list and apply early duration filtering
+        from app.worker.yt_dlp_service import YtDlpService
+
+        # Get duration thresholds for filtering
+        min_duration, max_duration = YtDlpService.get_duration_thresholds()
+        logger.info(f"Applying duration filter: {min_duration}s - {max_duration}s")
+
         videos_found = []
+        skipped_short = 0
+        skipped_long = 0
+
         for line in result.stdout.strip().split('\n'):
             if not line:
                 continue
             try:
                 video_info = json.loads(line)
                 upload_date = video_info.get("upload_date")  # Format: YYYYMMDD
+                duration = video_info.get("duration", 0)
 
                 # Additional date filtering (yt-dlp sometimes misses edge cases)
                 if date_start or date_end:
@@ -355,15 +450,28 @@ def process_channel_import_job(job_data: dict):
                         if date_end and upload_date_str > date_end:
                             continue
 
+                # Early duration validation (optimization)
+                if duration < min_duration:
+                    logger.info(f"Skipping short video {video_info.get('id')} - {duration}s")
+                    skipped_short += 1
+                    continue
+
+                if duration > max_duration:
+                    logger.info(f"Skipping long video {video_info.get('id')} - {duration}s")
+                    skipped_long += 1
+                    continue
+
+                # Video passes all checks
                 videos_found.append({
                     "youtube_id": video_info.get("id"),
                     "title": video_info.get("title", "Untitled"),
-                    "duration": video_info.get("duration", 0),
+                    "duration": duration,
                     "upload_date": upload_date
                 })
             except json.JSONDecodeError:
                 continue
 
+        logger.info(f"Duration filtering: {skipped_short} too short, {skipped_long} too long, {len(videos_found)} valid")
         logger.info(f"Found {len(videos_found)} videos in channel"
                     f"{' (filtered by date range)' if date_start or date_end else ''}")
 
@@ -593,14 +701,71 @@ def process_reanalysis_job(job_data: dict):
                 db.commit()
 
 
+def load_config_from_database():
+    """Load configuration from database on worker startup"""
+    try:
+        from app.common.models import SystemSettings
+
+        with get_db() as db:
+            # Load Gemini API key from database
+            api_key_setting = db.query(SystemSettings).filter(
+                SystemSettings.setting_key == "gemini_api_key"
+            ).first()
+
+            if api_key_setting and api_key_setting.setting_value:
+                os.environ["GEMINI_API_KEY"] = api_key_setting.setting_value
+                logger.info("✅ Loaded Gemini API key from database")
+            else:
+                logger.warning("⚠️ No Gemini API key found in database, using .env value")
+
+            # Load AI service provider setting
+            service_setting = db.query(SystemSettings).filter(
+                SystemSettings.setting_key == "ai_service_provider"
+            ).first()
+
+            if service_setting and service_setting.setting_value:
+                os.environ["PRIMARY_LLM"] = service_setting.setting_value
+                logger.info(f"✅ Loaded AI service provider from database: {service_setting.setting_value}")
+
+    except Exception as e:
+        logger.error(f"❌ Error loading config from database: {e}")
+
+
 def worker_loop():
     """
     Main worker loop - polls Redis queue for jobs
     """
-    logger.info("Worker started. Waiting for jobs...")
+    logger.info("Worker starting...")
+
+    # Load configuration from database
+    load_config_from_database()
+
+    # Clean up any abandoned jobs from previous crashes
+    with get_db() as db:
+        cleanup_abandoned_jobs(db)
+
+    logger.info("Worker ready. Waiting for jobs...")
 
     while True:
         try:
+            # Check for timed out jobs periodically (every 10th iteration)
+            if random.randint(1, 10) == 1:
+                with get_db() as db:
+                    timed_out = db.query(Job).filter(
+                        Job.status == 'running',
+                        Job.started_at < datetime.now() - timedelta(hours=2)
+                    ).all()
+
+                    for job in timed_out:
+                        logger.error(f"Job {job.id} timed out after 2 hours")
+                        job.status = 'failed'
+                        job.error_message = 'Job timed out after 2 hours'
+                        job.completed_at = datetime.now()
+
+                    if timed_out:
+                        db.commit()
+                        logger.info(f"Failed {len(timed_out)} timed out jobs")
+
             # Block and wait for job from queue (BLPOP with 5 second timeout)
             result = redis_client.blpop("transcription_queue", timeout=5)
 

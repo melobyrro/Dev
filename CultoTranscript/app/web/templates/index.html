@@ -711,6 +711,16 @@
     font-style: italic;
     padding: 0.5rem;
 }
+
+/* Pulsing animation for processing status */
+@keyframes pulse-processing {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+}
+
+.status-processing {
+    animation: pulse-processing 2s ease-in-out infinite;
+}
 </style>
 {% endblock %}
 
@@ -884,7 +894,7 @@ async function loadRecentVideos() {
                                                 ${formatVideoTitle(v)}
                                             </td>
                                             <td>${formatStatus(v.status)}</td>
-                                            <td>${Math.floor(v.duration_sec / 60)} min</td>
+                                            <td>${formatDuration(v.duration_sec)}</td>
                                             <td onclick="event.stopPropagation();">
                                                 <button onclick="reprocessVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')"
                                                         class="btn"
@@ -1132,6 +1142,129 @@ function collapseAllVideosInMonth(dateKey) {
     });
 }
 
+// ========== JOB STATUS POLLING SYSTEM ==========
+
+// Global polling state
+const activePollingJobs = new Map(); // Map<jobId, intervalId>
+
+// Poll job status and update UI
+async function pollJobStatus(jobId, videoId) {
+    try {
+        const response = await fetch(`/api/jobs/${jobId}/status`);
+        const data = await response.json();
+
+        console.log(`📊 Job ${jobId} status: ${data.status}`);
+
+        // Update UI with progress if available
+        if (data.progress && data.status === 'running') {
+            updateVideoRowProgress(videoId, data.progress);
+        }
+
+        // Check if job completed
+        if (data.status === 'completed') {
+            console.log(`✅ Job ${jobId} completed! Refreshing video list...`);
+            stopPolling(jobId);
+            await loadRecentVideos();
+            showToast('Reprocessamento concluído!', 'success');
+        } else if (data.status === 'failed') {
+            console.log(`❌ Job ${jobId} failed: ${data.error || 'Unknown error'}`);
+            stopPolling(jobId);
+            await loadRecentVideos();
+            showToast(data.error || 'Reprocessamento falhou', 'error');
+        }
+        // Continue polling if status is 'queued' or 'running'
+
+    } catch (error) {
+        console.error(`⚠️ Error polling job ${jobId}:`, error);
+        // Don't stop polling on network errors - will retry
+    }
+}
+
+// Start polling for a job
+function startPolling(jobId, videoId, intervalMs = 3000) {
+    // Don't start if already polling
+    if (activePollingJobs.has(jobId)) {
+        console.log(`Already polling job ${jobId}`);
+        return;
+    }
+
+    console.log(`🔄 Starting polling for job ${jobId} (every ${intervalMs}ms)`);
+
+    // Poll immediately once
+    pollJobStatus(jobId, videoId);
+
+    // Then poll at intervals
+    const intervalId = setInterval(() => {
+        pollJobStatus(jobId, videoId);
+    }, intervalMs);
+
+    activePollingJobs.set(jobId, intervalId);
+
+    // Safety timeout: stop polling after 10 minutes
+    setTimeout(() => {
+        if (activePollingJobs.has(jobId)) {
+            console.warn(`⏱️ Job ${jobId} polling timed out after 10 minutes`);
+            stopPolling(jobId);
+            loadRecentVideos(); // Refresh anyway
+        }
+    }, 600000); // 10 minutes
+}
+
+// Stop polling for a job
+function stopPolling(jobId) {
+    const intervalId = activePollingJobs.get(jobId);
+    if (intervalId) {
+        clearInterval(intervalId);
+        activePollingJobs.delete(jobId);
+        console.log(`⏹️ Stopped polling for job ${jobId}`);
+    }
+}
+
+// Stop all active polling (e.g., on page unload)
+function stopAllPolling() {
+    activePollingJobs.forEach((intervalId, jobId) => {
+        clearInterval(intervalId);
+    });
+    activePollingJobs.clear();
+    console.log('Stopped all polling');
+}
+
+// Update video row with progress message (placeholder - can be enhanced)
+function updateVideoRowProgress(videoId, progressMessage) {
+    console.log(`📝 Video ${videoId} progress: ${progressMessage}`);
+    // Could update UI here if we add progress indicators
+}
+
+// Simple toast notification
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.textContent = message;
+    toast.style.cssText = `
+        position: fixed;
+        bottom: 2rem;
+        left: 50%;
+        transform: translateX(-50%);
+        background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+        color: white;
+        padding: 1rem 2rem;
+        border-radius: 8px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+        z-index: 9999;
+        font-size: 14px;
+    `;
+
+    document.body.appendChild(toast);
+
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s';
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}
+
+// Clean up on page unload
+window.addEventListener('beforeunload', stopAllPolling);
+
 // Reprocess video function
 async function reprocessVideo(videoId, title) {
     // Refresh CSRF token before operation
@@ -1178,12 +1311,17 @@ async function reprocessVideo(videoId, title) {
         const data = await response.json();
 
         if (response.ok && data.success) {
-            alert(`Reprocessamento iniciado! O vídeo será reanalizado em alguns minutos.`);
+            alert(`Reprocessamento iniciado! O status será atualizado automaticamente.`);
 
-            // Refresh video list after a short delay
-            setTimeout(() => {
-                loadRecentVideos();
-            }, 2000);
+            // Start polling with job_id
+            if (data.job_id) {
+                startPolling(data.job_id, videoId, 3000); // Poll every 3 seconds
+            } else {
+                // Fallback: single refresh after 2 seconds (if job_id not provided)
+                setTimeout(() => {
+                    loadRecentVideos();
+                }, 2000);
+            }
         } else {
             alert(`Erro: ${data.detail || 'Falha ao iniciar reprocessamento'}`);
 
@@ -1342,7 +1480,7 @@ async function fetchAndDisplayTranscript(videoId, expansionRow) {
                         <div class="sermon-meta">
                             <div class="meta-card">
                                 <strong>Duração</strong>
-                                <span>${stats.duration_minutes} min</span>
+                                <span>${formatDuration(stats.duration_minutes * 60)}</span>
                             </div>
                             <div class="meta-card">
                                 <strong>Palavras</strong>

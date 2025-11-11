@@ -1,12 +1,13 @@
 """
 Sermon Coach
-Generates actionable improvement suggestions using Gemini AI
+Generates actionable improvement suggestions using unified LLM client (Gemini or Ollama)
 """
 import logging
 import re
 import json
 from typing import List, Dict
 from dataclasses import dataclass
+from app.ai.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -31,10 +32,10 @@ class SermonCoach:
     3. Communication: Delivery, pacing, clarity
     """
 
-    def __init__(self, gemini_client):
-        """Initialize with Gemini client"""
-        self.gemini = gemini_client
-        logger.info("Sermon coach initialized")
+    def __init__(self):
+        """Initialize with unified LLM client"""
+        self.llm = get_llm_client()
+        logger.info("Sermon coach initialized with unified LLM client")
 
     def generate_suggestions(
         self,
@@ -165,9 +166,15 @@ Retorne APENAS JSON com 1-2 sugestões.
         return self._parse_suggestions(prompt, 'communication')
 
     def _parse_suggestions(self, prompt: str, category: str) -> List[Suggestion]:
-        """Parse Gemini response into Suggestion objects"""
+        """Parse LLM response into Suggestion objects"""
         try:
-            response = self.gemini.generate_content(prompt)
+            llm_response = self.llm.generate(
+                prompt=prompt,
+                max_tokens=1000,
+                temperature=0.6
+            )
+            response = llm_response["text"]
+            backend_used = llm_response["backend"]
 
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if not json_match:
@@ -185,6 +192,7 @@ Retorne APENAS JSON com 1-2 sugestões.
                     rewritten_example=item.get('exemplo', '')[:1000]
                 ))
 
+            logger.info(f"✅ {category} suggestions generated using {backend_used} backend")
             return suggestions
 
         except Exception as e:

@@ -58,7 +58,7 @@
     </div>
 
     <div style="display: flex; gap: 0.5rem;">
-        <button type="submit" style="padding: 0.5rem 1.5rem; background: #3b82f6; color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
+        <button type="submit" style="padding: 0.5rem 1.5rem; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; font-weight: 500;">
             Filtrar
         </button>
         <a href="/videos" style="padding: 0.5rem 1.5rem; background: var(--text-muted); color: white; text-decoration: none; border-radius: 4px; display: inline-block;">
@@ -68,12 +68,12 @@
 </form>
 
 <!-- Bulk Actions Bar (hidden by default) -->
-<div id="bulk-actions-bar" style="display: none;" class="mb-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg flex items-center gap-4">
-    <span id="selected-count" class="font-semibold text-blue-900 dark:text-blue-100">0 vídeos selecionados</span>
-    <button onclick="openMergeModal()" class="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+<div id="bulk-actions-bar" style="display: none; margin-bottom: 1rem; padding: 1rem; background: var(--info-bg, #dbeafe); border: 1px solid var(--info-border, #93c5fd); border-radius: 8px; align-items: center; gap: 1rem;">
+    <span id="selected-count" style="font-weight: 600; color: var(--info-text, #1e40af);">0 vídeos selecionados</span>
+    <button onclick="openMergeModal()" style="padding: 0.5rem 1rem; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: background 200ms;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
         Mesclar Vídeos Selecionados
     </button>
-    <button onclick="clearSelection()" class="px-3 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors">
+    <button onclick="clearSelection()" style="padding: 0.5rem 0.75rem; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 200ms;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#6b7280'">
         Limpar Seleção
     </button>
 </div>
@@ -185,7 +185,7 @@
                     </div>
                 </td>
                 <td class="px-4 py-3"><span class="status status-{{ video.status }}">{{ video.status }}</span></td>
-                <td class="px-4 py-3 text-sm text-secondary">{{ (video.duration_sec / 60)|int }} min</td>
+                <td class="px-4 py-3 text-sm text-secondary">{{ video.duration_sec|format_duration }}</td>
                 <td class="px-4 py-3 text-sm">
                     <div><strong>Publicado:</strong> {{ (video.published_at).strftime('%m/%d/%Y') }}</div>
                     <div>
@@ -239,23 +239,23 @@
 </div>
 
 <!-- Video Merge Modal -->
-<div id="merge-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;">
-    <div class="modal-content bg-white dark:bg-gray-800 rounded-lg shadow-xl p-6 max-w-2xl w-full mx-4" style="max-height: 90vh; overflow-y: auto;">
+<div id="merge-modal" class="modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5); z-index: 1000; align-items: center; justify-content: center;">
+    <div class="modal-content" style="background: var(--surface); border-radius: 8px; box-shadow: var(--shadow); padding: 1.5rem; max-width: 42rem; width: 100%; margin: 0 1rem; max-height: 90vh; overflow-y: auto;">
 
         <!-- Step 1: Select Primary Video -->
         <div id="merge-step-1">
-            <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Mesclar Vídeos - Etapa 1/2</h2>
-            <p class="mb-4 text-gray-700 dark:text-gray-300">Selecione qual vídeo será o principal (manterá YouTube ID, título, speaker, etc.):</p>
+            <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: var(--text);">Mesclar Vídeos - Etapa 1/2</h2>
+            <p style="margin-bottom: 1rem; color: var(--text-muted);">Selecione qual vídeo será o principal (manterá YouTube ID, título, speaker, etc.):</p>
 
-            <div id="primary-video-selection" class="space-y-2 mb-6">
+            <div id="primary-video-selection" style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
                 <!-- Radio buttons will be inserted here by JavaScript -->
             </div>
 
-            <div class="flex gap-3">
-                <button onclick="mergeStep2()" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors">
+            <div style="display: flex; gap: 0.75rem;">
+                <button onclick="mergeStep2()" style="padding: 0.5rem 1.5rem; background: var(--primary); color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: opacity 200ms;" onmouseover="this.style.opacity='0.9'" onmouseout="this.style.opacity='1'">
                     Próximo →
                 </button>
-                <button onclick="closeMergeModal()" class="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors">
+                <button onclick="closeMergeModal()" style="padding: 0.5rem 1.5rem; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 200ms;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#6b7280'">
                     Cancelar
                 </button>
             </div>
@@ -263,23 +263,23 @@
 
         <!-- Step 2: Confirm Merge -->
         <div id="merge-step-2" style="display: none;">
-            <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Mesclar Vídeos - Etapa 2/2</h2>
+            <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: var(--text);">Mesclar Vídeos - Etapa 2/2</h2>
 
-            <div class="mb-4">
-                <p class="font-semibold text-gray-900 dark:text-white">Vídeo Principal:</p>
-                <p id="primary-video-title" class="text-gray-700 dark:text-gray-300 ml-4"></p>
+            <div style="margin-bottom: 1rem;">
+                <p style="font-weight: 600; color: var(--text);">Vídeo Principal:</p>
+                <p id="primary-video-title" style="color: var(--text-muted); margin-left: 1rem;"></p>
             </div>
 
-            <div class="mb-4">
-                <p class="font-semibold text-gray-900 dark:text-white">Vídeos que serão mesclados e excluídos:</p>
-                <ul id="secondary-videos-list" class="text-gray-700 dark:text-gray-300 ml-4 list-disc list-inside">
+            <div style="margin-bottom: 1rem;">
+                <p style="font-weight: 600; color: var(--text);">Vídeos que serão mesclados e excluídos:</p>
+                <ul id="secondary-videos-list" style="color: var(--text-muted); margin-left: 1rem; list-style-type: disc; list-style-position: inside;">
                     <!-- Will be populated by JavaScript -->
                 </ul>
             </div>
 
-            <div class="mb-4 p-4 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700 rounded-lg">
-                <p class="font-bold text-yellow-900 dark:text-yellow-100 mb-2">⚠️ Atenção:</p>
-                <ul class="text-sm text-yellow-800 dark:text-yellow-200 space-y-1">
+            <div style="margin-bottom: 1rem; padding: 1rem; background: var(--warning-bg, #fef3c7); border: 1px solid var(--warning-border, #fcd34d); border-radius: 8px;">
+                <p style="font-weight: bold; color: var(--warning-text, #92400e); margin-bottom: 0.5rem;">⚠️ Atenção:</p>
+                <ul style="font-size: 0.875rem; color: var(--warning-text, #92400e); line-height: 1.5;">
                     <li>• As transcrições serão concatenadas em ordem cronológica</li>
                     <li id="total-duration-info">• Duração total: <span id="total-duration"></span></li>
                     <li>• Os vídeos secundários serão <strong>excluídos permanentemente</strong></li>
@@ -288,39 +288,39 @@
                 </ul>
             </div>
 
-            <div class="mb-4">
-                <label class="block font-medium text-gray-900 dark:text-white mb-2">Digite a senha de admin para confirmar:</label>
+            <div style="margin-bottom: 1rem;">
+                <label style="display: block; font-weight: 500; color: var(--text); margin-bottom: 0.5rem;">Digite a senha de admin para confirmar:</label>
                 <input type="password"
                        id="merge-password"
                        placeholder="Senha"
-                       class="w-full p-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                       style="width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text);"
                        onkeypress="if(event.key === 'Enter') executeMerge()">
             </div>
 
-            <div class="flex gap-3">
-                <button onclick="executeMerge()" class="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg font-medium transition-colors">
+            <div style="display: flex; gap: 0.75rem;">
+                <button onclick="executeMerge()" style="padding: 0.5rem 1.5rem; background: #10b981; color: white; border: none; border-radius: 8px; font-weight: 500; cursor: pointer; transition: background 200ms;" onmouseover="this.style.background='#059669'" onmouseout="this.style.background='#10b981'">
                     ✓ Confirmar Mesclagem
                 </button>
-                <button onclick="mergeStep1()" class="px-6 py-2 bg-gray-500 hover:bg-gray-600 text-white rounded-lg transition-colors">
+                <button onclick="mergeStep1()" style="padding: 0.5rem 1.5rem; background: #6b7280; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 200ms;" onmouseover="this.style.background='#4b5563'" onmouseout="this.style.background='#6b7280'">
                     ← Voltar
                 </button>
-                <button onclick="closeMergeModal()" class="px-6 py-2 bg-gray-400 hover:bg-gray-500 text-white rounded-lg transition-colors">
+                <button onclick="closeMergeModal()" style="padding: 0.5rem 1.5rem; background: #9ca3af; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 200ms;" onmouseover="this.style.background='#6b7280'" onmouseout="this.style.background='#9ca3af'">
                     Cancelar
                 </button>
             </div>
 
-            <div id="merge-message" class="mt-4" style="display: none;"></div>
+            <div id="merge-message" style="margin-top: 1rem; display: none;"></div>
         </div>
 
         <!-- Step 3: Progress -->
         <div id="merge-step-3" style="display: none;">
-            <h2 class="text-2xl font-bold mb-4 text-gray-900 dark:text-white">Mesclando Vídeos...</h2>
-            <div class="mb-4">
-                <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-4">
-                    <div id="merge-progress" class="bg-green-600 h-4 rounded-full transition-all duration-300" style="width: 0%"></div>
+            <h2 style="font-size: 1.5rem; font-weight: bold; margin-bottom: 1rem; color: var(--text);">Mesclando Vídeos...</h2>
+            <div style="margin-bottom: 1rem;">
+                <div style="width: 100%; background: var(--muted); border-radius: 9999px; height: 1rem;">
+                    <div id="merge-progress" style="background: #10b981; height: 1rem; border-radius: 9999px; transition: width 300ms; width: 0%;"></div>
                 </div>
             </div>
-            <p id="merge-status" class="text-center text-gray-700 dark:text-gray-300">Processando...</p>
+            <p id="merge-status" style="text-align: center; color: var(--text-muted);">Processando...</p>
         </div>
 
     </div>
@@ -672,12 +672,14 @@ function openMergeModal() {
 
     mergeData.videos.forEach(video => {
         const div = document.createElement('div');
-        div.className = 'p-3 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer';
+        div.style.cssText = 'padding: 0.75rem; border: 1px solid var(--border); border-radius: 8px; cursor: pointer; transition: background 200ms;';
+        div.onmouseover = function() { this.style.background = 'var(--muted)'; };
+        div.onmouseout = function() { this.style.background = 'transparent'; };
         div.innerHTML = `
-            <label class="flex items-center cursor-pointer">
-                <input type="radio" name="primary-video" value="${video.id}" class="mr-3">
-                <span class="text-gray-900 dark:text-white">${video.title}</span>
-                <span class="ml-auto text-sm text-gray-500 dark:text-gray-400">(${video.status})</span>
+            <label style="display: flex; align-items: center; cursor: pointer;">
+                <input type="radio" name="primary-video" value="${video.id}" style="margin-right: 0.75rem;">
+                <span style="color: var(--text);">${video.title}</span>
+                <span style="margin-left: auto; font-size: 0.875rem; color: var(--text-muted);">(${video.status})</span>
             </label>
         `;
         selectionDiv.appendChild(div);
@@ -732,17 +734,7 @@ function mergeStep2() {
 
     // Calculate total duration
     const totalDurationSec = mergeData.videos.reduce((sum, v) => sum + v.duration, 0);
-    const totalMinutes = Math.floor(totalDurationSec / 60);
-    const totalHours = Math.floor(totalMinutes / 60);
-    const remainingMinutes = totalMinutes % 60;
-
-    let durationText = '';
-    if (totalHours > 0) {
-        durationText = `${totalHours}h ${remainingMinutes}min`;
-    } else {
-        durationText = `${totalMinutes}min`;
-    }
-    document.getElementById('total-duration').textContent = durationText;
+    document.getElementById('total-duration').textContent = formatDuration(totalDurationSec);
 
     // Show step 2
     document.getElementById('merge-step-1').style.display = 'none';
@@ -785,8 +777,8 @@ async function executeMerge() {
         if (response.ok && result.success) {
             document.getElementById('merge-progress').style.width = '100%';
             document.getElementById('merge-status').innerHTML = `
-                <span class="text-green-600 dark:text-green-400 font-semibold">✓ ${result.message}</span><br>
-                <span class="text-sm text-gray-600 dark:text-gray-400">Atualizando página...</span>
+                <span style="color: #10b981; font-weight: 600;">✓ ${result.message}</span><br>
+                <span style="font-size: 0.875rem; color: var(--text-muted);">Atualizando página...</span>
             `;
 
             // Reload page after 2 seconds
@@ -799,8 +791,8 @@ async function executeMerge() {
     } catch (error) {
         document.getElementById('merge-progress').style.width = '0%';
         document.getElementById('merge-status').innerHTML = `
-            <span class="text-red-600 dark:text-red-400 font-semibold">✗ Erro: ${error.message}</span><br>
-            <button onclick="mergeStep2()" class="mt-3 px-4 py-2 bg-blue-600 text-white rounded-lg">Tentar Novamente</button>
+            <span style="color: #ef4444; font-weight: 600;">✗ Erro: ${error.message}</span><br>
+            <button onclick="mergeStep2()" style="margin-top: 0.75rem; padding: 0.5rem 1rem; background: var(--primary); color: white; border: none; border-radius: 8px; cursor: pointer;">Tentar Novamente</button>
         `;
     }
 }

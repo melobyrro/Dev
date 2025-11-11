@@ -52,7 +52,7 @@ class Video(Base):
     __tablename__ = "videos"
     __table_args__ = (
         CheckConstraint(
-            "status IN ('pending', 'processing', 'transcribed', 'completed', 'failed', 'too_long', 'skipped')",
+            "status IN ('pending', 'processing', 'transcribed', 'completed', 'failed', 'too_long', 'too_short', 'skipped')",
             name="check_video_status"
         ),
     )
@@ -431,10 +431,22 @@ class TranscriptEmbedding(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), index=True)
-    segment_start = Column(Integer, nullable=False)
-    segment_end = Column(Integer, nullable=False)
+    segment_start = Column(Integer, nullable=False, comment="Segment start position in words")
+    segment_end = Column(Integer, nullable=False, comment="Segment end position in words")
+    segment_start_sec = Column(Integer, nullable=True, comment="Segment start time in seconds (for YouTube timestamp links)")
+    segment_end_sec = Column(Integer, nullable=True, comment="Segment end time in seconds (for YouTube timestamp links)")
     segment_text = Column(Text, nullable=False)
     embedding = Column(Vector(768))
+
+    # Phase 2: Segment metadata
+    keywords = Column(JSONB, comment='Extracted keywords (array)')
+    topics = Column(JSONB, comment='Identified theological topics (array)')
+    sentiment = Column(String(20), comment='Emotional tone: positive, neutral, negative')
+    question_type = Column(String(50), comment='Type of question answered: what, why, how, etc.')
+    has_scripture = Column(Boolean, default=False)
+    has_practical_application = Column(Boolean, default=False)
+    metadata_generated_at = Column(DateTime(timezone=True))
+
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -545,3 +557,131 @@ class SystemSettings(Base):
 
     def __repr__(self):
         return f"<SystemSettings(key='{self.setting_key}', value='{'***' if self.encrypted else self.setting_value}')>"
+
+
+# ============================================================================
+# PHASE 2: CHATBOT ENHANCEMENTS MODELS
+# ============================================================================
+
+class ChatbotFeedback(Base):
+    """User feedback on chatbot responses"""
+    __tablename__ = "chatbot_feedback"
+    __table_args__ = (
+        CheckConstraint(
+            "rating IN ('helpful', 'not_helpful')",
+            name="check_feedback_rating"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String(100), nullable=False, index=True)
+    query = Column(Text, nullable=False)
+    response_summary = Column(Text)
+    rating = Column(String(20), nullable=False)
+    feedback_text = Column(Text)
+    segments_shown = Column(JSONB, comment='Array of segment IDs that were shown')
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    user_ip = Column(String(45))
+    extra_metadata = Column(JSONB, server_default='{}')
+
+    # Relationships
+    channel = relationship("Channel")
+
+
+class ChatbotQueryMetrics(Base):
+    """Tracks all chatbot queries for analytics"""
+    __tablename__ = "chatbot_query_metrics"
+
+    id = Column(Integer, primary_key=True, index=True)
+    query = Column(Text, nullable=False)
+    query_normalized = Column(Text, index=True, comment='Normalized query for grouping')
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), index=True)
+    session_id = Column(String(100))
+    segments_returned = Column(Integer)
+    response_time_ms = Column(Integer)
+    cache_hit = Column(Boolean, default=False, index=True)
+    date_filters_used = Column(Boolean, default=False)
+    speaker_filter_used = Column(Boolean, default=False)
+    biblical_filter_used = Column(Boolean, default=False)
+    theme_filter_used = Column(Boolean, default=False)
+    query_type = Column(String(50), index=True, comment='Query type from classifier')
+    backend_used = Column(String(20), index=True, comment='LLM backend: gemini or ollama')
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), index=True)
+    extra_metadata = Column(JSONB, server_default='{}')
+
+    # Relationships
+    channel = relationship("Channel")
+
+
+# ============================================================================
+# PHASE 3: CHATBOT ENHANCEMENTS MODELS (Hybrid Search, Hierarchical, Context)
+# ============================================================================
+
+class VideoEmbedding(Base):
+    """Video-level embeddings from sermon summaries for broader topical searches"""
+    __tablename__ = "video_embeddings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    video_id = Column(Integer, ForeignKey("videos.id", ondelete="CASCADE"), unique=True, index=True)
+    embedding = Column(Vector(768))
+    summary = Column(Text, comment='200-300 word AI-generated summary of entire sermon')
+    main_topics = Column(JSONB, comment='Top 3-5 main topics covered in sermon')
+    key_scripture_refs = Column(JSONB, comment='Key scripture passages referenced (OSIS format)')
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    video = relationship("Video")
+
+
+class ChannelEmbedding(Base):
+    """Channel-level embeddings capturing overall teaching style and themes"""
+    __tablename__ = "channel_embeddings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), unique=True, index=True)
+    embedding = Column(Vector(768))
+    teaching_summary = Column(Text, comment='Overview of channel teaching style and emphasis')
+    common_themes = Column(JSONB, comment='Most frequently taught themes across all sermons')
+    style_notes = Column(Text, comment='Notes on preaching style and approach')
+    sermon_count = Column(Integer, default=0, comment='Number of sermons used to generate this embedding')
+    generated_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    channel = relationship("Channel")
+
+
+class SermonContextLink(Base):
+    """Links related sermon segments across different videos for cross-referencing"""
+    __tablename__ = "sermon_context_links"
+    __table_args__ = (
+        CheckConstraint(
+            "link_type IN ('same_topic', 'contrasting_view', 'elaboration', 'example', 'related')",
+            name="check_link_type"
+        ),
+        CheckConstraint(
+            "similarity_score >= 0 AND similarity_score <= 1",
+            name="check_similarity_score"
+        ),
+        CheckConstraint(
+            "confidence_score >= 0 AND confidence_score <= 1",
+            name="check_confidence_score"
+        ),
+        CheckConstraint(
+            "source_embedding_id != related_embedding_id",
+            name="check_different_segments"
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    source_embedding_id = Column(Integer, ForeignKey("transcript_embeddings.id", ondelete="CASCADE"), index=True)
+    related_embedding_id = Column(Integer, ForeignKey("transcript_embeddings.id", ondelete="CASCADE"), index=True)
+    similarity_score = Column(Float, nullable=False, comment='Cosine similarity score (0-1, higher = more similar)')
+    link_type = Column(String(50), comment='Type of relationship: same_topic, contrasting_view, elaboration, example, related')
+    confidence_score = Column(Float, default=0.8, comment='AI confidence in the link type classification')
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    # Relationships
+    source_embedding = relationship("TranscriptEmbedding", foreign_keys=[source_embedding_id])
+    related_embedding = relationship("TranscriptEmbedding", foreign_keys=[related_embedding_id])

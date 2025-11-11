@@ -223,7 +223,7 @@
             📅 <strong>Publicado:</strong> {{ video.published_at.strftime('%m/%d/%Y às %H:%M') }}
         </div>
         <div>
-            ⏱️ <strong>Duração:</strong> {{ (video.duration_sec // 60) }} minutos
+            ⏱️ <strong>Duração:</strong> {{ video.duration_sec|format_duration }}
         </div>
         <div>
             <span class="status status-{{ video.status }}">{{ video.status }}</span>
@@ -238,7 +238,7 @@
     <!-- Informações Gerais -->
     <div class="analytics-card">
         <h3>📊 Informações Gerais</h3>
-        <p><strong>Duração:</strong> {{ (video.duration_sec // 60) }} minutos</p>
+        <p><strong>Duração:</strong> {{ video.duration_sec|format_duration }}</p>
         <p><strong>Palavras:</strong> {{ transcript.word_count if transcript else 0 }}</p>
         <p>
             <strong>Pregador:</strong>

@@ -85,7 +85,7 @@ def generate_ai_summary(
         logger.info("🤖 Generating AI summary with LLM...")
         llm_response = llm.generate(
             prompt=prompt,
-            max_tokens=2000,
+            max_tokens=4000,
             temperature=0.7
         )
         summary = llm_response["text"]

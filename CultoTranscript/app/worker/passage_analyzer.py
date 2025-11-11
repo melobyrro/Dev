@@ -209,7 +209,23 @@ Contexto: {context[:500]}
 Gere uma nota de aplicação muito breve (máximo 100 caracteres) explicando como esta passagem foi usada.
 Responda APENAS com a nota, sem explicações adicionais.
 """
-                note = gemini_client.generate_content(prompt)
+                response = gemini_client.generate_content(prompt)
+
+                # Handle both simple and multi-part responses
+                try:
+                    note = response.text
+                except (ValueError, AttributeError):
+                    # Multi-part response - extract text from all parts
+                    if hasattr(response, 'candidates') and response.candidates:
+                        parts = response.candidates[0].content.parts
+                        note = "".join(part.text for part in parts if hasattr(part, 'text'))
+                    else:
+                        note = ""
+
+                if not note or not note.strip():
+                    logger.warning("Empty response from Gemini for application note")
+                    return "Aplicação geral"
+
                 return note.strip()[:100]
             except Exception as e:
                 logger.error(f"Error generating application note: {e}")

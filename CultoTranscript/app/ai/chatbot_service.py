@@ -3,10 +3,15 @@ Channel Chatbot Service
 Conversational AI for Q&A about channel sermons
 """
 import logging
+import os
+import re
+import time
 import uuid
 from datetime import datetime, timezone
+from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Tuple
 
+import numpy as np
 from sqlalchemy import text
 
 from app.ai.cache_manager import CacheManager
@@ -26,7 +31,7 @@ from app.ai.biblical_passage_service import get_biblical_passage_service
 from app.ai.theme_parser import get_theme_parser
 from app.ai.theme_service import get_theme_service
 from app.common.database import get_db
-from app.common.models import GeminiChatHistory, Video
+from app.common.models import GeminiChatHistory, Video, ChatbotQueryMetrics
 
 MONTH_NAMES_PT = [
     "",
@@ -45,6 +50,12 @@ MONTH_NAMES_PT = [
 ]
 
 logger = logging.getLogger(__name__)
+
+# Configuration from environment
+CHATBOT_DEDUP_ENABLED = os.getenv("CHATBOT_DEDUP_ENABLED", "true").lower() == "true"
+CHATBOT_DEDUP_THRESHOLD = float(os.getenv("CHATBOT_DEDUP_THRESHOLD", "0.95"))
+CHATBOT_MERGE_ADJACENT_SEC = int(os.getenv("CHATBOT_MERGE_ADJACENT_SEC", "30"))
+CHATBOT_MAX_PER_VIDEO = int(os.getenv("CHATBOT_MAX_PER_VIDEO", "2"))
 
 
 class ChatbotService:
@@ -70,7 +81,382 @@ class ChatbotService:
         self.passage_service = get_biblical_passage_service()
         self.theme_parser = get_theme_parser()
         self.theme_service = get_theme_service()
-        logger.info("Chatbot service initialized with unified LLM client, caching, query classification, speaker detection, biblical reference parsing, and theme extraction")
+        logger.info(
+            f"Chatbot service initialized with unified LLM client, caching, query classification, "
+            f"speaker detection, biblical reference parsing, and theme extraction "
+            f"(dedup_enabled={CHATBOT_DEDUP_ENABLED})"
+        )
+
+    @staticmethod
+    def _normalize_query(query: str) -> str:
+        """
+        Normalize query for grouping similar questions
+
+        Args:
+            query: Original query text
+
+        Returns:
+            Normalized query (lowercase, no punctuation)
+        """
+        # Convert to lowercase
+        normalized = query.lower()
+
+        # Remove punctuation
+        normalized = re.sub(r'[^\w\s]', ' ', normalized)
+
+        # Remove extra whitespace
+        normalized = re.sub(r'\s+', ' ', normalized).strip()
+
+        return normalized
+
+    def _log_query_metrics(
+        self,
+        channel_id: int,
+        session_id: str,
+        query: str,
+        segments_returned: int,
+        response_time_ms: int,
+        cache_hit: bool,
+        date_filters_used: bool,
+        speaker_filter_used: bool,
+        biblical_filter_used: bool,
+        theme_filter_used: bool,
+        query_type: QueryType,
+        backend_used: str,
+        metadata: Dict = None
+    ) -> None:
+        """
+        Log query metrics to database for analytics
+
+        Args:
+            channel_id: Channel ID
+            session_id: Session ID
+            query: User query
+            segments_returned: Number of segments returned
+            response_time_ms: Response time in milliseconds
+            cache_hit: Whether response was cached
+            date_filters_used: Whether date filters were applied
+            speaker_filter_used: Whether speaker filter was applied
+            biblical_filter_used: Whether biblical filter was applied
+            theme_filter_used: Whether theme filter was applied
+            query_type: Query type from classifier
+            backend_used: LLM backend used
+            metadata: Additional metadata
+        """
+        try:
+            with get_db() as db:
+                metrics = ChatbotQueryMetrics(
+                    query=query,
+                    query_normalized=self._normalize_query(query),
+                    channel_id=channel_id,
+                    session_id=session_id,
+                    segments_returned=segments_returned,
+                    response_time_ms=response_time_ms,
+                    cache_hit=cache_hit,
+                    date_filters_used=date_filters_used,
+                    speaker_filter_used=speaker_filter_used,
+                    biblical_filter_used=biblical_filter_used,
+                    theme_filter_used=theme_filter_used,
+                    query_type=query_type.value if query_type else None,
+                    backend_used=backend_used,
+                    metadata=metadata or {}
+                )
+                db.add(metrics)
+                db.commit()
+                logger.debug(f"Logged query metrics for session {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to log query metrics: {e}", exc_info=True)
+
+    @staticmethod
+    @lru_cache(maxsize=1000)
+    def _calculate_similarity_cached(
+        embedding1_tuple: Tuple[float, ...],
+        embedding2_tuple: Tuple[float, ...]
+    ) -> float:
+        """
+        Calculate cosine similarity between two embeddings with caching
+
+        Args:
+            embedding1_tuple: First embedding as tuple (hashable)
+            embedding2_tuple: Second embedding as tuple (hashable)
+
+        Returns:
+            Cosine similarity (0-1, higher = more similar)
+        """
+        # Convert tuples back to numpy arrays
+        vec1 = np.array(embedding1_tuple)
+        vec2 = np.array(embedding2_tuple)
+
+        # Calculate cosine similarity
+        dot_product = np.dot(vec1, vec2)
+        norm1 = np.linalg.norm(vec1)
+        norm2 = np.linalg.norm(vec2)
+
+        if norm1 == 0 or norm2 == 0:
+            return 0.0
+
+        return dot_product / (norm1 * norm2)
+
+    def _deduplicate_segments(
+        self,
+        segments: List[Dict],
+        similarity_threshold: float = None,
+        merge_adjacent: bool = True
+    ) -> List[Dict]:
+        """
+        Remove duplicate and highly similar segments
+
+        Strategy:
+        1. Group segments by video_id
+        2. Within each video:
+           - Merge adjacent segments (if timestamps differ by <30 seconds)
+           - Remove segments with >95% semantic similarity
+           - Keep highest scoring unique segments
+        3. Limit to max 2 segments per video (unless explicitly different topics)
+
+        Args:
+            segments: List of segment dictionaries from search
+            similarity_threshold: Similarity threshold (default from config)
+            merge_adjacent: Whether to merge adjacent segments
+
+        Returns:
+            Deduplicated list of segments
+        """
+        if not CHATBOT_DEDUP_ENABLED or not segments:
+            return segments
+
+        if similarity_threshold is None:
+            similarity_threshold = CHATBOT_DEDUP_THRESHOLD
+
+        original_count = len(segments)
+        logger.debug(f"🔄 Starting deduplication: {original_count} segments")
+
+        # First, fetch embeddings for all segments from database
+        with get_db() as db:
+            # Group segments by video
+            segments_by_video = {}
+            for seg in segments:
+                video_id = seg['video_id']
+                if video_id not in segments_by_video:
+                    segments_by_video[video_id] = []
+                segments_by_video[video_id].append(seg)
+
+            # Fetch embeddings for all segments
+            for video_id, video_segments in segments_by_video.items():
+                # Get embeddings from database for this video's segments
+                segment_starts = [s['segment_start'] for s in video_segments]
+
+                result = db.execute(text("""
+                    SELECT segment_start, embedding
+                    FROM transcript_embeddings
+                    WHERE video_id = :video_id
+                      AND segment_start = ANY(:segment_starts)
+                """), {
+                    'video_id': video_id,
+                    'segment_starts': segment_starts
+                }).fetchall()
+
+                # Map embeddings to segments
+                embedding_map = {row[0]: row[1] for row in result}
+
+                for seg in video_segments:
+                    seg['_embedding'] = embedding_map.get(seg['segment_start'])
+
+        # Process each video's segments
+        deduplicated = []
+        stats = {
+            'merged_adjacent': 0,
+            'removed_similar': 0,
+            'limited_per_video': 0
+        }
+
+        for video_id, video_segments in segments_by_video.items():
+            # Sort by timestamp for adjacent merging
+            video_segments.sort(key=lambda x: x['segment_start_sec'])
+
+            # Step 1: Merge adjacent segments
+            if merge_adjacent:
+                video_segments = self._merge_adjacent_segments(
+                    video_segments,
+                    max_gap_sec=CHATBOT_MERGE_ADJACENT_SEC,
+                    stats=stats
+                )
+
+            # Step 2: Remove semantically similar segments
+            video_segments = self._remove_similar_segments(
+                video_segments,
+                similarity_threshold=similarity_threshold,
+                stats=stats
+            )
+
+            # Step 3: Limit per video (keep top N by relevance)
+            if len(video_segments) > CHATBOT_MAX_PER_VIDEO:
+                # Sort by relevance score
+                video_segments.sort(key=lambda x: x['relevance'], reverse=True)
+                removed_count = len(video_segments) - CHATBOT_MAX_PER_VIDEO
+                video_segments = video_segments[:CHATBOT_MAX_PER_VIDEO]
+                stats['limited_per_video'] += removed_count
+                logger.debug(
+                    f"📊 Limited video {video_id} to {CHATBOT_MAX_PER_VIDEO} segments "
+                    f"(removed {removed_count} lower-scoring segments)"
+                )
+
+            deduplicated.extend(video_segments)
+
+        # Clean up temporary embeddings
+        for seg in deduplicated:
+            if '_embedding' in seg:
+                del seg['_embedding']
+
+        # Sort by relevance score
+        deduplicated.sort(key=lambda x: x['relevance'], reverse=True)
+
+        final_count = len(deduplicated)
+        reduction_pct = ((original_count - final_count) / original_count * 100) if original_count > 0 else 0
+
+        logger.info(
+            f"🔄 Deduplication complete: {original_count} → {final_count} segments "
+            f"({reduction_pct:.1f}% reduction) | "
+            f"Merged: {stats['merged_adjacent']}, Similar: {stats['removed_similar']}, "
+            f"Limited: {stats['limited_per_video']}"
+        )
+
+        return deduplicated
+
+    def _merge_adjacent_segments(
+        self,
+        segments: List[Dict],
+        max_gap_sec: int,
+        stats: Dict
+    ) -> List[Dict]:
+        """
+        Merge segments that are within max_gap_sec of each other
+
+        Args:
+            segments: Sorted list of segments (by timestamp)
+            max_gap_sec: Maximum gap in seconds to merge
+            stats: Stats dictionary to update
+
+        Returns:
+            List of segments with adjacent ones merged
+        """
+        if len(segments) <= 1:
+            return segments
+
+        merged = []
+        i = 0
+
+        while i < len(segments):
+            current = segments[i].copy()
+
+            # Look ahead for adjacent segments
+            j = i + 1
+            while j < len(segments):
+                next_seg = segments[j]
+
+                # Check if within merge window
+                gap = next_seg['segment_start_sec'] - current['segment_end_sec']
+
+                if gap <= max_gap_sec:
+                    # Merge segments
+                    logger.debug(
+                        f"🔗 Merging adjacent segments (gap={gap}s): "
+                        f"[{current['segment_start_sec']}-{current['segment_end_sec']}] + "
+                        f"[{next_seg['segment_start_sec']}-{next_seg['segment_end_sec']}]"
+                    )
+
+                    # Combine text with separator
+                    current['segment_text'] = current['segment_text'] + " ... " + next_seg['segment_text']
+
+                    # Extend timestamp range
+                    current['segment_end'] = next_seg['segment_end']
+                    current['segment_end_sec'] = next_seg['segment_end_sec']
+
+                    # Keep higher relevance score
+                    if next_seg['relevance'] > current['relevance']:
+                        current['relevance'] = next_seg['relevance']
+                        current['score_breakdown'] = next_seg.get('score_breakdown')
+                        current['base_relevance'] = next_seg.get('base_relevance')
+
+                    # Use embedding from higher-scoring segment
+                    if next_seg.get('_embedding') is not None and next_seg['relevance'] > current['relevance']:
+                        current['_embedding'] = next_seg['_embedding']
+
+                    stats['merged_adjacent'] += 1
+                    j += 1
+                else:
+                    # Gap too large, stop merging
+                    break
+
+            merged.append(current)
+            i = j if j > i + 1 else i + 1
+
+        return merged
+
+    def _remove_similar_segments(
+        self,
+        segments: List[Dict],
+        similarity_threshold: float,
+        stats: Dict
+    ) -> List[Dict]:
+        """
+        Remove segments that are semantically very similar (>threshold similarity)
+
+        Args:
+            segments: List of segments
+            similarity_threshold: Similarity threshold (0-1)
+            stats: Stats dictionary to update
+
+        Returns:
+            List with similar segments removed
+        """
+        if len(segments) <= 1:
+            return segments
+
+        # Filter out segments without embeddings
+        segments_with_embeddings = [s for s in segments if s.get('_embedding') is not None]
+        segments_without_embeddings = [s for s in segments if s.get('_embedding') is None]
+
+        if not segments_with_embeddings:
+            logger.debug("⚠️ No embeddings available for similarity comparison")
+            return segments
+
+        # Track which segments to keep
+        keep = []
+        removed = []
+
+        for i, seg1 in enumerate(segments_with_embeddings):
+            is_duplicate = False
+
+            # Compare with already kept segments
+            for seg2 in keep:
+                if seg1.get('_embedding') is None or seg2.get('_embedding') is None:
+                    continue
+
+                # Convert embeddings to tuples for caching
+                emb1_tuple = tuple(seg1['_embedding'])
+                emb2_tuple = tuple(seg2['_embedding'])
+
+                similarity = self._calculate_similarity_cached(emb1_tuple, emb2_tuple)
+
+                if similarity >= similarity_threshold:
+                    # High similarity - this is a duplicate
+                    logger.debug(
+                        f"🚫 Removing duplicate segment ({similarity:.1%} similar) from video {seg1['video_id']}: "
+                        f"'{seg1['segment_text'][:50]}...' vs '{seg2['segment_text'][:50]}...'"
+                    )
+                    is_duplicate = True
+                    stats['removed_similar'] += 1
+                    removed.append(seg1)
+                    break
+
+            if not is_duplicate:
+                keep.append(seg1)
+
+        # Add back segments without embeddings (can't compare them)
+        result = keep + segments_without_embeddings
+
+        return result
 
     def chat(
         self,
@@ -79,7 +465,7 @@ class ChatbotService:
         session_id: str = None
     ) -> Dict:
         """
-        Handle a chat message with caching
+        Handle a chat message with caching (Phase 2: with metrics tracking)
 
         Args:
             channel_id: Channel ID
@@ -89,11 +475,21 @@ class ChatbotService:
         Returns:
             Dictionary with response and cited videos
         """
+        # Start time tracking for metrics
+        start_time = time.time()
+
         # Generate or use existing session ID
         if not session_id:
             session_id = str(uuid.uuid4())
 
         logger.info(f"Chat request for channel {channel_id}: {user_message[:100]}")
+
+        # Classify query early to determine optimal response configuration
+        query_type, response_config = self.query_classifier.classify_and_configure(user_message)
+        logger.info(f"🎯 Query classified as {query_type.value}, using max_tokens={response_config.max_tokens}, temperature={response_config.temperature}, context_size={response_config.context_size}")
+
+        # Use dynamic context size from response_config
+        top_k = response_config.context_size
 
         # Phase 1.1: Extract speaker from query
         speaker_result = self.speaker_parser.extract_speaker(user_message)
@@ -172,23 +568,72 @@ class ChatbotService:
             logger.debug("No date filter found in query - searching all videos")
 
         # Use Phase 2 search with date range support + Phase 1.1 speaker filter + Phase 1.2 biblical filter
-        if date_range:
-            relevant_segments = self._search_with_date_range(
-                channel_id=channel_id,
-                query=user_message,
-                date_range=date_range,
-                speaker_filter=speaker_filter,
-                video_ids_filter=video_ids_filter
+        try:
+            if date_range:
+                relevant_segments = self._search_with_date_range(
+                    channel_id=channel_id,
+                    query=user_message,
+                    date_range=date_range,
+                    speaker_filter=speaker_filter,
+                    video_ids_filter=video_ids_filter
+                )
+                if not relevant_segments and date_range.start_date:
+                    logger.info("No segments from vector search; using chronological fallback for date %s", date_range.start_date.date())
+                    relevant_segments = self._fallback_segments_for_date(
+                        channel_id=channel_id,
+                        date_range=date_range,
+                        query=user_message,
+                        speaker_filter=speaker_filter,
+                        video_ids_filter=video_ids_filter,
+                        top_k=top_k
+                    )
+            else:
+                # No date filter - search all videos (with optional speaker and biblical filters)
+                relevant_segments = self.embedding_service.search_similar_segments(
+                    channel_id=channel_id,
+                    query=user_message,
+                    top_k=10,
+                    speaker_filter=speaker_filter,
+                    video_ids_filter=video_ids_filter
+                )
+        except ValueError as e:
+            # Handle case when embeddings are unavailable (Gemini quota exhausted)
+            if "embeddings unavailable" in str(e).lower() or "gemini" in str(e).lower():
+                logger.error(f"❌ Chatbot unavailable due to embedding service failure: {e}")
+                error_message = (
+                    "Desculpe, o chatbot está temporariamente indisponível devido ao limite de uso da API do Google Gemini. "
+                    "Por favor, tente novamente mais tarde (geralmente após 1 minuto)."
+                )
+
+                self._save_history_entry(
+                    channel_id=channel_id,
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_response=error_message,
+                    cited_videos=[]
+                )
+
+                return {
+                    'response': error_message,
+                    'cited_videos': [],
+                    'session_id': session_id,
+                    'relevance_scores': [],
+                    'cached': False,
+                    'error': 'quota_exceeded'
+                }
+            else:
+                raise
+
+        # Apply enhanced relevance scoring
+        if relevant_segments:
+            relevant_segments = self._apply_enhanced_scoring(
+                relevant_segments,
+                speaker_filter=speaker_result.speaker_name if speaker_result.found else None
             )
-        else:
-            # No date filter - search all videos (with optional speaker and biblical filters)
-            relevant_segments = self.embedding_service.search_similar_segments(
-                channel_id=channel_id,
-                query=user_message,
-                top_k=10,
-                speaker_filter=speaker_filter,
-                video_ids_filter=video_ids_filter
-            )
+
+        # Apply semantic deduplication (Phase 1: Deduplication)
+        if relevant_segments:
+            relevant_segments = self._deduplicate_segments(relevant_segments)
 
         # Debug logging
         logger.info(f"📊 Found {len(relevant_segments)} relevant segments")
@@ -198,7 +643,10 @@ class ChatbotService:
             speakers = set(s.get('speaker', 'Desconhecido') for s in relevant_segments)
             logger.info(f"🎤 Speakers in results: {speakers}")
             relevance_pcts = [f"{s['relevance']:.2%}" for s in relevant_segments]
-            logger.info(f"🎯 Relevance scores: {relevance_pcts}")
+            logger.info(f"🎯 Enhanced relevance scores: {relevance_pcts}")
+            # Log scoring breakdown for top result
+            if relevant_segments[0].get('score_breakdown'):
+                logger.debug(f"🔍 Top result score breakdown: {relevant_segments[0]['score_breakdown']}")
         else:
             if speaker_filter:
                 logger.warning(f"⚠️ No relevant segments found for query with speaker filter '{speaker_result.speaker_name}': {user_message[:100]}")
@@ -226,6 +674,27 @@ class ChatbotService:
                 cited_videos=cached_response['cited_videos']
             )
 
+            # Log metrics (cached response)
+            response_time_ms = int((time.time() - start_time) * 1000)
+            self._log_query_metrics(
+                channel_id=channel_id,
+                session_id=session_id,
+                query=user_message,
+                segments_returned=len(relevant_segments),
+                response_time_ms=response_time_ms,
+                cache_hit=True,
+                date_filters_used=date_range is not None,
+                speaker_filter_used=speaker_filter is not None,
+                biblical_filter_used=biblical_ref.found if biblical_ref else False,
+                theme_filter_used=theme_result.found if theme_result else False,
+                query_type=query_type,
+                backend_used='cache',
+                metadata={
+                    'cache_age_hours': cached_response.get('cache_age_hours'),
+                    'hit_count': cached_response.get('hit_count')
+                }
+            )
+
             return {
                 'response': cached_response['response'],
                 'cited_videos': cached_response['cited_videos'],
@@ -238,10 +707,6 @@ class ChatbotService:
 
         # Cache miss - generate new response
         logger.info(f"Generating new chatbot response with LLM")
-
-        # Classify query to determine optimal response configuration
-        query_type, response_config = self.query_classifier.classify_and_configure(user_message)
-        logger.info(f"🎯 Query classified as {query_type.value}, using max_tokens={response_config.max_tokens}")
 
         # Get conversation history
         conversation_context = self._get_conversation_history(
@@ -259,11 +724,11 @@ class ChatbotService:
             theme_result=theme_result if theme_result.found else None
         )
 
-        # Generate response using unified LLM client with query-specific max_tokens
+        # Generate response using unified LLM client with query-specific max_tokens and temperature
         llm_response = self.llm.generate(
             prompt=prompt,
             max_tokens=response_config.max_tokens,
-            temperature=0.7
+            temperature=response_config.temperature  # Now dynamic!
         )
         response_text = llm_response["text"]
         backend_used = llm_response["backend"]
@@ -292,6 +757,28 @@ class ChatbotService:
             cited_videos=cited_videos
         )
 
+        # Log metrics (new response)
+        response_time_ms = int((time.time() - start_time) * 1000)
+        self._log_query_metrics(
+            channel_id=channel_id,
+            session_id=session_id,
+            query=user_message,
+            segments_returned=len(relevant_segments),
+            response_time_ms=response_time_ms,
+            cache_hit=False,
+            date_filters_used=date_range is not None,
+            speaker_filter_used=speaker_filter is not None,
+            biblical_filter_used=biblical_ref.found if biblical_ref else False,
+            theme_filter_used=theme_result.found if theme_result else False,
+            query_type=query_type,
+            backend_used=backend_used,
+            metadata={
+                'tokens_used': llm_response.get('tokens_used', 0),
+                'max_tokens': response_config.max_tokens,
+                'temperature': response_config.temperature
+            }
+        )
+
         return {
             'response': response_text,
             'cited_videos': cited_videos,
@@ -301,6 +788,82 @@ class ChatbotService:
             'backend': backend_used,
             'tokens_used': llm_response.get('tokens_used', 0)
         }
+
+    def _apply_enhanced_scoring(
+        self,
+        segments: List[Dict],
+        speaker_filter: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Apply multi-factor relevance scoring to segments
+
+        Args:
+            segments: List of segment dictionaries from search
+            speaker_filter: Optional speaker name from query
+
+        Returns:
+            Re-ranked segments with enhanced scores
+        """
+        with get_db() as db:
+            for seg in segments:
+                video_id = seg['video_id']
+
+                # Get theme confidence from database
+                # Use average confidence of all themes for this video
+                theme_confidence = db.execute(text("""
+                    SELECT AVG(confidence_score) as avg_confidence
+                    FROM sermon_themes_v2
+                    WHERE video_id = :video_id
+                """), {'video_id': video_id}).scalar()
+
+                # Count biblical references in segment text
+                # This is a simple word-based estimate
+                biblical_keywords = [
+                    'bíblia', 'escritura', 'palavra', 'versículo', 'capítulo',
+                    'gênesis', 'êxodo', 'levítico', 'números', 'deuteronômio',
+                    'josué', 'juízes', 'rute', 'samuel', 'reis', 'crônicas',
+                    'esdras', 'neemias', 'ester', 'jó', 'salmos', 'provérbios',
+                    'eclesiastes', 'cantares', 'isaías', 'jeremias', 'lamentações',
+                    'ezequiel', 'daniel', 'oséias', 'joel', 'amós', 'obadias',
+                    'jonas', 'miquéias', 'naum', 'habacuque', 'sofonias', 'ageu',
+                    'zacarias', 'malaquias', 'mateus', 'marcos', 'lucas', 'joão',
+                    'atos', 'romanos', 'coríntios', 'gálatas', 'efésios',
+                    'filipenses', 'colossenses', 'tessalonicenses', 'timóteo',
+                    'tito', 'filemom', 'hebreus', 'tiago', 'pedro', 'judas',
+                    'apocalipse'
+                ]
+
+                segment_text_lower = seg['segment_text'].lower()
+                biblical_ref_count = sum(
+                    1 for keyword in biblical_keywords
+                    if keyword in segment_text_lower
+                )
+
+                # Get sermon date (prefer sermon_actual_date, fallback to published_at)
+                sermon_date = seg.get('sermon_actual_date')
+                if not sermon_date and seg.get('published_at'):
+                    sermon_date = seg['published_at']
+
+                # Apply enhanced scoring
+                base_score = seg['relevance']
+                score_result = self.embedding_service.calculate_relevance_score(
+                    base_score=base_score,
+                    sermon_date=sermon_date,
+                    theme_confidence=theme_confidence,
+                    speaker=seg.get('speaker'),
+                    requested_speaker=speaker_filter,
+                    biblical_references=biblical_ref_count
+                )
+
+                # Update segment with enhanced score
+                seg['relevance'] = score_result['enhanced_score']
+                seg['score_breakdown'] = score_result['factors']
+                seg['base_relevance'] = base_score
+
+        # Re-sort by enhanced score
+        segments.sort(key=lambda x: x['relevance'], reverse=True)
+
+        return segments
 
     def _build_prompt(
         self,
@@ -316,8 +879,13 @@ class ChatbotService:
         # Format relevant segments with dates and speaker for clear identification
         context_parts = []
         for seg in relevant_segments:
+            # Use sermon_actual_date if available (actual sermon date), fallback to published_at (upload date)
+            sermon_date = seg.get('sermon_actual_date')
+            if not sermon_date and seg.get('published_at'):
+                sermon_date = seg['published_at'].date()  # Convert datetime to date
+
             # Format date as "DD/MM/YYYY" to match Brazilian format
-            date_str = seg['published_at'].strftime('%d/%m/%Y') if seg.get('published_at') else "Data desconhecida"
+            date_str = sermon_date.strftime('%d/%m/%Y') if sermon_date else "Data desconhecida"
             speaker = seg.get('speaker', 'Desconhecido')
             sermon_header = f"[Sermão: {seg['video_title']} - {date_str} - Pregador: {speaker}]"
             context_parts.append(f"{sermon_header}\n{seg['segment_text']}")
@@ -605,7 +1173,7 @@ RESPOSTA:
         """
         Deduplicate citation list so each video appears once with MM/DD/YYYY date.
         Keeps the segment with the highest relevance score.
-        Includes speaker information in citation (Phase 1.1).
+        Includes speaker information and YouTube timestamp links (Phase 1.1 + Timestamp Links).
         """
         unique: Dict[int, Dict] = {}
 
@@ -619,6 +1187,15 @@ RESPOSTA:
             date_str = sermon_date.strftime('%m/%d/%Y') if sermon_date else "Unknown date"
             speaker = seg.get('speaker', 'Desconhecido')
 
+            # Get timestamp for YouTube link
+            start_sec = seg.get('segment_start_sec', 0)
+            youtube_id = seg['youtube_id']
+
+            # Create YouTube link with timestamp
+            youtube_link = f"https://youtube.com/watch?v={youtube_id}"
+            if start_sec > 0:
+                youtube_link += f"&t={start_sec}s"
+
             # Include speaker in title: "MM/DD/YYYY - Title (Speaker)"
             title_with_date = f"{date_str} - {seg['video_title']}"
             if speaker and speaker != 'Desconhecido':
@@ -627,8 +1204,10 @@ RESPOSTA:
             citation = {
                 'video_id': video_id,
                 'video_title': title_with_date,
-                'youtube_id': seg['youtube_id'],
-                'timestamp': seg['segment_start'],
+                'youtube_id': youtube_id,
+                'timestamp': seg['segment_start'],  # Word position (legacy)
+                'timestamp_sec': start_sec,  # Timestamp in seconds
+                'youtube_link': youtube_link,  # Full YouTube URL with timestamp
                 'speaker': speaker  # Include speaker in citation metadata
             }
 
@@ -694,6 +1273,72 @@ RESPOSTA:
         speaker_filter: Optional[str] = None,
         video_ids_filter: Optional[List[int]] = None
     ) -> List[Dict]:
+        """Route date-aware queries to the embedding service."""
+        if date_range.query_type == 'last_sermon':
+            sermon = self._get_last_sermon(channel_id, offset=0)
+            if not sermon:
+                return []
+            return self.embedding_service.search_similar_segments(
+                channel_id=channel_id,
+                query=query,
+                top_k=10,
+                start_date=sermon.published_at,
+                end_date=sermon.published_at,
+                speaker_filter=speaker_filter,
+                video_ids_filter=video_ids_filter
+            )
+
+        if date_range.query_type == 'second_last_sermon':
+            sermon = self._get_last_sermon(channel_id, offset=1)
+            if not sermon:
+                return []
+            return self.embedding_service.search_similar_segments(
+                channel_id=channel_id,
+                query=query,
+                top_k=10,
+                start_date=sermon.published_at,
+                end_date=sermon.published_at,
+                speaker_filter=speaker_filter,
+                video_ids_filter=video_ids_filter
+            )
+
+        if date_range.is_range and date_range.start_date and date_range.end_date:
+            return self.embedding_service.search_similar_segments(
+                channel_id=channel_id,
+                query=query,
+                top_k=10,
+                start_date=date_range.start_date,
+                end_date=date_range.end_date,
+                speaker_filter=speaker_filter,
+                video_ids_filter=video_ids_filter
+            )
+
+        if date_range.start_date and not date_range.is_range:
+            return self.embedding_service.search_similar_segments(
+                channel_id=channel_id,
+                query=query,
+                top_k=10,
+                date_filter=date_range.start_date,
+                speaker_filter=speaker_filter,
+                video_ids_filter=video_ids_filter
+            )
+
+        return self.embedding_service.search_similar_segments(
+            channel_id=channel_id,
+            query=query,
+            top_k=10,
+            speaker_filter=speaker_filter,
+            video_ids_filter=video_ids_filter
+        )
+
+    def _search_with_date_range(
+        self,
+        channel_id: int,
+        query: str,
+        date_range: DateRangeResult,
+        speaker_filter: Optional[str] = None,
+        video_ids_filter: Optional[List[int]] = None
+    ) -> List[Dict]:
         """
         Search segments using date range information from Phase 2 parser.
 
@@ -707,26 +1352,19 @@ RESPOSTA:
         Returns:
             List of relevant segments
         """
-        # Handle smart "last sermon" queries
-        if date_range.query_type == 'last_sermon':
-            sermon = self._get_last_sermon(channel_id, offset=0)
-            if not sermon:
-                return []
-
-            # Search only in this specific sermon
-            segments = self.embedding_service.search_similar_segments(
-                channel_id=channel_id,
-                query=query,
-                top_k=10,
-                start_date=sermon.published_at,
-                end_date=sermon.published_at,
-                speaker_filter=speaker_filter,
-                video_ids_filter=video_ids_filter
-            )
-            logger.info(f"Found {len(segments)} segments in last sermon (video_id={sermon.id})")
-            return segments
-
-        elif date_range.query_type == 'second_last_sermon':
+    def _fallback_segments_for_date(
+        self,
+        channel_id: int,
+        date_range: DateRangeResult,
+        query: str,
+        speaker_filter: Optional[str],
+        video_ids_filter: Optional[List[int]],
+        top_k: int
+    ) -> List[Dict]:
+        """
+        Simple chronological retrieval when embeddings are unavailable.
+        """
+        if date_range.query_type == 'second_last_sermon':
             sermon = self._get_last_sermon(channel_id, offset=1)
             if not sermon:
                 return []
@@ -744,7 +1382,7 @@ RESPOSTA:
             return segments
 
         # Handle date range queries
-        elif date_range.is_range and date_range.start_date and date_range.end_date:
+        if date_range.is_range and date_range.start_date and date_range.end_date:
             segments = self.embedding_service.search_similar_segments(
                 channel_id=channel_id,
                 query=query,
@@ -761,7 +1399,7 @@ RESPOSTA:
             return segments
 
         # Handle single date queries
-        elif date_range.start_date and not date_range.is_range:
+        if date_range.start_date and not date_range.is_range:
             segments = self.embedding_service.search_similar_segments(
                 channel_id=channel_id,
                 query=query,

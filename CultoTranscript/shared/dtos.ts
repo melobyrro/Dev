@@ -46,6 +46,7 @@ export interface VideoDTO {
   status: VideoStatus;
   duration: number; // in seconds
   published_at?: string; // ISO 8601 datetime - YouTube upload date
+  sermon_actual_date?: string; // Actual service date (YYYY-MM-DD)
   created_at: string; // ISO 8601 datetime
   processed_at?: string; // ISO 8601 datetime
   thumbnail_url?: string;

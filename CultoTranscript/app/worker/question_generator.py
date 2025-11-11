@@ -1,12 +1,13 @@
 """
 Discussion Question Generator
-Creates small group discussion questions from sermons
+Creates small group discussion questions from sermons using unified LLM client (Gemini or Ollama)
 """
 import logging
 import re
 import json
 from typing import List, Dict
 from dataclasses import dataclass
+from app.ai.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -22,10 +23,10 @@ class DiscussionQuestionData:
 class QuestionGenerator:
     """Generates discussion questions for small groups"""
 
-    def __init__(self, gemini_client):
-        """Initialize with Gemini client"""
-        self.gemini = gemini_client
-        logger.info("Question generator initialized")
+    def __init__(self):
+        """Initialize with unified LLM client"""
+        self.llm = get_llm_client()
+        logger.info("Question generator initialized with unified LLM client")
 
     def generate_questions(
         self,
@@ -63,7 +64,13 @@ Retorne APENAS o JSON com {count} perguntas variadas.
 """
 
         try:
-            response = self.gemini.generate_content(prompt)
+            llm_response = self.llm.generate(
+                prompt=prompt,
+                max_tokens=1000,
+                temperature=0.7
+            )
+            response = llm_response["text"]
+            backend_used = llm_response["backend"]
 
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
             if not json_match:
@@ -79,6 +86,7 @@ Retorne APENAS o JSON com {count} perguntas variadas.
                     question_order=i
                 ))
 
+            logger.info(f"✅ Questions generated using {backend_used} backend")
             return questions
 
         except Exception as e:

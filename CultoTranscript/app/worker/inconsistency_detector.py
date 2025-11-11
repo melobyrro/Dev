@@ -1,12 +1,13 @@
 """
 Sermon Inconsistency Detector
-Identifies logical, biblical, factual, and language errors using Gemini AI
+Identifies logical, biblical, factual, and language errors using unified LLM client (Gemini or Ollama)
 """
 import logging
 import re
 import json
 from typing import List, Dict
 from dataclasses import dataclass
+from app.ai.llm_client import get_llm_client
 
 logger = logging.getLogger(__name__)
 
@@ -32,10 +33,10 @@ class InconsistencyDetector:
     - Language: Ambiguous terms, false cognates
     """
 
-    def __init__(self, gemini_client):
-        """Initialize detector with Gemini client"""
-        self.gemini = gemini_client
-        logger.info("Inconsistency detector initialized")
+    def __init__(self):
+        """Initialize detector with unified LLM client"""
+        self.llm = get_llm_client()
+        logger.info("Inconsistency detector initialized with unified LLM client")
 
     def detect_inconsistencies(
         self,
@@ -97,7 +98,13 @@ Retorne APENAS o JSON. Se nenhuma inconsistência significativa for encontrada, 
 """
 
         try:
-            response = self.gemini.generate_content(prompt)
+            llm_response = self.llm.generate(
+                prompt=prompt,
+                max_tokens=1500,
+                temperature=0.4
+            )
+            response = llm_response["text"]
+            backend_used = llm_response["backend"]
 
             # Extract JSON
             json_match = re.search(r'\[.*\]', response, re.DOTALL)
@@ -120,6 +127,7 @@ Retorne APENAS o JSON. Se nenhuma inconsistência significativa for encontrada, 
                     severity=item['gravidade']
                 ))
 
+            logger.info(f"✅ Inconsistency analysis completed using {backend_used} backend")
             return inconsistencies
 
         except Exception as e:

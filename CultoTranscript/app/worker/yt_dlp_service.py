@@ -19,6 +19,43 @@ class YtDlpService:
     """Service for YouTube video metadata and auto-caption extraction"""
 
     @staticmethod
+    def get_duration_thresholds() -> Tuple[int, int]:
+        """
+        Get min and max video duration from database with env var fallback.
+
+        Returns:
+            (min_duration_sec, max_duration_sec)
+        """
+        from app.common.database import SessionLocal
+        from app.common.models import SystemSettings
+
+        # Defaults from environment or hardcoded
+        default_min = int(os.getenv("MIN_VIDEO_DURATION", "300"))  # 5 minutes
+        default_max = int(os.getenv("MAX_VIDEO_DURATION", "9000"))  # 150 minutes
+
+        try:
+            db = SessionLocal()
+
+            # Get min duration
+            min_setting = db.query(SystemSettings).filter(
+                SystemSettings.setting_key == "min_video_duration_sec"
+            ).first()
+            min_duration = int(min_setting.setting_value) if min_setting else default_min
+
+            # Get max duration
+            max_setting = db.query(SystemSettings).filter(
+                SystemSettings.setting_key == "max_video_duration_sec"
+            ).first()
+            max_duration = int(max_setting.setting_value) if max_setting else default_max
+
+            db.close()
+            return (min_duration, max_duration)
+
+        except Exception as e:
+            logger.error(f"Error reading duration settings from database: {e}")
+            return (default_min, default_max)
+
+    @staticmethod
     def extract_video_info(url: str) -> Dict[str, Any]:
         """
         Extract video metadata without downloading
@@ -65,15 +102,25 @@ class YtDlpService:
     @staticmethod
     def validate_video_duration(duration_sec: int) -> Tuple[bool, Optional[str]]:
         """
-        Validate video duration against MAX_VIDEO_DURATION
+        Validate video duration against min and max thresholds.
 
         Returns:
             (is_valid, error_message)
         """
-        if duration_sec > MAX_VIDEO_DURATION:
+        min_duration, max_duration = YtDlpService.get_duration_thresholds()
+
+        # Check minimum
+        if duration_sec < min_duration:
             minutes = duration_sec / 60
-            max_minutes = MAX_VIDEO_DURATION / 60
+            min_minutes = min_duration / 60
+            return False, f"Vídeo muito curto: {minutes:.1f} min (mínimo: {min_minutes:.0f} min)"
+
+        # Check maximum
+        if duration_sec > max_duration:
+            minutes = duration_sec / 60
+            max_minutes = max_duration / 60
             return False, f"Vídeo muito longo: {minutes:.1f} min (máximo: {max_minutes:.0f} min)"
+
         return True, None
 
     @staticmethod

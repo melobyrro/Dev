@@ -51,13 +51,30 @@
             --muted: #F1F5F9;
             --text: #0F172A;
             --text-muted: #475569;
-            --text-tertiary: #94A3B8;
+            --text-tertiary: #6B7280;  /* Changed from #94A3B8 for better contrast */
             --primary: #0EA5E9;
             --primary-dark: #0284C7;
             --primary-light: #38BDF8;
             --accent: #3B82F6;
             --border: #E2E8F0;
             --shadow: rgba(15, 23, 42, 0.08);
+
+            /* Semantic colors for status messages */
+            --success-bg: #D1FAE5;
+            --success-text: #065F46;
+            --success-border: #A7F3D0;
+            --error-bg: #FEE2E2;
+            --error-text: #991B1B;
+            --error-border: #FECACA;
+            --info-bg: #DBEAFE;
+            --info-text: #1E40AF;
+            --info-border: #BFDBFE;
+            --warning-bg: #FEF3C7;
+            --warning-text: #92400E;
+            --warning-border: #FDE68A;
+
+            /* Border variant for emphasis */
+            --border-strong: #CBD5E1;
         }
 
         [data-theme="dark"] {
@@ -73,6 +90,23 @@
             --accent: #60A5FA;
             --border: #334155;
             --shadow: rgba(0, 0, 0, 0.3);
+
+            /* Semantic colors for dark theme */
+            --success-bg: #065F46;
+            --success-text: #D1FAE5;
+            --success-border: #047857;
+            --error-bg: #991B1B;
+            --error-text: #FEE2E2;
+            --error-border: #B91C1C;
+            --info-bg: #1E40AF;
+            --info-text: #DBEAFE;
+            --info-border: #1D4ED8;
+            --warning-bg: #92400E;
+            --warning-text: #FEF3C7;
+            --warning-border: #B45309;
+
+            /* Border variant for dark theme */
+            --border-strong: #475569;
         }
 
         /* === THEME TRANSITIONS === */
@@ -301,6 +335,14 @@
     </div>
 
     <script>
+        // Format duration from seconds to HH:MM
+        function formatDuration(seconds) {
+            if (!seconds || seconds < 0) return '00:00';
+            const hours = Math.floor(seconds / 3600);
+            const mins = Math.floor((seconds % 3600) / 60);
+            return `${hours.toString().padStart(2, '0')}:${mins.toString().padStart(2, '0')}`;
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             const themeToggle = document.getElementById('theme-toggle');
             const sunIcon = document.getElementById('theme-icon-sun');

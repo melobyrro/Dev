@@ -15,7 +15,7 @@ from app.common.models import (
     SermonHighlight, DiscussionQuestion, SensitivityFlag,
     TranscriptionError, SermonReport
 )
-from app.ai.gemini_client import get_gemini_client
+from app.ai.llm_client import get_llm_client
 from app.worker.biblical_classifier import BiblicalClassifier
 from app.worker.passage_analyzer import PassageAnalyzer
 from app.worker.transcription_scorer import TranscriptionScorer
@@ -52,18 +52,18 @@ class AdvancedAnalyticsService:
 
     def __init__(self):
         """Initialize all analytics services"""
-        # Initialize Gemini client
-        self.gemini = get_gemini_client()
+        # Initialize LLM client (Gemini with Ollama fallback)
+        self.llm = get_llm_client()
 
         # Initialize all analytics services
         self.biblical_classifier = BiblicalClassifier()
         self.passage_analyzer = PassageAnalyzer()
         self.transcription_scorer = TranscriptionScorer()
-        self.theme_analyzer = ThemeAnalyzerV2(self.gemini)
-        self.inconsistency_detector = InconsistencyDetector(self.gemini)
-        self.sermon_coach = SermonCoach(self.gemini)
-        self.highlight_extractor = HighlightExtractor(self.gemini)
-        self.question_generator = QuestionGenerator(self.gemini)
+        self.theme_analyzer = ThemeAnalyzerV2()
+        self.inconsistency_detector = InconsistencyDetector()
+        self.sermon_coach = SermonCoach()
+        self.highlight_extractor = HighlightExtractor()
+        self.question_generator = QuestionGenerator()
         self.sensitivity_analyzer = SensitivityAnalyzer()
 
         # Cache statistics
@@ -115,6 +115,26 @@ class AdvancedAnalyticsService:
                 logger.info(f"Transcript changed for video {video_id}, invalidating cache")
                 return False
 
+            # Validate critical fields exist - if missing, force regeneration
+            # Check analysis version - ensure it's the latest version (v2)
+            if not hasattr(video, 'analysis_version') or video.analysis_version != 2:
+                logger.info(f"Outdated analysis version for video {video_id} (v{getattr(video, 'analysis_version', 'unknown')}), invalidating cache to regenerate with v2")
+                return False
+
+            # Check if ai_summary is missing, empty, or contains an error message
+            if not video.ai_summary or not video.ai_summary.strip():
+                logger.info(f"Missing ai_summary for video {video_id}, invalidating cache to regenerate")
+                return False
+
+            # Invalidate cache if ai_summary is an error message (to allow retry)
+            if video.ai_summary.startswith("Erro ao gerar resumo"):
+                logger.info(f"Error ai_summary for video {video_id}, invalidating cache to retry generation")
+                return False
+
+            if not video.speaker or video.speaker.strip() == "Desconhecido":
+                logger.info(f"Missing or unknown speaker for video {video_id}, invalidating cache to regenerate")
+                return False
+
             # Update last_accessed timestamp
             report.last_accessed = datetime.utcnow()
             db.commit()
@@ -122,17 +142,18 @@ class AdvancedAnalyticsService:
             logger.info(f"Valid cached analytics found for video {video_id}")
             return True
 
-    def analyze_video(self, video_id: int) -> Dict:
+    def analyze_video(self, video_id: int, force: bool = False) -> Dict:
         """
         Perform comprehensive analysis on a video
 
         Args:
             video_id: Video ID to analyze
+            force: Force re-analysis even if cached results exist
 
         Returns:
             Dictionary with analysis results
         """
-        logger.info(f"Starting advanced analysis for video {video_id}")
+        logger.info(f"Starting advanced analysis for video {video_id} (force={force})")
 
         with get_db() as db:
             # Get video and transcript
@@ -149,6 +170,59 @@ class AdvancedAnalyticsService:
             text = transcript.text
             word_count = transcript.word_count
             duration_sec = video.duration_sec
+
+            # Calculate transcript hash
+            transcript_hash = self._hash_transcript(text)
+
+            # Store hash in video record for future comparisons
+            video.transcript_hash = transcript_hash
+
+            # Check cache if not forcing re-analysis
+            if not force and self._check_analytics_cache(video_id, transcript_hash):
+                self.cache_hits += 1
+                logger.info(f"CACHE HIT: Using cached analytics for video {video_id}")
+                logger.info(f"Cache statistics - Hits: {self.cache_hits}, Misses: {self.cache_misses}")
+
+                # Return existing results from database
+                classification = db.query(SermonClassification).filter(
+                    SermonClassification.video_id == video_id
+                ).first()
+
+                return {
+                    'success': True,
+                    'video_id': video_id,
+                    'cached': True,
+                    'citacoes': classification.citacao_count if classification else 0,
+                    'leituras': classification.leitura_count if classification else 0,
+                    'mencoes': classification.mencao_count if classification else 0,
+                    'themes_count': db.query(SermonThemeV2).filter(
+                        SermonThemeV2.video_id == video_id
+                    ).count(),
+                    'inconsistencies_count': db.query(SermonInconsistency).filter(
+                        SermonInconsistency.video_id == video_id
+                    ).count(),
+                    'suggestions_count': db.query(SermonSuggestion).filter(
+                        SermonSuggestion.video_id == video_id
+                    ).count(),
+                    'highlights_count': db.query(SermonHighlight).filter(
+                        SermonHighlight.video_id == video_id
+                    ).count(),
+                    'questions_count': db.query(DiscussionQuestion).filter(
+                        DiscussionQuestion.video_id == video_id
+                    ).count(),
+                    'sensitivity_flags_count': db.query(SensitivityFlag).filter(
+                        SensitivityFlag.video_id == video_id
+                    ).count(),
+                    'wpm': video.wpm,
+                    'confidence_score': transcript.confidence_score,
+                    'audio_quality': transcript.audio_quality,
+                    'llm_usage': {'cached': True, 'tokens_used': 0}
+                }
+
+            # Cache miss - perform full analysis
+            self.cache_misses += 1
+            logger.info(f"CACHE MISS: Running full analysis for video {video_id}")
+            logger.info(f"Cache statistics - Hits: {self.cache_hits}, Misses: {self.cache_misses}")
 
             # Calculate WPM
             wpm = int((word_count / duration_sec) * 60) if duration_sec > 0 else 0
@@ -371,7 +445,7 @@ class AdvancedAnalyticsService:
             # Step 10: Generate AI Summary
             logger.info("Step 10/11: Generating AI summary")
             try:
-                ai_summary = generate_ai_summary(text, video.sermon_start_time, self.gemini)
+                ai_summary = generate_ai_summary(text, video.sermon_start_time)
                 # Store AI summary in video's metadata (we'll use SermonReport for this)
                 # The report generator will include this in the report JSON
                 video.ai_summary = ai_summary  # Store temporarily for report generation
@@ -380,25 +454,39 @@ class AdvancedAnalyticsService:
                 logger.error(f"Failed to generate AI summary: {e}", exc_info=True)
                 video.ai_summary = "Erro ao gerar resumo"
 
-            # Step 11: Extract Speaker Name
+            # Step 11: Extract Speaker Name (with channel default support)
             logger.info("Step 11/11: Extracting speaker name")
             try:
-                speaker_name = extract_speaker_name(text, self.gemini)
-                video.speaker = speaker_name
-                logger.info(f"Speaker name: {speaker_name}")
+                # Check if channel has a default speaker configured
+                if video.channel and video.channel.default_speaker:
+                    # Use channel's default speaker (skip AI extraction)
+                    video.speaker = video.channel.default_speaker
+                    logger.info(f"Using channel default speaker: {video.channel.default_speaker}")
+                else:
+                    # Fall back to AI extraction
+                    speaker_name = extract_speaker_name(text)
+                    video.speaker = speaker_name
+                    logger.info(f"AI-extracted speaker name: {speaker_name}")
             except Exception as e:
                 logger.error(f"Failed to extract speaker name: {e}", exc_info=True)
-                video.speaker = "Desconhecido"
+                # Try channel default as last resort
+                if video.channel and video.channel.default_speaker:
+                    video.speaker = video.channel.default_speaker
+                    logger.info(f"Using channel default speaker after error: {video.channel.default_speaker}")
+                else:
+                    video.speaker = "Desconhecido"
 
             # Commit all changes
             db.commit()
 
             logger.info(f"Advanced analysis completed for video {video_id}")
-            logger.info(f"Gemini API usage: {self.gemini.get_usage_stats()}")
+            logger.info(f"LLM API usage: {self.llm.get_stats()}")
+            logger.info(f"Cache statistics - Hits: {self.cache_hits}, Misses: {self.cache_misses}")
 
             return {
                 'success': True,
                 'video_id': video_id,
+                'cached': False,
                 'citacoes': classification_result['citacao_count'],
                 'leituras': classification_result['leitura_count'],
                 'mencoes': classification_result['mencao_count'],
@@ -411,5 +499,5 @@ class AdvancedAnalyticsService:
                 'wpm': wpm,
                 'confidence_score': transcript.confidence_score,
                 'audio_quality': transcript.audio_quality,
-                'gemini_usage': self.gemini.get_usage_stats()
+                'llm_usage': self.llm.get_stats()
             }

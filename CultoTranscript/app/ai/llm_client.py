@@ -350,3 +350,16 @@ def get_llm_client() -> LLMClient:
         _llm_client = LLMClient()
         logger.info("🚀 LLM client initialized")
     return _llm_client
+
+
+def reset_llm_client() -> None:
+    """Reset the singleton LLM client instance.
+
+    This forces the client to be re-initialized on the next call to get_llm_client(),
+    picking up any changes to environment variables (like GEMINI_API_KEY).
+
+    Use this after updating API configuration to apply changes immediately without restarting.
+    """
+    global _llm_client
+    _llm_client = None
+    logger.info("🔄 LLM client reset - will reinitialize on next use")

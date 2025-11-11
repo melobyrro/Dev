@@ -4,6 +4,7 @@ Main entry point for the web service
 """
 import os
 import sys
+import logging
 from pathlib import Path
 
 # Add Backend directory to Python path for imports
@@ -18,7 +19,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from app.web.auth import AuthMiddleware, verify_password, get_current_user, require_auth
-from app.web.routes import api, channels, videos, reports
+from app.web.routes import api, channels, videos, reports, websub
 from app.routers import llm_status, database
 from app.common.database import engine, Base, get_db
 from app.common.models import Job
@@ -51,7 +52,7 @@ if BACKEND_AVAILABLE:
 if BACKEND_AVAILABLE:
     app.add_middleware(
         CSRFMiddleware,
-        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast", "/api/channels/"]
+        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast", "/api/channels/", "/api/websub/callback"]
     )
 
 # Add auth middleware (added first so it runs second)
@@ -67,11 +68,23 @@ app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 # Templates
 templates = Jinja2Templates(directory="app/web/templates")
 
+# Custom Jinja2 filters
+def format_duration(seconds):
+    """Format duration from seconds to HH:MM"""
+    if not seconds or seconds < 0:
+        return '00:00'
+    hours = seconds // 3600
+    mins = (seconds % 3600) // 60
+    return f'{hours:02d}:{mins:02d}'
+
+templates.env.filters['format_duration'] = format_duration
+
 # Include routers
 app.include_router(api.router, prefix="/api", tags=["API"])
 app.include_router(channels.router, prefix="/channels", tags=["Channels"])
 app.include_router(videos.router, prefix="/videos", tags=["Videos"])
 app.include_router(reports.router, prefix="/reports", tags=["Reports"])
+app.include_router(websub.router, tags=["WebSub"])
 app.include_router(llm_status.router, tags=["LLM Status"])
 app.include_router(database.router, prefix="/api/database", tags=["Database"])
 
@@ -87,12 +100,48 @@ async def startup_event():
     """Initialize database and SSE manager on startup"""
     # Tables are created via SQL migration, not here
 
+    # Load configuration from database on startup
+    try:
+        from app.common.models import SystemSettings
+        from app.common.database import get_db_session
+
+        logger = logging.getLogger(__name__)
+        db = next(get_db_session())
+
+        # Load Gemini API key from database
+        api_key_setting = db.query(SystemSettings).filter(
+            SystemSettings.setting_key == "gemini_api_key"
+        ).first()
+
+        if api_key_setting and api_key_setting.setting_value:
+            os.environ["GEMINI_API_KEY"] = api_key_setting.setting_value
+            print("✅ Loaded Gemini API key from database")
+            logger.info("✅ Loaded Gemini API key from database")
+        else:
+            print("⚠️ No Gemini API key found in database, using .env value")
+            logger.warning("⚠️ No Gemini API key found in database, using .env value")
+
+        # Load AI service provider setting
+        service_setting = db.query(SystemSettings).filter(
+            SystemSettings.setting_key == "ai_service_provider"
+        ).first()
+
+        if service_setting and service_setting.setting_value:
+            os.environ["PRIMARY_LLM"] = service_setting.setting_value
+            print(f"✅ Loaded AI service provider from database: {service_setting.setting_value}")
+            logger.info(f"✅ Loaded AI service provider from database: {service_setting.setting_value}")
+
+        db.close()
+    except Exception as e:
+        print(f"❌ Error loading config from database: {e}")
+        import logging
+        logging.error(f"Error loading config from database: {e}")
+
     # Initialize SSE Manager (if Backend is available)
     if BACKEND_AVAILABLE:
         print("🚀 Starting SSE Manager...")
         await sse_manager.start_heartbeat_task()
         print("✅ SSE Manager initialized")
-    pass
 
 
 @app.on_event("shutdown")
@@ -163,6 +212,24 @@ async def admin_import_redirect(user: str = Depends(require_auth)):
 async def admin_schedule_redirect(user: str = Depends(require_auth)):
     """Redirect to unified admin page - schedule tab (backward compatibility)"""
     return RedirectResponse(url="/admin#agendamento", status_code=303)
+
+
+@app.get("/admin/websub", response_class=HTMLResponse)
+async def admin_websub(request: Request, user: str = Depends(require_auth)):
+    """WebSub subscriptions management page."""
+    return templates.TemplateResponse(
+        "admin_websub.html",
+        {"request": request, "user": user}
+    )
+
+
+@app.get("/admin/chatbot-metrics", response_class=HTMLResponse)
+async def admin_chatbot_metrics(request: Request, user: str = Depends(require_auth)):
+    """Chatbot metrics and analytics dashboard (Phase 2)"""
+    return templates.TemplateResponse("admin_chatbot_metrics.html", {
+        "request": request,
+        "user": user
+    })
 
 
 @app.get("/database", response_class=HTMLResponse)

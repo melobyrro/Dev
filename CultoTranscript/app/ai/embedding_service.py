@@ -6,16 +6,25 @@ import logging
 import hashlib
 import os
 from typing import List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import text
 from app.common.database import get_db
 from app.common.models import Video, Transcript, TranscriptEmbedding
 from app.ai.gemini_client import get_gemini_client
+from app.ai.segmentation import get_text_segmenter
 
 logger = logging.getLogger(__name__)
 
 # Feature flags from environment
 ENABLE_EMBEDDING_DEDUP = os.getenv("ENABLE_EMBEDDING_DEDUP", "true").lower() == "true"
+
+# Segmentation mode: "none" (no overlap), "minimal" (small overlap), "legacy" (50-word overlap)
+EMBEDDING_OVERLAP_MODE = os.getenv("EMBEDDING_OVERLAP_MODE", "none")
+
+# Segment size configuration
+EMBEDDING_TARGET_WORDS = int(os.getenv("EMBEDDING_TARGET_WORDS", "250"))
+EMBEDDING_MIN_WORDS = int(os.getenv("EMBEDDING_MIN_WORDS", "150"))
+EMBEDDING_MAX_WORDS = int(os.getenv("EMBEDDING_MAX_WORDS", "350"))
 
 
 class EmbeddingService:
@@ -29,15 +38,127 @@ class EmbeddingService:
     - Retrieves relevant segments for chatbot context
     """
 
-    SEGMENT_SIZE = 300  # Words per segment
-    OVERLAP = 50  # Words of overlap
+    SEGMENT_SIZE = 300  # Words per segment (legacy mode)
+    OVERLAP = 50  # Words of overlap (legacy mode)
 
     def __init__(self):
         """Initialize embedding service"""
         self.gemini = get_gemini_client()
         self.embeddings_skipped = 0
         self.embeddings_generated = 0
-        logger.info(f"Embedding service initialized (dedup_enabled={ENABLE_EMBEDDING_DEDUP})")
+
+        # Initialize segmenter based on mode
+        self.overlap_mode = EMBEDDING_OVERLAP_MODE
+        if self.overlap_mode == "none":
+            self.segmenter = get_text_segmenter(
+                target_words=EMBEDDING_TARGET_WORDS,
+                min_words=EMBEDDING_MIN_WORDS,
+                max_words=EMBEDDING_MAX_WORDS
+            )
+            logger.info(
+                f"Embedding service initialized (mode=non-overlapping, "
+                f"target={EMBEDDING_TARGET_WORDS} words, "
+                f"dedup_enabled={ENABLE_EMBEDDING_DEDUP})"
+            )
+        else:
+            self.segmenter = None
+            logger.info(
+                f"Embedding service initialized (mode={self.overlap_mode}, "
+                f"size={self.SEGMENT_SIZE}, overlap={self.OVERLAP}, "
+                f"dedup_enabled={ENABLE_EMBEDDING_DEDUP})"
+            )
+
+    @staticmethod
+    def calculate_relevance_score(
+        base_score: float,
+        sermon_date: Optional[datetime] = None,
+        theme_confidence: Optional[float] = None,
+        speaker: Optional[str] = None,
+        requested_speaker: Optional[str] = None,
+        biblical_references: int = 0
+    ) -> dict:
+        """
+        Calculate multi-factor relevance score
+
+        Factors:
+        - Recency boost: More recent sermons get higher scores (up to 10%)
+        - Theme confidence: Higher confidence themes boost score (0.3-1.0x)
+        - Speaker authority: Matching speaker boosts score (20%)
+        - Biblical density: More references boost score (up to 25%)
+
+        Args:
+            base_score: Base similarity score from vector search (0-1)
+            sermon_date: Date of the sermon (for recency boost)
+            theme_confidence: Theme confidence from analytics (0.3-1.0)
+            speaker: Sermon speaker name
+            requested_speaker: Speaker filter from query
+            biblical_references: Count of biblical references in segment
+
+        Returns:
+            Dictionary with enhanced score and breakdown of factors
+        """
+        score = base_score
+        factors = {
+            'base_score': base_score,
+            'recency_boost': 0.0,
+            'theme_confidence_multiplier': 1.0,
+            'speaker_boost': 0.0,
+            'biblical_density_boost': 0.0
+        }
+
+        # 1. Recency boost (10% max for videos from last 30 days)
+        if sermon_date:
+            try:
+                # Handle both date and datetime objects
+                if isinstance(sermon_date, datetime):
+                    sermon_date_obj = sermon_date
+                else:
+                    sermon_date_obj = datetime.combine(sermon_date, datetime.min.time())
+                    sermon_date_obj = sermon_date_obj.replace(tzinfo=timezone.utc)
+
+                now = datetime.now(timezone.utc)
+                days_old = (now - sermon_date_obj).days
+
+                # Linear scaling: 10% boost for videos from last 30 days
+                if days_old < 30:
+                    recency_factor = max(0, (30 - days_old) / 30)
+                    recency_boost = 0.1 * recency_factor
+                    score *= (1 + recency_boost)
+                    factors['recency_boost'] = recency_boost
+            except Exception as e:
+                logger.debug(f"Error calculating recency boost: {e}")
+
+        # 2. Theme confidence multiplier (0.3-1.0)
+        if theme_confidence is not None:
+            # Clamp to valid range
+            theme_conf = max(0.3, min(1.0, theme_confidence))
+            score *= theme_conf
+            factors['theme_confidence_multiplier'] = theme_conf
+        else:
+            # Default confidence if not available
+            default_conf = 0.7
+            score *= default_conf
+            factors['theme_confidence_multiplier'] = default_conf
+
+        # 3. Speaker authority boost (20% if matched)
+        if speaker and requested_speaker:
+            if speaker.lower().strip() == requested_speaker.lower().strip():
+                speaker_boost = 0.2
+                score *= (1 + speaker_boost)
+                factors['speaker_boost'] = speaker_boost
+
+        # 4. Biblical density boost (5% per reference, max 25% for 5+ refs)
+        if biblical_references > 0:
+            # Cap at 5 references for max boost
+            capped_refs = min(biblical_references, 5)
+            biblical_boost = 0.05 * capped_refs
+            score *= (1 + biblical_boost)
+            factors['biblical_density_boost'] = biblical_boost
+
+        return {
+            'enhanced_score': score,
+            'factors': factors
+        }
 
     @staticmethod
     def _hash_transcript(text: str) -> str:
@@ -105,15 +226,36 @@ class EmbeddingService:
 
             logger.info(f"Generating {len(segments)} embeddings for video {video_id}")
 
+            # Calculate timestamps based on word positions
+            word_count = transcript.word_count or len(transcript.text.split())
+            duration_sec = video.duration_sec or 0
+
             for i, (segment_text, start_word, end_word) in enumerate(segments):
                 # Generate embedding
                 embedding = self.gemini.generate_embeddings(segment_text)
+
+                if embedding is None:
+                    logger.error(f"❌ Failed to generate embedding for video {video_id}, segment {i+1}/{len(segments)}")
+                    raise ValueError(
+                        f"Embedding generation failed for video {video_id}. "
+                        "Gemini API quota may be exhausted. Please try again later."
+                    )
+
+                # Calculate timestamp in seconds based on word position
+                if word_count > 0 and duration_sec > 0:
+                    segment_start_sec = int((start_word / word_count) * duration_sec)
+                    segment_end_sec = int((end_word / word_count) * duration_sec)
+                else:
+                    segment_start_sec = 0
+                    segment_end_sec = 0
 
                 # Save to database
                 emb_obj = TranscriptEmbedding(
                     video_id=video_id,
                     segment_start=start_word,
                     segment_end=end_word,
+                    segment_start_sec=segment_start_sec,
+                    segment_end_sec=segment_end_sec,
                     segment_text=segment_text,
                     embedding=embedding
                 )
@@ -140,176 +282,161 @@ class EmbeddingService:
         video_ids_filter: Optional[List[int]] = None
     ) -> List[dict]:
         """
-        Search for semantically similar transcript segments
+        Search for transcript segments using semantic embeddings.
 
-        Args:
-            channel_id: Channel to search in
-            query: Search query
-            top_k: Number of results to return
-            date_filter: Optional date to filter videos by (filters by published_at date) - legacy
-            start_date: Optional start date for range filtering (Phase 2)
-            end_date: Optional end date for range filtering (Phase 2)
-            speaker_filter: Optional speaker name pattern for filtering (Phase 1.1)
-            video_ids_filter: Optional list of video IDs to restrict search (Phase 1.2)
-
-        Returns:
-            List of relevant segments with metadata
+        Raises:
+            ValueError: If embeddings are unavailable (Gemini quota exhausted)
         """
-        # Generate query embedding
         query_embedding = self.gemini.generate_embeddings(query)
 
+        if query_embedding is None:
+            logger.error("❌ Embeddings unavailable - Gemini API quota likely exhausted")
+            raise ValueError(
+                "Chatbot embeddings unavailable. Gemini API quota may be exhausted. "
+                "Please try again later."
+            )
+
+        use_vector_search = True
+
+        def execute_query(db_session, conditions, params):
+            select_distance = "(te.embedding <=> CAST(:query_emb AS vector)) AS distance" if use_vector_search else "0 AS distance"
+            order_clause = "ORDER BY distance" if use_vector_search else "ORDER BY te.segment_start"
+            sql = f"""
+                SELECT
+                    te.video_id,
+                    te.segment_text,
+                    te.segment_start,
+                    te.segment_end,
+                    te.segment_start_sec,
+                    te.segment_end_sec,
+                    v.title,
+                    v.youtube_id,
+                    v.published_at,
+                    v.sermon_actual_date,
+                    v.speaker,
+                    {select_distance}
+                FROM transcript_embeddings te
+                JOIN videos v ON te.video_id = v.id
+                WHERE {' AND '.join(conditions)}
+                {order_clause}
+                LIMIT :top_k
+            """
+            if use_vector_search:
+                params['query_emb'] = query_embedding
+            return db_session.execute(text(sql), params).fetchall()
+
         with get_db() as db:
-            # Log filters if present
             if speaker_filter:
                 logger.info(f"Searching segments with speaker filter: '{speaker_filter}'")
             if video_ids_filter:
                 logger.info(f"Searching segments with video IDs filter: {len(video_ids_filter)} videos")
 
-            # Determine which date filtering to apply
             if start_date and end_date:
-                # Phase 2: Date range filtering (with optional speaker and biblical filters)
-                filter_desc = f"date range: {start_date.date()} to {end_date.date()}"
-                if speaker_filter:
-                    filter_desc += f" + speaker: '{speaker_filter}'"
-                if video_ids_filter:
-                    filter_desc += f" + biblical passages ({len(video_ids_filter)} videos)"
-                logger.info(f"Searching segments with {filter_desc}")
-
-                results = db.execute(text("""
-                    SELECT
-                        te.video_id,
-                        te.segment_text,
-                        te.segment_start,
-                        te.segment_end,
-                        v.title,
-                        v.youtube_id,
-                        v.published_at,
-                        v.speaker,
-                        (te.embedding <=> CAST(:query_emb AS vector)) AS distance
-                    FROM transcript_embeddings te
-                    JOIN videos v ON te.video_id = v.id
-                    WHERE v.channel_id = :channel_id
-                    AND v.published_at BETWEEN :start_date AND :end_date
-                    AND (:speaker IS NULL OR v.speaker ILIKE :speaker)
-                    AND (:video_ids::integer[] IS NULL OR v.id = ANY(:video_ids))
-                    ORDER BY distance
-                    LIMIT :top_k
-                """), {
-                    'query_emb': query_embedding,
+                conditions = [
+                    "v.channel_id = :channel_id",
+                    "COALESCE(v.sermon_actual_date, DATE(v.published_at)) BETWEEN :start_date AND :end_date"
+                ]
+                params = {
                     'channel_id': channel_id,
-                    'start_date': start_date,
-                    'end_date': end_date,
-                    'speaker': speaker_filter,
-                    'video_ids': video_ids_filter,
+                    'start_date': start_date.date(),
+                    'end_date': end_date.date(),
                     'top_k': top_k
-                }).fetchall()
-            elif date_filter:
-                # Legacy: Single date filtering (with optional speaker and biblical filters)
-                filter_desc = f"date filter: {date_filter.date()}"
-                if speaker_filter:
-                    filter_desc += f" + speaker: '{speaker_filter}'"
-                if video_ids_filter:
-                    filter_desc += f" + biblical passages ({len(video_ids_filter)} videos)"
-                logger.info(f"Searching segments with {filter_desc}")
-
-                results = db.execute(text("""
-                    SELECT
-                        te.video_id,
-                        te.segment_text,
-                        te.segment_start,
-                        te.segment_end,
-                        v.title,
-                        v.youtube_id,
-                        v.published_at,
-                        v.sermon_actual_date,
-                        v.speaker,
-                        (te.embedding <=> CAST(:query_emb AS vector)) AS distance
-                    FROM transcript_embeddings te
-                    JOIN videos v ON te.video_id = v.id
-                    WHERE v.channel_id = :channel_id
-                    AND COALESCE(v.sermon_actual_date, DATE(v.published_at)) = DATE(:date_filter)
-                    AND (:speaker IS NULL OR v.speaker ILIKE :speaker)
-                    AND (:video_ids::integer[] IS NULL OR v.id = ANY(:video_ids))
-                    ORDER BY distance
-                    LIMIT :top_k
-                """), {
-                    'query_emb': query_embedding,
-                    'channel_id': channel_id,
-                    'date_filter': date_filter,
-                    'speaker': speaker_filter,
-                    'video_ids': video_ids_filter,
-                    'top_k': top_k
-                }).fetchall()
-            else:
-                # No date filter - search all videos in channel (with optional speaker and biblical filters)
-                filter_desc = "all videos"
-                if speaker_filter:
-                    filter_desc += f" with speaker filter: '{speaker_filter}'"
-                if video_ids_filter:
-                    filter_desc += f" + biblical passages ({len(video_ids_filter)} videos)"
-                logger.info(f"Searching segments in {filter_desc}")
-
-                results = db.execute(text("""
-                    SELECT
-                        te.video_id,
-                        te.segment_text,
-                        te.segment_start,
-                        te.segment_end,
-                        v.title,
-                        v.youtube_id,
-                        v.published_at,
-                        v.sermon_actual_date,
-                        v.speaker,
-                        (te.embedding <=> CAST(:query_emb AS vector)) AS distance
-                    FROM transcript_embeddings te
-                    JOIN videos v ON te.video_id = v.id
-                    WHERE v.channel_id = :channel_id
-                    AND (:speaker IS NULL OR v.speaker ILIKE :speaker)
-                    AND (:video_ids::integer[] IS NULL OR v.id = ANY(:video_ids))
-                    ORDER BY distance
-                    LIMIT :top_k
-                """), {
-                    'query_emb': query_embedding,
-                    'channel_id': channel_id,
-                    'speaker': speaker_filter,
-                    'video_ids': video_ids_filter,
-                    'top_k': top_k
-                }).fetchall()
-
-            # Handle different result column counts based on query type
-            segments = []
-            for r in results:
-                segment = {
-                    'video_id': r[0],
-                    'segment_text': r[1],
-                    'segment_start': r[2],
-                    'segment_end': r[3],
-                    'video_title': r[4],
-                    'youtube_id': r[5],
-                    'published_at': r[6],
                 }
+                if speaker_filter:
+                    conditions.append("v.speaker ILIKE :speaker")
+                    params['speaker'] = speaker_filter
+                if video_ids_filter:
+                    conditions.append("v.id = ANY(:video_ids)")
+                    params['video_ids'] = video_ids_filter
+                results = execute_query(db, conditions, params)
+            elif date_filter:
+                conditions = [
+                    "v.channel_id = :channel_id",
+                    "COALESCE(v.sermon_actual_date, DATE(v.published_at)) = DATE(:date_filter)"
+                ]
+                params = {
+                    'channel_id': channel_id,
+                    'date_filter': date_filter.date(),
+                    'top_k': top_k
+                }
+                if speaker_filter:
+                    conditions.append("v.speaker ILIKE :speaker")
+                    params['speaker'] = speaker_filter
+                if video_ids_filter:
+                    conditions.append("v.id = ANY(:video_ids)")
+                    params['video_ids'] = video_ids_filter
+                results = execute_query(db, conditions, params)
+            else:
+                conditions = ["v.channel_id = :channel_id"]
+                params = {
+                    'channel_id': channel_id,
+                    'top_k': top_k
+                }
+                if speaker_filter:
+                    conditions.append("v.speaker ILIKE :speaker")
+                    params['speaker'] = speaker_filter
+                if video_ids_filter:
+                    conditions.append("v.id = ANY(:video_ids)")
+                    params['video_ids'] = video_ids_filter
+                results = execute_query(db, conditions, params)
 
-                # Handle variable columns based on query
-                if len(r) == 10:  # date_filter or no filter (includes sermon_actual_date)
-                    segment['sermon_actual_date'] = r[7]
-                    segment['speaker'] = r[8] if r[8] else "Desconhecido"
-                    segment['relevance'] = 1 - r[9]
-                elif len(r) == 9:  # start_date/end_date (no sermon_actual_date)
-                    segment['sermon_actual_date'] = None
-                    segment['speaker'] = r[7] if r[7] else "Desconhecido"
-                    segment['relevance'] = 1 - r[8]
-                else:
-                    # Fallback for old queries
-                    segment['sermon_actual_date'] = None
-                    segment['speaker'] = "Desconhecido"
-                    segment['relevance'] = 1 - r[len(r)-1]
-
-                segments.append(segment)
+            segments = []
+            for row in results:
+                segments.append({
+                    'video_id': row[0],
+                    'segment_text': row[1],
+                    'segment_start': row[2],
+                    'segment_end': row[3],
+                    'segment_start_sec': row[4] if row[4] is not None else 0,
+                    'segment_end_sec': row[5] if row[5] is not None else 0,
+                    'video_title': row[6],
+                    'youtube_id': row[7],
+                    'published_at': row[8],
+                    'sermon_actual_date': row[9],
+                    'speaker': row[10] if row[10] else "Desconhecido",
+                    'relevance': 1 - row[11]
+                })
 
             return segments
 
     def _segment_text(self, text: str) -> List[tuple]:
-        """Segment text into overlapping chunks"""
+        """
+        Segment text into chunks
+
+        Mode-aware segmentation:
+        - "none": Non-overlapping segments at natural boundaries
+        - "minimal": Small overlap (10 words)
+        - "legacy": Original 50-word overlap
+
+        Args:
+            text: Text to segment
+
+        Returns:
+            List of (segment_text, start_word_pos, end_word_pos) tuples
+        """
+        if self.overlap_mode == "none" and self.segmenter:
+            # Use intelligent segmenter with no overlap
+            return self.segmenter.segment_text(text)
+
+        elif self.overlap_mode == "minimal":
+            # Minimal overlap mode (10 words)
+            return self._segment_with_overlap(text, overlap=10)
+
+        else:
+            # Legacy mode (50-word overlap) - default
+            return self._segment_with_overlap(text, overlap=self.OVERLAP)
+
+    def _segment_with_overlap(self, text: str, overlap: int) -> List[tuple]:
+        """
+        Segment text with specified overlap (legacy algorithm)
+
+        Args:
+            text: Text to segment
+            overlap: Number of overlapping words
+
+        Returns:
+            List of (segment_text, start_word_pos, end_word_pos) tuples
+        """
         words = text.split()
         segments = []
 
@@ -321,6 +448,6 @@ class EmbeddingService:
 
             segments.append((segment_text, start, end))
 
-            start += (self.SEGMENT_SIZE - self.OVERLAP)
+            start += (self.SEGMENT_SIZE - overlap)
 
         return segments

@@ -61,6 +61,8 @@ services:
       - ../app:/app/app
       - ../Backend:/app/Backend
       - ../migrations:/app/migrations
+      - /var/run/docker.sock:/var/run/docker.sock  # Docker socket for container management
+      - ../docker/.env:/app/docker/.env  # Mount .env file for updates
     ports:
       - "${WEB_PORT:-8000}:8000"
     depends_on:
@@ -125,6 +127,8 @@ services:
     volumes:
       - ../app:/app/app
       - ../analytics:/app/analytics
+    ports:
+      - "8001:8001"  # Health check endpoint
     depends_on:
       db:
         condition: service_healthy

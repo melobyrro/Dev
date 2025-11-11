@@ -28,6 +28,13 @@ numpy==1.24.3
 pydantic==2.5.0
 pydantic-settings==2.1.0
 yt-dlp==2023.11.16
+python-dateutil==2.8.2
+pytz==2024.1
+requests==2.31.0
+xmltodict==0.13.0
 
 # SSE (Server-Sent Events)
 sse-starlette==1.6.5
+
+# Docker integration (for container management)
+docker==7.0.0

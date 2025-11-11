@@ -73,6 +73,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.exempt_paths = exempt_paths or [
             "/api/v2/events/stream",  # SSE endpoint (GET only)
+            "/api/channels/",  # Channel chat endpoint (public chatbot)
             "/health",  # Health check endpoints
             "/docs",  # API documentation
             "/openapi.json",  # OpenAPI schema

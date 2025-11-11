@@ -7,11 +7,19 @@ import time
 import logging
 from typing import List, Dict, Optional, Any
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
+
+import requests
 
 try:
     import google.generativeai as genai
 except ImportError:
     genai = None
+
+try:
+    import redis
+except ImportError:
+    redis = None
 
 logger = logging.getLogger(__name__)
 
@@ -33,6 +41,9 @@ class GeminiClient:
     MAX_TOKENS_PER_MINUTE = 1_000_000
     RETRY_MAX_ATTEMPTS = 3
     RETRY_DELAY_BASE = 2  # seconds
+
+    # Daily quota limit (Gemini free tier)
+    DAILY_REQUESTS_LIMIT = 250  # Free tier: 250 RPD (requests per day)
 
     # Cost per 1M tokens (Gemini 1.5 Flash pricing)
     COST_INPUT_PER_1M = 0.075  # USD
@@ -109,6 +120,16 @@ class GeminiClient:
         self.total_input_tokens = 0
         self.total_output_tokens = 0
         self.total_cost = 0.0
+
+        # Redis connection for daily quota tracking
+        self.redis_client = None
+        try:
+            redis_url = os.getenv("REDIS_URL", "redis://localhost:6379/0")
+            if redis:
+                self.redis_client = redis.from_url(redis_url, decode_responses=True)
+                logger.info("Redis connected for quota tracking")
+        except Exception as e:
+            logger.warning(f"Redis connection failed for quota tracking: {e}")
 
         logger.info(f"Gemini client initialized with model: {self.model_name}")
 
@@ -229,6 +250,9 @@ class GeminiClient:
                 output_tokens = self._estimate_tokens(text)
                 self._track_request(input_tokens, output_tokens)
 
+                # Increment daily quota counter
+                self._increment_daily_quota()
+
                 logger.debug(
                     f"Generated {output_tokens} tokens from {input_tokens} input tokens"
                 )
@@ -246,15 +270,21 @@ class GeminiClient:
                 else:
                     raise
 
-    def generate_embeddings(self, text: str) -> List[float]:
+    def generate_embeddings(self, text: str) -> Optional[List[float]]:
         """
         Generate text embeddings using Gemini
+
+        CRITICAL: This method NEVER falls back to Ollama to prevent dimension mismatch.
+        Database expects 768-dim vectors (Gemini), Ollama produces 3072-dim vectors.
 
         Args:
             text: Text to embed
 
         Returns:
-            768-dimensional embedding vector
+            768-dimensional embedding vector or None if Gemini is unavailable
+
+        Raises:
+            No exceptions - returns None on any error for graceful degradation
         """
         try:
             self._check_rate_limits()
@@ -270,11 +300,16 @@ class GeminiClient:
             input_tokens = self._estimate_tokens(text)
             self._track_request(input_tokens, 0)
 
+            # Increment daily quota counter
+            self._increment_daily_quota()
+
             return result['embedding']
 
         except Exception as e:
-            logger.error(f"Embedding generation error: {e}")
-            raise
+            logger.error(f"❌ Embedding generation failed (Gemini unavailable): {e}")
+            logger.warning("⚠️ Chatbot will be temporarily unavailable - no Ollama fallback for embeddings to prevent dimension mismatch")
+            return None
+
 
     def count_tokens(self, text: str) -> int:
         """
@@ -328,6 +363,112 @@ class GeminiClient:
         self.total_output_tokens = 0
         self.total_cost = 0.0
         logger.info("Usage stats reset")
+
+    def _increment_daily_quota(self):
+        """
+        Increment daily request counter in Redis
+
+        Tracks requests with automatic daily reset (Pacific Time midnight)
+        """
+        if not self.redis_client:
+            return
+
+        try:
+            # Use Pacific Time for quota reset (Gemini API timezone)
+            pacific_tz = ZoneInfo("America/Los_Angeles")
+            now_pacific = datetime.now(pacific_tz)
+
+            # Create key based on current date in Pacific Time
+            date_key = now_pacific.strftime("%Y-%m-%d")
+            redis_key = f"gemini:daily_quota:{date_key}"
+
+            # Increment counter
+            current_count = self.redis_client.incr(redis_key)
+
+            # Set expiration to midnight Pacific Time + 1 day (86400 seconds)
+            # This ensures the key expires after the quota resets
+            if current_count == 1:
+                # First request of the day - set expiration
+                midnight_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
+                next_midnight = midnight_pacific + timedelta(days=1)
+                ttl_seconds = int((next_midnight - now_pacific).total_seconds()) + 3600  # +1h buffer
+                self.redis_client.expire(redis_key, ttl_seconds)
+
+            logger.debug(f"Daily quota: {current_count}/{self.DAILY_REQUESTS_LIMIT}")
+
+        except Exception as e:
+            logger.error(f"Failed to increment daily quota: {e}")
+
+    def get_daily_quota_stats(self) -> Dict[str, Any]:
+        """
+        Get daily quota statistics
+
+        Returns:
+            Dictionary with quota metrics:
+            - daily_requests_used: Requests used today
+            - daily_requests_limit: Daily limit (250)
+            - daily_quota_percentage: Percentage used
+            - estimated_videos_remaining: Videos that can be processed (10 req/video)
+            - time_until_reset_hours: Hours until midnight Pacific
+            - time_until_reset_formatted: Formatted time string
+        """
+        if not self.redis_client:
+            return {
+                "daily_requests_used": 0,
+                "daily_requests_limit": self.DAILY_REQUESTS_LIMIT,
+                "daily_quota_percentage": 0,
+                "estimated_videos_remaining": int(self.DAILY_REQUESTS_LIMIT / 10),
+                "time_until_reset_hours": 0,
+                "time_until_reset_formatted": "N/A (Redis unavailable)"
+            }
+
+        try:
+            # Get current Pacific Time
+            pacific_tz = ZoneInfo("America/Los_Angeles")
+            now_pacific = datetime.now(pacific_tz)
+
+            # Get today's request count
+            date_key = now_pacific.strftime("%Y-%m-%d")
+            redis_key = f"gemini:daily_quota:{date_key}"
+
+            daily_requests_used = int(self.redis_client.get(redis_key) or 0)
+
+            # Calculate quota percentage
+            quota_percentage = int((daily_requests_used / self.DAILY_REQUESTS_LIMIT) * 100)
+
+            # Estimate videos remaining (assume 10 requests per video)
+            requests_remaining = max(0, self.DAILY_REQUESTS_LIMIT - daily_requests_used)
+            estimated_videos = int(requests_remaining / 10)
+
+            # Calculate time until midnight Pacific
+            midnight_pacific = now_pacific.replace(hour=0, minute=0, second=0, microsecond=0)
+            next_midnight = midnight_pacific + timedelta(days=1)
+            time_until_reset = next_midnight - now_pacific
+
+            hours_until_reset = time_until_reset.total_seconds() / 3600
+            hours = int(time_until_reset.total_seconds() // 3600)
+            minutes = int((time_until_reset.total_seconds() % 3600) // 60)
+            time_formatted = f"{hours}h {minutes}m"
+
+            return {
+                "daily_requests_used": daily_requests_used,
+                "daily_requests_limit": self.DAILY_REQUESTS_LIMIT,
+                "daily_quota_percentage": quota_percentage,
+                "estimated_videos_remaining": estimated_videos,
+                "time_until_reset_hours": round(hours_until_reset, 1),
+                "time_until_reset_formatted": time_formatted
+            }
+
+        except Exception as e:
+            logger.error(f"Failed to get daily quota stats: {e}")
+            return {
+                "daily_requests_used": 0,
+                "daily_requests_limit": self.DAILY_REQUESTS_LIMIT,
+                "daily_quota_percentage": 0,
+                "estimated_videos_remaining": int(self.DAILY_REQUESTS_LIMIT / 10),
+                "time_until_reset_hours": 0,
+                "time_until_reset_formatted": "Error"
+            }
 
 
 # Singleton instance (lazy-loaded)
