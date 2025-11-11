@@ -59,6 +59,13 @@
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
+.channel-header-banner h2,
+.channel-header-banner p,
+.channel-header-banner div,
+.channel-header-banner .text-secondary {
+    color: white !important;
+}
+
 [data-theme="dark"] .channel-header-banner {
     background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
 }
@@ -592,6 +599,10 @@
                                 👁️
                             </button>
                         </div>
+                        <small style="color: var(--text-muted); margin-top: 0.25rem; display: block;">
+                            <strong>Chave ativa:</strong>
+                            <span id="active-api-key-display">Carregando...</span>
+                        </small>
                     </div>
 
                     <!-- Token Usage Display -->
@@ -616,6 +627,24 @@
                                 <span class="text-gray-700 dark:text-gray-300">Modelo Ativo:</span>
                                 <span id="model-name" class="font-semibold text-gray-900 dark:text-white">-</span>
                             </div>
+
+                            <!-- Daily Quota Section -->
+                            <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                                <strong style="color: var(--text);">Quota Diária (Gemini):</strong>
+                                <div style="margin-top: 0.5rem;">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 0.25rem;">
+                                        <span class="text-gray-700 dark:text-gray-300">Requisições:</span>
+                                        <span id="daily-requests-display" class="font-semibold text-gray-900 dark:text-white">-/-</span>
+                                    </div>
+                                    <div class="progress-bar" style="background: var(--muted); height: 8px; border-radius: 4px; overflow: hidden;">
+                                        <div id="quota-progress" style="height: 100%; width: 0%; transition: width 0.3s, background 0.3s;"></div>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-top: 0.5rem; font-size: 0.9em; color: var(--text-muted);">
+                                        <span>Vídeos restantes (est.): <strong id="videos-remaining">-</strong></span>
+                                        <span>Reinicia em: <strong id="quota-reset-time">-</strong></span>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
                         <button
                             onclick="refreshGeminiUsage()"
@@ -636,8 +665,57 @@
                     </button>
                 </div>
 
-                <div id="api-config-message" class="hidden mt-3"></div>
+                <div id="api-config-message" style="display: none;"></div>
             </div>
+        </div>
+
+        <!-- Video Duration Settings -->
+        <div class="card" style="margin-bottom: 1.5rem;">
+            <h2>⏱️ Filtros de Duração de Vídeo</h2>
+            <p style="color: var(--text-muted); margin-top: 1rem;">
+                Configure a duração mínima e máxima aceita para vídeos. Vídeos fora desses limites serão rejeitados automaticamente.
+            </p>
+
+            <div id="durationStatusMessage" style="display: none; margin-top: 1rem;"></div>
+
+            <div id="durationLoadingIndicator" class="loading" style="margin-top: 1rem;">
+                <div class="progress-indicator"></div>
+                Carregando configurações...
+            </div>
+
+            <form id="durationSettingsForm" style="display: none; margin-top: 1.5rem;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;">
+                    <!-- Minimum Duration -->
+                    <div class="form-group">
+                        <label for="minDurationMin">Duração Mínima (minutos)</label>
+                        <input type="number" id="minDurationMin" min="0" max="60" step="1" required
+                               style="padding: 0.75rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); width: 100%;">
+                        <small style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                            Padrão: 5 minutos. Vídeos mais curtos serão marcados como "too_short"
+                        </small>
+                    </div>
+
+                    <!-- Maximum Duration -->
+                    <div class="form-group">
+                        <label for="maxDurationMin">Duração Máxima (minutos)</label>
+                        <input type="number" id="maxDurationMin" min="5" max="300" step="1" required
+                               style="padding: 0.75rem; border: 1px solid var(--border); border-radius: 4px; background: var(--surface); color: var(--text); width: 100%;">
+                        <small style="color: var(--text-muted); display: block; margin-top: 0.25rem;">
+                            Padrão: 150 minutos. Vídeos mais longos serão marcados como "too_long"
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Current Values Display -->
+                <div id="currentDurationValues" style="margin-top: 1rem; padding: 1rem; background: var(--muted); border-radius: 4px; display: none;">
+                    <strong>Valores Atuais:</strong><br>
+                    <span id="currentMinDisplay"></span> | <span id="currentMaxDisplay"></span>
+                </div>
+
+                <button type="submit" class="btn" style="margin-top: 1.5rem; width: 100%; padding: 0.75rem; background: #27ae60; color: white; border: none; border-radius: 4px; font-size: 1rem; font-weight: bold; cursor: pointer;">
+                    💾 Salvar Configurações de Duração
+                </button>
+            </form>
         </div>
 
         <!-- Future System Settings -->
@@ -645,7 +723,6 @@
             <h2>⚙️ Outras Configurações do Sistema</h2>
             <p style="color: var(--text-muted); margin-top: 1rem;">Em breve: configurações avançadas do sistema</p>
             <ul style="margin-top: 1rem; color: var(--text-muted);">
-                <li>Limites de processamento</li>
                 <li>Backup e restauração</li>
             </ul>
         </div>
@@ -1159,11 +1236,22 @@ function showMessage(message, type) {
 async function loadApiConfig() {
     try {
         const response = await fetch('/api/admin/settings/api-config');
+
+        // Capture CSRF token from response headers
+        const newToken = response.headers.get('X-CSRF-Token');
+        if (newToken) {
+            csrfToken = newToken;
+            console.log('CSRF token captured from loadApiConfig');
+        }
+
         const data = await response.json();
 
         document.getElementById('ai-service').value = data.ai_service || 'gemini';
         if (data.gemini_api_key) {
-            document.getElementById('gemini-api-key').placeholder = data.gemini_api_key;
+            document.getElementById('active-api-key-display').textContent = data.gemini_api_key;
+            document.getElementById('gemini-api-key').placeholder = "Deixe vazio para manter a chave atual";
+        } else {
+            document.getElementById('active-api-key-display').textContent = "Nenhuma configurada";
         }
 
         toggleGeminiConfig();
@@ -1178,37 +1266,67 @@ async function loadApiConfig() {
 
 async function saveApiConfig() {
     const aiService = document.getElementById('ai-service').value;
-    const apiKey = document.getElementById('gemini-api-key').value;
+    const apiKey = document.getElementById('gemini-api-key').value.trim();
 
     const messageDiv = document.getElementById('api-config-message');
 
     try {
         const response = await fetch('/api/admin/settings/api-config', {
             method: 'POST',
-            headers: {'Content-Type': 'application/json'},
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-Token': csrfToken
+            },
             body: JSON.stringify({
                 ai_service: aiService,
                 gemini_api_key: apiKey || undefined
             })
         });
 
+        // Check if response is OK before parsing
+        if (!response.ok) {
+            const error = await response.json();
+            messageDiv.className = 'status-message error';
+            // CSRF errors use 'detail', other errors use 'message'
+            messageDiv.textContent = error.detail || error.message || 'Erro ao salvar configurações';
+            messageDiv.style.display = 'block';
+            setTimeout(() => messageDiv.style.display = 'none', 5000);
+            return;
+        }
+
         const result = await response.json();
 
-        messageDiv.className = result.success
-            ? 'mt-3 p-3 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg text-green-800 dark:text-green-200'
-            : 'mt-3 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200';
-        messageDiv.textContent = result.message;
-        messageDiv.classList.remove('hidden');
+        // Show initial success message
+        messageDiv.className = 'status-message success';
+        messageDiv.textContent = '✅ API Key salva! 🔄 Reiniciando serviços... (aguarde 10 segundos)';
+        messageDiv.style.display = 'block';
 
-        setTimeout(() => messageDiv.classList.add('hidden'), 5000);
+        // Refresh the active key display
+        if (apiKey && apiKey.length > 4) {
+            document.getElementById('active-api-key-display').textContent = `...${apiKey.slice(-4)}`;
+        }
+
+        // Clear the input field
+        document.getElementById('gemini-api-key').value = '';
+
+        // Wait 10 seconds then show completion message
+        setTimeout(() => {
+            messageDiv.textContent = '✅ Serviços reiniciados! Nova chave está ativa.';
+
+            // Wait 2 more seconds then refresh the page
+            setTimeout(() => {
+                location.reload();
+            }, 2000);
+        }, 10000);
 
         if (result.success && aiService === 'gemini') {
             await loadApiConfig();
         }
     } catch (error) {
-        messageDiv.className = 'mt-3 p-3 bg-red-100 dark:bg-red-900/30 border border-red-300 dark:border-red-700 rounded-lg text-red-800 dark:text-red-200';
+        messageDiv.className = 'status-message error';
         messageDiv.textContent = 'Erro ao salvar configurações';
-        messageDiv.classList.remove('hidden');
+        messageDiv.style.display = 'block';
+        setTimeout(() => messageDiv.style.display = 'none', 5000);
     }
 }
 
@@ -1219,6 +1337,30 @@ function loadGeminiUsage(stats) {
     document.getElementById('total-calls').textContent = formatNumber(stats.total_calls || 0);
     document.getElementById('fallback-count').textContent = formatNumber(stats.fallback_count || 0);
     document.getElementById('model-name').textContent = stats.model_name || 'gemini-1.5-flash';
+
+    // Update daily quota fields
+    if (stats.daily_requests_used !== undefined) {
+        document.getElementById('daily-requests-display').textContent =
+            `${stats.daily_requests_used}/${stats.daily_requests_limit} (${stats.daily_quota_percentage}%)`;
+
+        // Update progress bar
+        const progressBar = document.getElementById('quota-progress');
+        progressBar.style.width = `${stats.daily_quota_percentage}%`;
+
+        // Color code: green < 70%, yellow < 90%, red >= 90%
+        if (stats.daily_quota_percentage < 70) {
+            progressBar.style.background = '#10b981'; // green
+        } else if (stats.daily_quota_percentage < 90) {
+            progressBar.style.background = '#f59e0b'; // yellow
+        } else {
+            progressBar.style.background = '#ef4444'; // red
+        }
+
+        document.getElementById('videos-remaining').textContent =
+            stats.estimated_videos_remaining || '-';
+        document.getElementById('quota-reset-time').textContent =
+            stats.time_until_reset_formatted || '-';
+    }
 }
 
 async function refreshGeminiUsage() {
@@ -1232,6 +1374,30 @@ async function refreshGeminiUsage() {
         }
 
         loadGeminiUsage(data);
+
+        // Also update quota fields (in case loadGeminiUsage is called separately)
+        if (data.daily_requests_used !== undefined) {
+            document.getElementById('daily-requests-display').textContent =
+                `${data.daily_requests_used}/${data.daily_requests_limit} (${data.daily_quota_percentage}%)`;
+
+            // Update progress bar
+            const progressBar = document.getElementById('quota-progress');
+            progressBar.style.width = `${data.daily_quota_percentage}%`;
+
+            // Color code: green < 70%, yellow < 90%, red >= 90%
+            if (data.daily_quota_percentage < 70) {
+                progressBar.style.background = '#10b981'; // green
+            } else if (data.daily_quota_percentage < 90) {
+                progressBar.style.background = '#f59e0b'; // yellow
+            } else {
+                progressBar.style.background = '#ef4444'; // red
+            }
+
+            document.getElementById('videos-remaining').textContent =
+                data.estimated_videos_remaining || '-';
+            document.getElementById('quota-reset-time').textContent =
+                data.time_until_reset_formatted || '-';
+        }
     } catch (error) {
         console.error('Error refreshing Gemini usage:', error);
     }
@@ -1252,11 +1418,105 @@ function formatNumber(num) {
     return new Intl.NumberFormat('pt-BR').format(num);
 }
 
+// ============================================================================
+// Video Duration Settings Functions
+// ============================================================================
+
+async function loadDurationSettings() {
+    try {
+        const response = await fetch('/api/admin/settings/video-duration');
+        const data = await response.json();
+
+        if (data) {
+            // Convert seconds to minutes for display
+            document.getElementById('minDurationMin').value = Math.round(data.min_duration_min);
+            document.getElementById('maxDurationMin').value = Math.round(data.max_duration_min);
+
+            // Show current values
+            document.getElementById('currentMinDisplay').textContent = `Min: ${Math.round(data.min_duration_min)} min (${data.min_duration_sec}s)`;
+            document.getElementById('currentMaxDisplay').textContent = `Max: ${Math.round(data.max_duration_min)} min (${data.max_duration_sec}s)`;
+            document.getElementById('currentDurationValues').style.display = 'block';
+
+            // Show form
+            document.getElementById('durationLoadingIndicator').style.display = 'none';
+            document.getElementById('durationSettingsForm').style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error loading duration settings:', error);
+        showDurationMessage('Erro ao carregar configurações', 'error');
+        document.getElementById('durationLoadingIndicator').style.display = 'none';
+    }
+}
+
+async function saveDurationSettings(event) {
+    event.preventDefault();
+
+    const minMin = parseInt(document.getElementById('minDurationMin').value);
+    const maxMin = parseInt(document.getElementById('maxDurationMin').value);
+
+    // Convert minutes to seconds
+    const minSec = minMin * 60;
+    const maxSec = maxMin * 60;
+
+    // Client-side validation
+    if (minMin >= maxMin) {
+        showDurationMessage('Duração mínima deve ser menor que a máxima', 'error');
+        return;
+    }
+
+    const submitButton = event.target.querySelector('button[type="submit"]');
+    submitButton.disabled = true;
+    submitButton.textContent = 'Salvando...';
+
+    try {
+        const response = await fetch('/api/admin/settings/video-duration', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                min_duration_sec: minSec,
+                max_duration_sec: maxSec
+            })
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            showDurationMessage('✓ Configurações salvas com sucesso! As novas regras serão aplicadas imediatamente.', 'success');
+            // Reload to show new values
+            await loadDurationSettings();
+        } else {
+            showDurationMessage('Erro: ' + (result.message || 'Erro desconhecido'), 'error');
+        }
+    } catch (error) {
+        console.error('Error saving duration settings:', error);
+        showDurationMessage('Erro ao salvar configurações. Verifique sua conexão.', 'error');
+    } finally {
+        submitButton.disabled = false;
+        submitButton.textContent = '💾 Salvar Configurações de Duração';
+    }
+}
+
+function showDurationMessage(message, type) {
+    const statusDiv = document.getElementById('durationStatusMessage');
+    statusDiv.className = type === 'success' ? 'status-message success' : 'status-message error';
+    statusDiv.textContent = message;
+    statusDiv.style.display = 'block';
+
+    // Auto-hide after 5 seconds
+    setTimeout(() => {
+        statusDiv.style.display = 'none';
+    }, 5000);
+}
+
+// Attach form submit handler
+document.getElementById('durationSettingsForm').addEventListener('submit', saveDurationSettings);
+
 // Load API config when page loads (on configuracao tab)
 document.addEventListener('DOMContentLoaded', function() {
     // Load on page load if configuracao tab is active
     if (window.location.hash === '#configuracao') {
         loadApiConfig();
+        loadDurationSettings();
     }
 });
 
@@ -1266,6 +1526,7 @@ showTab = function(tabName) {
     originalShowTab(tabName);
     if (tabName === 'configuracao') {
         loadApiConfig();
+        loadDurationSettings();
     }
 };
 </script>
