@@ -321,6 +321,12 @@
     border: 1px solid #f5c6cb;
 }
 
+.status-message.warning {
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeaa7;
+}
+
 [data-theme="dark"] .status-message.success {
     background: #155724;
     color: #d4edda;
@@ -331,6 +337,12 @@
     background: #721c24;
     color: #f8d7da;
     border: 1px solid #5a0e18;
+}
+
+[data-theme="dark"] .status-message.warning {
+    background: #664423;
+    color: #ffe2a8;
+    border: 1px solid #896033;
 }
 
 .loading {
@@ -1308,6 +1320,16 @@ async function saveApiConfig() {
 
         // Clear the input field
         document.getElementById('gemini-api-key').value = '';
+
+        // Check for warnings in the response
+        if (result.warnings && result.warnings.length > 0) {
+            const warningMessage = result.warnings.join('\n');
+            console.warn('⚠️ Avisos:', warningMessage);
+            // Display warning in message div but still count as success
+            messageDiv.className = 'status-message warning';
+            messageDiv.innerHTML = '⚠️ Configurações salvas com avisos:<br>' + result.warnings.join('<br>');
+            messageDiv.style.display = 'block';
+        }
 
         // Wait 10 seconds then show completion message
         setTimeout(() => {

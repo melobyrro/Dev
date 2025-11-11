@@ -9,13 +9,19 @@ import json
 
 from app.web.auth import get_current_user, require_auth, verify_password
 from app.common.database import get_db_session
-from app.common.models import Video, Job, Channel, ExcludedVideo, Transcript, SermonReport, ChannelRollup, ScheduleConfig, Speaker, YouTubeSubscription
+from app.common.models import (
+    Video, Job, Channel, ExcludedVideo, Transcript, SermonReport,
+    ChannelRollup, ScheduleConfig, Speaker, YouTubeSubscription,
+    ChatbotQueryMetrics, ChatbotFeedback
+)
 from app.worker.report_generators import generate_daily_sermon_report, generate_channel_rollup
 from app.worker.youtube_subscription_service import get_subscription_service
 from app.ai.chatbot_service import ChatbotService
 import os
 import logging
 from datetime import datetime, timezone, date
+from pathlib import Path
+import docker
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +33,98 @@ router = APIRouter()
 # Redis connection
 REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 redis_client = redis.from_url(REDIS_URL, decode_responses=True)
+
+
+# ============================================================================
+# Helper Functions for API Key Management
+# ============================================================================
+
+def update_env_file(key: str, value: str):
+    """Update a key in the .env file for persistence across restarts"""
+    try:
+        # Try multiple possible .env file locations
+        possible_paths = [
+            Path("/app/../docker/.env"),  # Docker context
+            Path("/app/.env"),             # Docker app directory
+            Path(__file__).parent.parent.parent.parent / "docker" / ".env",  # Relative to this file
+            Path(__file__).parent.parent.parent.parent / ".env",  # Root .env
+        ]
+
+        env_path = None
+        for path in possible_paths:
+            if path.exists():
+                env_path = path
+                logger.info(f"Found .env file at: {env_path}")
+                break
+
+        if not env_path:
+            logger.warning(f".env file not found in any of: {[str(p) for p in possible_paths]}")
+            return False
+
+        # Read current .env content
+        lines = env_path.read_text().split('\n')
+
+        # Update or add the key
+        key_found = False
+        for i, line in enumerate(lines):
+            # Match lines that start with the key (handle comments and whitespace)
+            if line.strip().startswith(f"{key}="):
+                lines[i] = f"{key}={value}"
+                key_found = True
+                logger.info(f"Updated existing {key} in .env file")
+                break
+
+        if not key_found:
+            # Add to end of file (before any trailing newlines)
+            while lines and not lines[-1].strip():
+                lines.pop()
+            lines.append(f"{key}={value}")
+            lines.append('')  # Add trailing newline
+            logger.info(f"Added new {key} to .env file")
+
+        # Write back
+        env_path.write_text('\n'.join(lines))
+        logger.info(f"✅ Successfully updated {key} in .env file at {env_path}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to update .env file: {e}")
+        return False
+
+
+def restart_worker_container():
+    """Restart the worker container to pick up new environment variables"""
+    try:
+        client = docker.from_env()
+
+        # Try to find worker container by name patterns
+        worker_patterns = ['culto_worker', 'worker', 'cultotranscript-worker', 'cultotranscript_worker']
+
+        containers = client.containers.list()
+        logger.info(f"Found {len(containers)} running containers")
+
+        for container in containers:
+            container_name = container.name.lower()
+            logger.info(f"Checking container: {container_name}")
+
+            # Check if container name matches any worker pattern
+            for pattern in worker_patterns:
+                if pattern.lower() in container_name:
+                    logger.info(f"🔄 Restarting worker container: {container.name}")
+                    container.restart()
+                    logger.info(f"✅ Successfully restarted {container.name}")
+                    return True
+
+        logger.warning("⚠️ Worker container not found among running containers")
+        return False
+
+    except docker.errors.DockerException as e:
+        logger.error(f"Docker error while restarting worker: {e}")
+        logger.info("💡 This is expected in development mode without Docker socket access")
+        return False
+    except Exception as e:
+        logger.error(f"Failed to restart worker container: {e}")
+        return False
 
 
 class TranscribeRequest(BaseModel):
@@ -687,6 +785,15 @@ class ChatRequest(BaseModel):
     session_id: Optional[str] = None
 
 
+class ChatbotFeedbackRequest(BaseModel):
+    session_id: str
+    query: str
+    rating: str  # 'helpful' or 'not_helpful'
+    response_summary: Optional[str] = None
+    feedback_text: Optional[str] = None
+    segments_shown: Optional[List[int]] = None
+
+
 class ChannelSetupRequest(BaseModel):
     title: str
     youtube_url: HttpUrl
@@ -750,6 +857,57 @@ async def chat_with_channel(
     except Exception as e:
         logger.error(f"Error in chatbot for channel {channel_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro no chatbot: {str(e)}")
+
+
+@router.post("/chatbot/feedback")
+async def submit_chatbot_feedback(
+    request: ChatbotFeedbackRequest,
+    http_request: Request,
+    db=Depends(get_db_session)
+):
+    """
+    Submit feedback for a chatbot response (Phase 2: User Feedback System)
+
+    Ratings: 'helpful', 'not_helpful'
+    Optional feedback text for additional context
+    """
+    from app.common.models import ChatbotFeedback
+
+    # Validate rating
+    if request.rating not in ['helpful', 'not_helpful']:
+        raise HTTPException(status_code=400, detail="Rating deve ser 'helpful' ou 'not_helpful'")
+
+    try:
+        # Extract user IP for analytics (optional)
+        user_ip = http_request.client.host if http_request.client else None
+
+        # Create feedback record
+        feedback = ChatbotFeedback(
+            session_id=request.session_id,
+            query=request.query,
+            response_summary=request.response_summary,
+            rating=request.rating,
+            feedback_text=request.feedback_text,
+            segments_shown=request.segments_shown or [],
+            channel_id=None,  # Can be extracted from session if needed
+            user_ip=user_ip,
+            metadata={}
+        )
+
+        db.add(feedback)
+        db.commit()
+
+        logger.info(f"Chatbot feedback submitted: {request.rating} (session={request.session_id})")
+
+        return {
+            "success": True,
+            "message": "Obrigado pelo seu feedback!"
+        }
+
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Error submitting chatbot feedback: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao salvar feedback: {str(e)}")
 
 
 @router.post("/channels/setup")
@@ -1328,8 +1486,10 @@ async def get_api_config(
     ).first()
 
     # Mask API key for security
-    gemini_key = os.getenv("GEMINI_API_KEY") or (
-        gemini_key_setting.setting_value if gemini_key_setting else None
+    # Always read from database first (source of truth), fall back to env var if DB is empty
+    gemini_key = (
+        gemini_key_setting.setting_value if gemini_key_setting and gemini_key_setting.setting_value
+        else os.getenv("GEMINI_API_KEY")
     )
     masked_key = None
     if gemini_key and len(gemini_key) > 4:
@@ -1418,11 +1578,59 @@ async def update_api_config(
             # Also update environment variable for immediate effect
             os.environ["GEMINI_API_KEY"] = gemini_api_key
 
+            # Reset LLM client singleton to pick up new API key
+            try:
+                from app.ai.llm_client import reset_llm_client
+                reset_llm_client()
+                logger.info("✅ LLM client reset - new API key will be used on next request")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to reset LLM client: {e}")
+
+            # Update .env file for persistence across restarts
+            logger.info("Updating .env file with new GEMINI_API_KEY...")
+            env_updated = update_env_file("GEMINI_API_KEY", gemini_api_key)
+
+            if env_updated:
+                logger.info("✅ .env file updated successfully")
+            else:
+                logger.warning("⚠️ Failed to update .env file - changes will not persist after restart")
+
+            # Restart worker container to pick up new API key
+            logger.info("Attempting to restart worker container...")
+            worker_restarted = restart_worker_container()
+
+            if worker_restarted:
+                logger.info("✅ Worker container restarted successfully")
+            else:
+                logger.warning("⚠️ Could not restart worker container - it will use old API key until manually restarted")
+
+        # Commit the database changes
         db.commit()
+
+        # Verify the save by re-reading from database
+        if gemini_api_key:
+            saved_setting = db.query(SystemSettings).filter(
+                SystemSettings.setting_key == "gemini_api_key"
+            ).first()
+
+            if not saved_setting or saved_setting.setting_value != gemini_api_key:
+                logger.error("❌ Database verification failed - API key not saved correctly")
+                return {
+                    "success": False,
+                    "message": "Erro ao verificar salvamento da chave API no banco de dados"
+                }
+
+        # Build response with any warnings
+        warnings = []
+        if gemini_api_key and not env_updated:
+            warnings.append("Chave API salva no banco mas .env não foi atualizado - pode não persistir após reinicialização")
+        if gemini_api_key and not worker_restarted:
+            warnings.append("Worker não foi reiniciado - usando chave antiga até reinicialização manual")
 
         return {
             "success": True,
-            "message": "Configurações salvas com sucesso!"
+            "message": "Configurações salvas com sucesso!",
+            "warnings": warnings if warnings else None
         }
 
     except Exception as e:
@@ -1436,19 +1644,36 @@ async def update_api_config(
 
 @router.get("/admin/gemini-usage")
 async def get_gemini_usage(user: str = Depends(require_auth)):
-    """Get Gemini API token usage statistics"""
+    """Get Gemini API token usage statistics including daily quota"""
     try:
         from app.ai.llm_client import get_llm_client
+        from app.ai.gemini_client import get_gemini_client
+
+        # Get session stats from LLM client
         llm_client = get_llm_client()
         stats = llm_client.get_stats()
 
+        # Get daily quota stats from Gemini client
+        gemini_client = get_gemini_client()
+        quota_stats = gemini_client.get_daily_quota_stats()
+
+        # Merge both stats
         return {
+            # Session stats
             "tokens_input": stats.get("gemini_tokens", 0),
             "tokens_output": 0,  # Not tracked separately
             "total_calls": stats.get("gemini_calls", 0),
             "fallback_count": stats.get("fallback_count", 0),
             "model_name": os.getenv("GEMINI_MODEL", "gemini-1.5-flash"),
-            "active_backend": "gemini" if stats.get("gemini_calls", 0) > 0 else "ollama"
+            "active_backend": "gemini" if stats.get("gemini_calls", 0) > 0 else "ollama",
+
+            # Daily quota stats
+            "daily_requests_used": quota_stats.get("daily_requests_used", 0),
+            "daily_requests_limit": quota_stats.get("daily_requests_limit", 250),
+            "daily_quota_percentage": quota_stats.get("daily_quota_percentage", 0),
+            "estimated_videos_remaining": quota_stats.get("estimated_videos_remaining", 25),
+            "time_until_reset_hours": quota_stats.get("time_until_reset_hours", 0),
+            "time_until_reset_formatted": quota_stats.get("time_until_reset_formatted", "N/A")
         }
     except Exception as e:
         logger.error(f"Error getting Gemini usage: {e}")
@@ -1814,3 +2039,206 @@ async def merge_videos(
             status_code=500,
             detail=f"Erro ao mesclar vídeos: {str(e)}"
         )
+
+
+# ============================================================================
+# PHASE 2: CHATBOT METRICS ENDPOINTS
+# ============================================================================
+
+@router.get("/admin/chatbot-metrics/data")
+async def get_chatbot_metrics_data(
+    days: int = 30,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """
+    Get chatbot analytics data for dashboard (Phase 2)
+
+    Returns:
+    - Top 20 most common queries
+    - Average response time
+    - Feedback summary (% helpful vs not helpful)
+    - Popular topics and keywords
+    - Query volume over time
+    - Cache hit rate
+    """
+    from sqlalchemy import func, desc
+    from datetime import timedelta
+
+    try:
+        # Calculate date range
+        end_date = datetime.now(timezone.utc)
+        start_date = end_date - timedelta(days=days)
+
+        # 1. Top 20 most common queries
+        top_queries = db.query(
+            ChatbotQueryMetrics.query_normalized,
+            func.count(ChatbotQueryMetrics.id).label('count'),
+            func.avg(ChatbotQueryMetrics.response_time_ms).label('avg_response_time')
+        ).filter(
+            ChatbotQueryMetrics.created_at >= start_date
+        ).group_by(
+            ChatbotQueryMetrics.query_normalized
+        ).order_by(
+            desc('count')
+        ).limit(20).all()
+
+        # 2. Overall metrics
+        total_queries = db.query(func.count(ChatbotQueryMetrics.id)).filter(
+            ChatbotQueryMetrics.created_at >= start_date
+        ).scalar() or 0
+
+        avg_response_time = db.query(
+            func.avg(ChatbotQueryMetrics.response_time_ms)
+        ).filter(
+            ChatbotQueryMetrics.created_at >= start_date
+        ).scalar() or 0
+
+        cache_hits = db.query(func.count(ChatbotQueryMetrics.id)).filter(
+            ChatbotQueryMetrics.created_at >= start_date,
+            ChatbotQueryMetrics.cache_hit == True
+        ).scalar() or 0
+
+        cache_hit_rate = (cache_hits / total_queries * 100) if total_queries > 0 else 0
+
+        # 3. Feedback summary
+        total_feedback = db.query(func.count(ChatbotFeedback.id)).filter(
+            ChatbotFeedback.created_at >= start_date
+        ).scalar() or 0
+
+        helpful_feedback = db.query(func.count(ChatbotFeedback.id)).filter(
+            ChatbotFeedback.created_at >= start_date,
+            ChatbotFeedback.rating == 'helpful'
+        ).scalar() or 0
+
+        not_helpful_feedback = total_feedback - helpful_feedback
+
+        helpful_percentage = (helpful_feedback / total_feedback * 100) if total_feedback > 0 else 0
+
+        # 4. Query type distribution
+        query_types = db.query(
+            ChatbotQueryMetrics.query_type,
+            func.count(ChatbotQueryMetrics.id).label('count')
+        ).filter(
+            ChatbotQueryMetrics.created_at >= start_date,
+            ChatbotQueryMetrics.query_type.isnot(None)
+        ).group_by(
+            ChatbotQueryMetrics.query_type
+        ).all()
+
+        # 5. Filter usage statistics
+        date_filter_usage = db.query(func.count(ChatbotQueryMetrics.id)).filter(
+            ChatbotQueryMetrics.created_at >= start_date,
+            ChatbotQueryMetrics.date_filters_used == True
+        ).scalar() or 0
+
+        speaker_filter_usage = db.query(func.count(ChatbotQueryMetrics.id)).filter(
+            ChatbotQueryMetrics.created_at >= start_date,
+            ChatbotQueryMetrics.speaker_filter_used == True
+        ).scalar() or 0
+
+        biblical_filter_usage = db.query(func.count(ChatbotQueryMetrics.id)).filter(
+            ChatbotQueryMetrics.created_at >= start_date,
+            ChatbotQueryMetrics.biblical_filter_used == True
+        ).scalar() or 0
+
+        theme_filter_usage = db.query(func.count(ChatbotQueryMetrics.id)).filter(
+            ChatbotQueryMetrics.created_at >= start_date,
+            ChatbotQueryMetrics.theme_filter_used == True
+        ).scalar() or 0
+
+        # 6. Backend distribution
+        backend_distribution = db.query(
+            ChatbotQueryMetrics.backend_used,
+            func.count(ChatbotQueryMetrics.id).label('count')
+        ).filter(
+            ChatbotQueryMetrics.created_at >= start_date,
+            ChatbotQueryMetrics.backend_used.isnot(None)
+        ).group_by(
+            ChatbotQueryMetrics.backend_used
+        ).all()
+
+        # 7. Daily query volume (last 30 days)
+        daily_volume = db.execute(text("""
+            SELECT DATE(created_at) as date, COUNT(*) as count
+            FROM chatbot_query_metrics
+            WHERE created_at >= :start_date
+            GROUP BY DATE(created_at)
+            ORDER BY date DESC
+        """), {'start_date': start_date}).fetchall()
+
+        return {
+            "success": True,
+            "period_days": days,
+            "summary": {
+                "total_queries": total_queries,
+                "avg_response_time_ms": round(avg_response_time, 2),
+                "cache_hit_rate": round(cache_hit_rate, 2),
+                "total_feedback": total_feedback,
+                "helpful_feedback": helpful_feedback,
+                "not_helpful_feedback": not_helpful_feedback,
+                "helpful_percentage": round(helpful_percentage, 2)
+            },
+            "top_queries": [
+                {
+                    "query": q[0],
+                    "count": q[1],
+                    "avg_response_time_ms": round(q[2], 2) if q[2] else 0
+                }
+                for q in top_queries
+            ],
+            "query_types": [
+                {"type": qt[0], "count": qt[1]}
+                for qt in query_types
+            ],
+            "filter_usage": {
+                "date_filters": date_filter_usage,
+                "speaker_filters": speaker_filter_usage,
+                "biblical_filters": biblical_filter_usage,
+                "theme_filters": theme_filter_usage
+            },
+            "backend_distribution": [
+                {"backend": bd[0], "count": bd[1]}
+                for bd in backend_distribution
+            ],
+            "daily_volume": [
+                {"date": str(dv[0]), "count": dv[1]}
+                for dv in daily_volume
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching chatbot metrics: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar métricas: {str(e)}")
+
+
+@router.get("/admin/chatbot-metrics/feedback")
+async def get_recent_feedback(
+    limit: int = 50,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Get recent chatbot feedback entries with details"""
+    try:
+        feedback = db.query(ChatbotFeedback).order_by(
+            ChatbotFeedback.created_at.desc()
+        ).limit(limit).all()
+
+        return {
+            "success": True,
+            "feedback": [
+                {
+                    "id": f.id,
+                    "query": f.query,
+                    "rating": f.rating,
+                    "feedback_text": f.feedback_text,
+                    "created_at": f.created_at.isoformat(),
+                    "session_id": f.session_id
+                }
+                for f in feedback
+            ]
+        }
+
+    except Exception as e:
+        logger.error(f"Error fetching feedback: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Erro ao buscar feedback: {str(e)}")
