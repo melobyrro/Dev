@@ -929,16 +929,60 @@ async function loadRecentVideos() {
     }
 }
 
+function parseDateParts(dateStr) {
+    if (!dateStr) {
+        return null;
+    }
+
+    const normalized = dateStr.replace('T', ' ');
+    const parts = normalized.split(' ')[0].split('-');
+    if (parts.length !== 3) {
+        return null;
+    }
+
+    const [year, month, day] = parts.map(part => parseInt(part, 10));
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+        return null;
+    }
+
+    return { year, month, day };
+}
+
+function extractDisplayDateParts(video) {
+    const dateStr = video.sermon_actual_date || video.published_at || video.video_created_at;
+    if (!dateStr) {
+        return null;
+    }
+
+    const normalized = dateStr.split('T')[0];
+    const [yearStr, monthStr, dayStr] = normalized.split('-');
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const day = parseInt(dayStr, 10);
+
+    if (Number.isNaN(year) || Number.isNaN(month) || Number.isNaN(day)) {
+        return null;
+    }
+
+    return {
+        year,
+        month,
+        day,
+        key: `${year}-${String(month).padStart(2, '0')}`,
+        timestamp: Date.UTC(year, month - 1, day)
+    };
+}
+
 // Group videos by year and month using video_created_at (with fallback to published_at)
 function groupVideosByDate(videos) {
     const grouped = {};
 
     videos.forEach(video => {
-        // Use video_created_at if available, otherwise fall back to published_at
-        const dateStr = video.video_created_at || video.published_at;
-        const date = new Date(dateStr);
-        // Group by YYYY-MM format
-        const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
+        const info = extractDisplayDateParts(video);
+        if (!info) {
+            return;
+        }
+        const key = info.key;
 
         if (!grouped[key]) {
             grouped[key] = [];
@@ -946,12 +990,12 @@ function groupVideosByDate(videos) {
         grouped[key].push(video);
     });
 
-    // Sort videos within each group by video_created_at (newest first)
+    // Sort videos within each group by date descending
     Object.keys(grouped).forEach(key => {
         grouped[key].sort((a, b) => {
-            const dateA = new Date(a.video_created_at || a.published_at);
-            const dateB = new Date(b.video_created_at || b.published_at);
-            return dateB - dateA;
+            const infoA = extractDisplayDateParts(a);
+            const infoB = extractDisplayDateParts(b);
+            return (infoB?.timestamp || 0) - (infoA?.timestamp || 0);
         });
     });
 
@@ -960,14 +1004,8 @@ function groupVideosByDate(videos) {
 
 // Format video title with video creation date prefix (mm/dd/yyyy format)
 function formatVideoTitle(video) {
-    // Use video_created_at if available, otherwise fall back to published_at
-    const dateStr = video.video_created_at || video.published_at;
-    const date = new Date(dateStr);
-    const day = String(date.getDate()).padStart(2, '0');
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const year = date.getFullYear();
-    // Changed to mm/dd/yyyy format
-    return `${month}/${day}/${year} - ${video.title}`;
+    // Title already includes date prefix from database
+    return video.title;
 }
 
 // Format date header for monthly groups
@@ -1193,6 +1231,12 @@ async function excludeVideo(videoId, title) {
 // Cache for fetched transcripts
 const transcriptCache = {};
 
+function formatDateLabel(dateStr) {
+    if (!dateStr) return 'Não definido';
+    const [year, month, day] = dateStr.split('-');
+    return `${month}/${day}/${year}`;
+}
+
 // Toggle transcript expansion
 async function toggleTranscript(videoId, rowElement) {
     const expansionRow = document.getElementById(`transcript-${videoId}`);
@@ -1212,6 +1256,43 @@ async function toggleTranscript(videoId, rowElement) {
         if (!transcriptCache[videoId]) {
             await fetchAndDisplayTranscript(videoId, expansionRow);
         }
+    }
+}
+
+async function editSermonDateInline(videoId) {
+    const display = document.getElementById(`sermon-date-display-${videoId}`);
+    if (!display) return;
+
+    const currentIso = display.dataset.iso || '';
+    const newValue = prompt("Informe a data real do culto (YYYY-MM-DD). Deixe vazio para remover.", currentIso);
+
+    if (newValue === null) {
+        return;
+    }
+
+    const trimmed = newValue.trim();
+    if (trimmed && !/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+        alert("Formato inválido. Use YYYY-MM-DD.");
+        return;
+    }
+
+    try {
+        const response = await fetch(`/api/videos/${videoId}/sermon-date`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ sermon_actual_date: trimmed || null })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+            display.dataset.iso = data.sermon_actual_date || '';
+            display.textContent = formatDateLabel(data.sermon_actual_date);
+            alert('Data do culto atualizada!');
+        } else {
+            alert(data.detail || 'Erro ao atualizar data do culto');
+        }
+    } catch (error) {
+        alert(`Erro ao atualizar data do culto: ${error.message}`);
     }
 }
 
@@ -1241,6 +1322,8 @@ async function fetchAndDisplayTranscript(videoId, expansionRow) {
             // Informações Gerais (moved to top, with Temas integrated)
             if (report.statistics) {
                 const stats = report.statistics;
+                const sermonDateIso = data.video_info?.sermon_actual_date || '';
+                const sermonDateDisplay = formatDateLabel(sermonDateIso);
                 contentHTML += `
                     <div class="sermon-section">
                         <h3>📊 Informações Gerais</h3>
@@ -1296,6 +1379,18 @@ async function fetchAndDisplayTranscript(videoId, expansionRow) {
                                             </div>
                                         </div>
                                     </div>
+                                </div>
+                            </div>
+                            <div class="meta-card">
+                                <strong>Data do culto</strong>
+                                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                                    <span id="sermon-date-display-${videoId}" data-iso="${sermonDateIso}">
+                                        ${sermonDateDisplay}
+                                    </span>
+                                    <button onclick="editSermonDateInline(${videoId})"
+                                            style="padding: 0.2rem 0.5rem; font-size: 0.85rem; background: #6b7280; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                                        ✏️
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1531,11 +1626,8 @@ async function sendChatMessage() {
             let citationsHtml = '';
             if (data.cited_videos && data.cited_videos.length > 0) {
                 citationsHtml = '<div class="chat-citations">📚 Fontes: ';
-                data.cited_videos.forEach((video, idx) => {
-                    const score = data.relevance_scores && data.relevance_scores[idx]
-                        ? `(${(data.relevance_scores[idx] * 100).toFixed(0)}%)`
-                        : '';
-                    citationsHtml += `<span class="chat-citation">${video.video_title} ${score}</span>`;
+                data.cited_videos.forEach((video) => {
+                    citationsHtml += `<span class="chat-citation">${video.video_title}</span>`;
                 });
                 citationsHtml += '</div>';
             }

@@ -6,7 +6,7 @@ import os
 import logging
 import tempfile
 from typing import Optional, Dict, Any
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from app.worker.yt_dlp_service import YtDlpService
 from app.worker.transcript_api_service import TranscriptApiService
@@ -15,6 +15,76 @@ from app.common.database import get_db
 from app.common.models import Video, Transcript
 
 logger = logging.getLogger(__name__)
+
+
+def calculate_sermon_actual_date(published_at: Optional[datetime]):
+    """
+    Calculate the actual sermon date based on published_at.
+    Rule: Use the most recent Sunday relative to the published date.
+    """
+    if not published_at:
+        return None
+
+    published_date = published_at.date()
+    # Python weekday(): Monday=0 ... Sunday=6
+    days_since_sunday = (published_date.weekday() + 1) % 7
+    return published_date - timedelta(days=days_since_sunday)
+
+
+def remove_existing_date_prefix(title: str) -> str:
+    """
+    Remove existing date prefixes from title to avoid duplication.
+
+    Handles patterns like:
+    - "15/03/2024 - Title"
+    - "03/15/2024 - Title"
+    - "2024-03-15 - Title"
+    - "15/03/24 - Title"
+    """
+    import re
+
+    patterns = [
+        r'^\d{1,2}/\d{1,2}/\d{4}\s*-\s*',   # dd/mm/yyyy - or mm/dd/yyyy -
+        r'^\d{4}-\d{1,2}-\d{1,2}\s*-\s*',    # yyyy-mm-dd -
+        r'^\d{1,2}/\d{1,2}/\d{2}\s*-\s*',    # dd/mm/yy - or mm/dd/yy -
+        r'^\d{1,2}\s+de\s+\w+\s+de\s+\d{4}\s*-\s*',  # "15 de março de 2024 -"
+    ]
+
+    for pattern in patterns:
+        title = re.sub(pattern, '', title, flags=re.IGNORECASE)
+
+    return title.strip()
+
+
+def format_title_with_date(title: str, sermon_date: Optional[datetime.date]) -> str:
+    """
+    Format title as 'MM/DD/YYYY - Title'.
+
+    Args:
+        title: Original video title (may already have date prefix)
+        sermon_date: The sermon actual date to use for prefix
+
+    Returns:
+        Formatted title with date prefix
+
+    Examples:
+        >>> format_title_with_date("Culto de Domingo", date(2024, 3, 15))
+        "03/15/2024 - Culto de Domingo"
+
+        >>> format_title_with_date("15/03/2024 - Culto", date(2024, 3, 15))
+        "03/15/2024 - Culto"
+    """
+    if not sermon_date:
+        return title
+
+    # Remove any existing date prefix to avoid duplication
+    cleaned_title = remove_existing_date_prefix(title)
+
+    # Format date as MM/DD/YYYY
+    date_str = sermon_date.strftime('%m/%d/%Y')
+
+    # Return formatted title
+    return f"{date_str} - {cleaned_title}"
 
 
 class TranscriptionService:
@@ -57,6 +127,9 @@ class TranscriptionService:
 
             youtube_id = video_info["youtube_id"]
             duration_sec = video_info["duration_sec"]
+            sermon_actual_date = calculate_sermon_actual_date(video_info["published_at"])
+            # Format title with sermon date prefix
+            formatted_title = format_title_with_date(video_info["title"], sermon_actual_date)
             result["duration_sec"] = duration_sec
 
             logger.info(f"Video {youtube_id}: {video_info['title']} ({duration_sec}s)")
@@ -64,20 +137,27 @@ class TranscriptionService:
             # Step 2: Validate duration
             is_valid, error_msg = self.yt_dlp.validate_video_duration(duration_sec)
             if not is_valid:
+                # Determine status based on error message
+                if "muito curto" in error_msg.lower():
+                    video_status = "too_short"
+                else:
+                    video_status = "too_long"
+
                 logger.warning(f"Video {youtube_id} rejected: {error_msg}")
-                result["status"] = "too_long"
+                result["status"] = video_status
                 result["error"] = error_msg
 
-                # Save to DB with too_long status
+                # Save to DB with rejection status
                 with get_db() as db:
                     video = Video(
                         channel_id=channel_id,
                         youtube_id=youtube_id,
-                        title=video_info["title"],
+                        title=formatted_title,
                         published_at=video_info["published_at"],
                         video_created_at=video_info["published_at"],
+                        sermon_actual_date=sermon_actual_date,
                         duration_sec=duration_sec,
-                        status="too_long",
+                        status=video_status,
                         language="pt",
                         error_message=error_msg
                     )
@@ -100,9 +180,10 @@ class TranscriptionService:
                     video = Video(
                         channel_id=channel_id,
                         youtube_id=youtube_id,
-                        title=video_info["title"],
+                        title=formatted_title,
                         published_at=video_info["published_at"],
                         video_created_at=video_info["published_at"],
+                        sermon_actual_date=sermon_actual_date,
                         duration_sec=duration_sec,
                         status="failed",
                         language="pt",
@@ -121,9 +202,10 @@ class TranscriptionService:
 
                 if video:
                     # Update existing video
-                    video.title = video_info["title"]
+                    video.title = formatted_title
                     video.published_at = video_info["published_at"]
                     video.video_created_at = video_info["published_at"]
+                    video.sermon_actual_date = sermon_actual_date
                     video.duration_sec = duration_sec
                     video.has_auto_cc = (source == "auto_cc")
                     video.status = "completed"
@@ -136,9 +218,10 @@ class TranscriptionService:
                     video = Video(
                         channel_id=channel_id,
                         youtube_id=youtube_id,
-                        title=video_info["title"],
+                        title=formatted_title,
                         published_at=video_info["published_at"],
                         video_created_at=video_info["published_at"],
+                        sermon_actual_date=sermon_actual_date,
                         duration_sec=duration_sec,
                         has_auto_cc=(source == "auto_cc"),
                         status="completed",
