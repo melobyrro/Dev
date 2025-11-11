@@ -134,8 +134,8 @@ async def startup_event():
         db.close()
     except Exception as e:
         print(f"❌ Error loading config from database: {e}")
-        import logging
-        logging.error(f"Error loading config from database: {e}")
+        logger = logging.getLogger(__name__)
+        logger.error(f"Error loading config from database: {e}")
 
     # Initialize SSE Manager (if Backend is available)
     if BACKEND_AVAILABLE:
