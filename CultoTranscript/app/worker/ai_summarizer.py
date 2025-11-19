@@ -1,6 +1,6 @@
 """
 AI Sermon Summarizer
-Generates narrative summaries of sermons using unified LLM client (Gemini or Ollama)
+Generates narrative summaries of sermons using Gemini LLM
 """
 import logging
 from typing import Optional
@@ -137,6 +137,97 @@ def generate_short_summary(full_summary: str, max_length: int = 200) -> str:
         return full_summary
 
     return full_summary[:max_length].rsplit(' ', 1)[0] + '...'
+
+
+TITLE_GENERATION_PROMPT = """Você é um assistente especializado em analisar sermões cristãos.
+
+Sua tarefa é criar um título descritivo para este sermão que reflita seu conteúdo principal.
+
+CONTEXTO DO SERMÃO:
+- Temas identificados: {themes}
+- Passagens bíblicas principais: {passages}
+
+RESUMO:
+{summary}
+
+INSTRUÇÕES:
+1. Crie um título conciso (5-15 palavras) em português
+2. O título deve capturar o tema central do sermão
+3. Inclua referência bíblica se for central ao sermão
+4. Use linguagem clara e impactante
+5. NÃO use aspas ou pontuação excessiva
+6. NÃO comece com "Sermão sobre" ou frases genéricas
+
+EXEMPLOS DE BONS TÍTULOS:
+- "A Fé que Move Montanhas - Mateus 17:20"
+- "O Amor Incondicional de Deus em João 3:16"
+- "Superando o Medo com a Força do Espírito"
+- "A Parábola do Filho Pródigo e o Perdão Divino"
+
+RESPOSTA (apenas o título):"""
+
+
+def generate_suggested_title(
+    summary: str,
+    themes: list,
+    passages: list
+) -> str:
+    """
+    Generate AI-suggested title for a sermon based on its content
+
+    Args:
+        summary: AI-generated summary of the sermon
+        themes: List of identified themes
+        passages: List of biblical passages (OSIS refs)
+
+    Returns:
+        Suggested title string (5-15 words)
+    """
+    try:
+        # Format themes for prompt
+        themes_text = ", ".join(themes[:5]) if themes else "Não identificados"
+
+        # Format passages for prompt
+        passages_text = ", ".join(passages[:5]) if passages else "Não identificadas"
+
+        # Use summary or fallback
+        summary_text = summary if summary and len(summary) > 50 else "Resumo não disponível"
+
+        # Generate prompt
+        prompt = TITLE_GENERATION_PROMPT.format(
+            themes=themes_text,
+            passages=passages_text,
+            summary=summary_text[:3000]  # Limit summary length
+        )
+
+        # Call unified LLM client
+        llm = get_llm_client()
+        logger.info("Generating suggested title with LLM...")
+        llm_response = llm.generate(
+            prompt=prompt,
+            max_tokens=100,
+            temperature=0.7
+        )
+        response = llm_response["text"]
+        backend_used = llm_response["backend"]
+
+        # Clean up response
+        title = response.strip()
+
+        # Remove quotes if present
+        title = title.strip('"\'')
+
+        # Validate result
+        if not title or len(title) < 5 or len(title) > 500:
+            logger.warning(f"Invalid title generated: '{title}'")
+            return None
+
+        logger.info(f"Suggested title generated using {backend_used} backend: {title}")
+        return title
+
+    except Exception as e:
+        logger.error(f"Failed to generate suggested title: {e}", exc_info=True)
+        return None
 
 
 SPEAKER_EXTRACTION_PROMPT = """Você é um assistente especializado em analisar sermões cristãos.

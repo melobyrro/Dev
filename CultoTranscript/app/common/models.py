@@ -73,6 +73,7 @@ class Video(Base):
     sermon_start_time = Column(Integer, nullable=True, comment='Sermon start time in seconds (0 if sermon starts immediately)')
     ai_summary = Column(Text, nullable=True, comment='AI-generated narrative summary of the sermon')
     speaker = Column(String(255), nullable=True, comment='Main speaker/preacher name (auto-detected by Gemini or manually edited)')
+    suggested_title = Column(String(500), nullable=True, comment='AI-generated descriptive title based on sermon content')
     transcript_hash = Column(String(64), nullable=True, comment='SHA-256 hash of transcript text for cache validation')
     ingested_at = Column(DateTime(timezone=True))
     error_message = Column(Text)
