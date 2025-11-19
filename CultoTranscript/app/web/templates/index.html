@@ -2,6 +2,8 @@
 
 {% block title %}Dashboard - CultoTranscript{% endblock %}
 
+{% block mobile_title %}Dashboard{% endblock %}
+
 {% block extra_css %}
 <style>
 /* === CHANNEL HEADER === */
@@ -177,6 +179,19 @@
     filter: brightness(0.95);
     color: var(--text);
 }
+
+@media (max-width: 768px) {
+    .month-controls {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 0.35rem;
+    }
+
+    .month-controls button {
+        width: 100%;
+        text-align: center;
+    }
+}
 .progress-indicator {
     display: inline-block;
     width: 16px;
@@ -292,12 +307,38 @@
 }
 .transcript-content {
     padding: 1.5rem;
-    max-height: 500px;
+    max-height: min(60vh, 800px);
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
     font-family: 'Georgia', 'Times New Roman', serif;
     line-height: 1.8;
     color: var(--text);
     text-align: justify;
+    overflow-wrap: anywhere;
+}
+@media (max-width: 768px) {
+    .transcript-expansion.visible,
+    .transcript-expansion.visible td {
+        display: block;
+        width: 100%;
+    }
+
+    .transcript-expansion.visible td {
+        padding: 0;
+    }
+
+    .sermon-expansion-content {
+        padding: 1.25rem 1rem;
+    }
+
+    .sermon-summary {
+        font-size: 1rem;
+    }
+
+    .transcript-content {
+        max-height: none;
+        overflow: visible;
+    }
 }
 .transcript-content.loading {
     text-align: center;
@@ -352,6 +393,7 @@
     text-align: justify;
     font-family: 'Georgia', 'Times New Roman', serif;
     font-size: 1.05rem;
+    overflow-wrap: anywhere;
 }
 .sermon-summary p {
     margin-bottom: 1rem;
@@ -417,23 +459,42 @@
     box-shadow: 0 4px 8px rgba(0,0,0,0.2);
 }
 
+/* Citation - solid border, darker background (explicit verse references) */
 .bible-ref-citation {
-    background: #3498db; /* Blue for citations */
+    background: #2563eb; /* Blue for citations */
+    border: 2px solid #1d4ed8;
 }
 
 @media (prefers-color-scheme: dark) {
     .bible-ref-citation {
-        background: #60A5FA; /* Lighter blue for dark mode */
+        background: #3b82f6;
+        border: 2px solid #60a5fa;
     }
 }
 
+/* Reading - dashed border, medium background (quoted scripture passages) */
+.bible-ref-reading {
+    background: #059669; /* Green for readings */
+    border: 2px dashed #047857;
+}
+
+@media (prefers-color-scheme: dark) {
+    .bible-ref-reading {
+        background: #10b981;
+        border: 2px dashed #34d399;
+    }
+}
+
+/* Mention - dotted border, lighter background (biblical characters/books) */
 .bible-ref-mention {
-    background: #f39c12; /* Orange for mentions */
+    background: #d97706; /* Orange/amber for mentions */
+    border: 2px dotted #b45309;
 }
 
 @media (prefers-color-scheme: dark) {
     .bible-ref-mention {
-        background: #FB923C; /* Lighter orange for dark mode */
+        background: #f59e0b;
+        border: 2px dotted #fbbf24;
     }
 }
 .highlight-item, .question-item {
@@ -554,6 +615,8 @@
     right: -400px;
     top: 0;
     width: 400px;
+    min-width: 300px;
+    max-width: 800px;
     height: 100vh;
     background: var(--surface);
     border-left: 1px solid var(--border);
@@ -566,6 +629,83 @@
 
 .chatbot-panel.visible {
     right: 0;
+}
+
+/* Disable transition during resize for smooth dragging */
+.chatbot-panel.resizing {
+    transition: none;
+}
+
+/* Resize handle on the left edge */
+.chatbot-resize-handle {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 6px;
+    height: 100%;
+    cursor: ew-resize;
+    background: transparent;
+    z-index: 1001;
+    transition: background 0.2s;
+}
+
+.chatbot-resize-handle:hover,
+.chatbot-resize-handle.active {
+    background: var(--primary);
+    opacity: 0.5;
+}
+
+/* Visual indicator for resize handle */
+.chatbot-resize-handle::after {
+    content: '';
+    position: absolute;
+    left: 2px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 2px;
+    height: 40px;
+    background: var(--border);
+    border-radius: 1px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.chatbot-resize-handle:hover::after {
+    opacity: 1;
+}
+
+@media (max-width: 768px) {
+    .chatbot-panel {
+        width: min(420px, 100%);
+        right: -420px;
+        min-width: unset;
+        max-width: unset;
+    }
+
+    .chatbot-panel.visible {
+        right: 0;
+    }
+
+    /* Hide floating chat button on mobile - use bottom nav instead */
+    .chat-fab {
+        display: none;
+    }
+
+    /* Hide resize handle on mobile */
+    .chatbot-resize-handle {
+        display: none;
+    }
+}
+
+@media (max-width: 640px) {
+    .chatbot-panel {
+        width: 100%;
+        right: -100%;
+    }
+
+    .chatbot-panel.visible {
+        right: 0;
+    }
 }
 
 .chatbot-header {
@@ -711,6 +851,12 @@
     font-style: italic;
     padding: 0.5rem;
 }
+.chatbot-input-hint {
+    margin-top: 0.35rem;
+    font-size: 0.8rem;
+    color: var(--text-tertiary);
+    text-align: right;
+}
 
 /* Pulsing animation for processing status */
 @keyframes pulse-processing {
@@ -720,6 +866,114 @@
 
 .status-processing {
     animation: pulse-processing 2s ease-in-out infinite;
+}
+
+/* === SUGGESTED TITLE SECTION === */
+.suggested-title-section {
+    background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+    padding: 1rem;
+    border-radius: 8px;
+    border-left: 4px solid #0ea5e9;
+}
+
+[data-theme="dark"] .suggested-title-section {
+    background: linear-gradient(135deg, rgba(14, 165, 233, 0.15) 0%, rgba(56, 189, 248, 0.1) 100%);
+}
+
+.suggested-title-section h3 {
+    margin: 0 0 0.5rem 0;
+    font-size: 0.9rem;
+    color: #0369a1;
+}
+
+[data-theme="dark"] .suggested-title-section h3 {
+    color: #7dd3fc;
+}
+
+.suggested-title-section p {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #0c4a6e;
+}
+
+[data-theme="dark"] .suggested-title-section p {
+    color: #e0f2fe;
+}
+
+.status-cell {
+    min-width: 180px;
+}
+
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    padding: 0.15rem 0.65rem;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+
+.status-badge.status-completed {
+    background: #dcfce7;
+    color: #166534;
+}
+
+.status-badge.status-processing,
+.status-badge.status-queued {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-badge.status-failed,
+.status-badge.status-processing_failed {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-badge.status-too_long,
+.status-badge.status-too_short {
+    background: #e0f2fe;
+    color: #075985;
+}
+
+[data-theme="dark"] .status-badge.status-completed {
+    background: rgba(22, 101, 52, 0.25);
+    color: #bbf7d0;
+}
+
+[data-theme="dark"] .status-badge.status-processing,
+[data-theme="dark"] .status-badge.status-queued {
+    background: rgba(234, 179, 8, 0.2);
+    color: #fcd34d;
+}
+
+[data-theme="dark"] .status-badge.status-failed,
+[data-theme="dark"] .status-badge.status-processing_failed {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fecaca;
+}
+
+[data-theme="dark"] .status-badge.status-too_long,
+[data-theme="dark"] .status-badge.status-too_short {
+    background: rgba(14, 165, 233, 0.2);
+    color: #bae6fd;
+}
+
+.status-subtext {
+    margin-top: 0.35rem;
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+.status-error-text {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #b91c1c;
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-word;
 }
 </style>
 {% endblock %}
@@ -739,6 +993,8 @@
 
 <!-- Chatbot Drawer -->
 <div class="chatbot-panel" id="chatbotPanel">
+    <!-- Resize handle for desktop -->
+    <div class="chatbot-resize-handle" id="chatbotResizeHandle"></div>
     <div class="chatbot-header">
         <h3>🤖 Assistente IA</h3>
         <div>
@@ -759,6 +1015,7 @@
                   placeholder="Digite sua pergunta sobre os sermões..."
                   onkeydown="if(event.key==='Enter' && !event.shiftKey){event.preventDefault();sendChatMessage();}"></textarea>
         <button id="chatSendBtn" onclick="sendChatMessage()">Enviar</button>
+        <div class="chatbot-input-hint">Use Shift + Enter para adicionar uma nova linha</div>
     </div>
 </div>
 {% endif %}
@@ -831,6 +1088,32 @@
 <script>
 const CHANNEL_ID = {{ channel.id if channel else 'null' }};
 let csrfToken = null;
+let isLoadingVideos = false;
+let processingRefreshTimer = null;
+
+const STATUS_ICONS = {
+    completed: '✅',
+    processing: '⏳',
+    queued: '📋',
+    failed: '❌',
+    processing_failed: '❌',
+    pending: '⏸️',
+    too_long: '⏱️',
+    too_short: '⏱️',
+    unknown: '❓'
+};
+
+const STATUS_LABELS = {
+    completed: 'Concluído',
+    processing: 'Processando',
+    queued: 'Na fila',
+    failed: 'Falhou',
+    processing_failed: 'Falhou',
+    pending: 'Pendente',
+    too_long: 'Muito longo',
+    too_short: 'Muito curto',
+    unknown: 'Desconhecido'
+};
 
 // Refresh CSRF token from server
 async function refreshCSRFToken() {
@@ -851,7 +1134,12 @@ async function refreshCSRFToken() {
 
 // Load recent videos with date grouping
 async function loadRecentVideos() {
-    if (!CHANNEL_ID) return;
+    if (!CHANNEL_ID || isLoadingVideos) return;
+    isLoadingVideos = true;
+
+    // Store currently expanded video IDs BEFORE rebuilding
+    const expandedIds = Array.from(document.querySelectorAll('.video-row.expanded'))
+        .map(row => parseInt(row.getAttribute('data-video-id')));
 
     try {
         const response = await fetch(`/api/channels/${CHANNEL_ID}/videos?limit=50`);
@@ -877,23 +1165,25 @@ async function loadRecentVideos() {
                                 <button onclick="expandAllVideosInMonth('${dateKey}')">▼ Expandir Todos</button>
                                 <button onclick="collapseAllVideosInMonth('${dateKey}')">▲ Recolher Todos</button>
                             </div>
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Título</th>
-                                        <th>Status</th>
-                                        <th>Duração</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${videos.map(v => `
-                                        <tr class="video-row" data-video-id="${v.id}" onclick="toggleTranscript(${v.id}, this)">
-                                            <td>
-                                                <span class="expand-icon">▶</span>
-                                                ${formatVideoTitle(v)}
+                            <!-- Desktop Table View -->
+                            <div class="table-wrapper">
+                                <table>
+                                    <thead>
+                                        <tr>
+                                            <th>Título</th>
+                                            <th>Status</th>
+                                            <th>Duração</th>
+                                            <th>Ações</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        ${videos.map(v => `
+                                            <tr class="video-row" data-video-id="${v.id}" onclick="toggleTranscript(${v.id}, this)">
+                                                <td>
+                                                    <span class="expand-icon">▶</span>
+                                                    ${formatVideoTitle(v)}
                                             </td>
-                                            <td>${formatStatus(v.status)}</td>
+                                            <td class="status-cell">${renderStatusCell(v)}</td>
                                             <td>${formatDuration(v.duration_sec)}</td>
                                             <td onclick="event.stopPropagation();">
                                                 <button onclick="reprocessVideo(${v.id}, '${v.title.replace(/'/g, "\\'")}')"
@@ -917,13 +1207,19 @@ async function loadRecentVideos() {
                                             </td>
                                         </tr>
                                     `).join('')}
-                                </tbody>
-                            </table>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <!-- Mobile Cards View -->
+                            <div class="mobile-cards-view">
+                                ${videos.map(v => renderMobileCard(v)).join('')}
+                            </div>
                         </div>
                     </div>
                 `;
             }
 
+            stopAllPolling();
             container.innerHTML = html;
 
             // Show group controls if there are videos
@@ -931,23 +1227,46 @@ async function loadRecentVideos() {
             if (groupControls) {
                 groupControls.style.display = 'block';
             }
+
+            // Restore expansion states for previously expanded videos
+            for (const videoId of expandedIds) {
+                const row = document.querySelector(`.video-row[data-video-id="${videoId}"]`);
+                if (row && !row.classList.contains('expanded')) {
+                    await toggleTranscript(videoId, row);
+                }
+            }
+
+            let hasActiveJobs = false;
+            data.videos.forEach(video => {
+                initializeVideoStatus(video);
+                if (shouldTrackJob(video)) {
+                    hasActiveJobs = true;
+                }
+            });
+
+            scheduleProcessingRefresh(hasActiveJobs);
         } else {
-            container.innerHTML = '<p>Nenhum vídeo encontrado.</p>';
+            stopAllPolling();
+            container.innerHTML = '<p class="no-data">Nenhum vídeo encontrado.</p>';
 
             // Hide group controls if no videos
             const groupControls = document.getElementById('groupControls');
             if (groupControls) {
                 groupControls.style.display = 'none';
             }
+            scheduleProcessingRefresh(false);
         }
     } catch (error) {
-        document.getElementById('recentVideos').innerHTML = '<p>Erro ao carregar vídeos.</p>';
+        document.getElementById('recentVideos').innerHTML = '<p class="no-data">Erro ao carregar vídeos.</p>';
 
         // Hide group controls on error
         const groupControls = document.getElementById('groupControls');
         if (groupControls) {
             groupControls.style.display = 'none';
         }
+        scheduleProcessingRefresh(false);
+    } finally {
+        isLoadingVideos = false;
     }
 }
 
@@ -1027,7 +1346,19 @@ function groupVideosByDate(videos) {
 // Format video title with video creation date prefix (mm/dd/yyyy format)
 function formatVideoTitle(video) {
     // Title already includes date prefix from database
-    return video.title;
+    let html = escapeHtml(video.title);
+
+    // Show AI suggested title if available
+    if (video.suggested_title) {
+        html += `
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem;">
+                <span style="background: #0ea5e9; color: white; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600;">IA</span>
+                ${escapeHtml(video.suggested_title)}
+            </div>
+        `;
+    }
+
+    return html;
 }
 
 // Format date header for monthly groups
@@ -1050,18 +1381,269 @@ function formatDateHeader(dateKey) {
     return `${monthNames[monthIndex]} de ${year}`;
 }
 
-// Format status with icon
-function formatStatus(status) {
-    const icons = {
-        'completed': '✅',
-        'processing': '⏳',
-        'failed': '❌',
-        'pending': '⏸️',
-        'queued': '📋',
-        'too_long': '⏱️'
-    };
-    const icon = icons[status] || '❓';
-    return `${icon} <span class="status status-${status}">${status}</span>`;
+function normalizeStatus(status) {
+    if (!status) return 'unknown';
+    if (status === 'processing_failed') return 'failed';
+    return status;
+}
+
+function escapeHtml(str) {
+    if (!str && str !== 0) return '';
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function truncateText(str, maxLength = 140) {
+    if (!str || str.length <= maxLength) return str;
+    return `${str.substring(0, maxLength - 1)}…`;
+}
+
+function renderStatusCell(video) {
+    const status = normalizeStatus(video.status);
+    const icon = STATUS_ICONS[status] || STATUS_ICONS.unknown;
+    const label = STATUS_LABELS[status] || STATUS_LABELS.unknown;
+    const job = video.current_job || null;
+
+    let html = `<div class="status-badge status-${status}">${icon} <span>${label}</span></div>`;
+
+    if (job && ['queued', 'running'].includes(job.status)) {
+        const message = job.metadata?.step_message || 'Processando...';
+        html += `<div class="status-subtext">${escapeHtml(message)}</div>`;
+    } else if ((job && job.status === 'failed') || status === 'failed') {
+        const reason = job?.error || video.error_message;
+        if (reason) {
+            html += `<div class="status-error-text">${escapeHtml(truncateText(reason))}</div>`;
+        }
+    } else if (video.error_message && status === 'too_long') {
+        html += `<div class="status-error-text">${escapeHtml(truncateText(video.error_message))}</div>`;
+    }
+
+    return html;
+}
+
+// Render mobile card for a video
+function renderMobileCard(video) {
+    const status = normalizeStatus(video.status);
+    const icon = STATUS_ICONS[status] || STATUS_ICONS.unknown;
+    const label = STATUS_LABELS[status] || STATUS_LABELS.unknown;
+    const job = video.current_job || null;
+    const escapedTitle = video.title.replace(/'/g, "\\'");
+
+    // Get speaker if available
+    const speaker = video.speaker_name || video.default_speaker || '';
+
+    // Format date
+    const dateInfo = extractDisplayDateParts(video);
+    const dateDisplay = dateInfo ? `${String(dateInfo.month).padStart(2, '0')}/${String(dateInfo.day).padStart(2, '0')}/${dateInfo.year}` : '';
+
+    let statusHtml = `<div class="status-badge status-${status}">${icon} <span>${label}</span></div>`;
+
+    // Add processing message or error
+    let extraInfo = '';
+    if (job && ['queued', 'running'].includes(job.status)) {
+        const message = job.metadata?.step_message || 'Processando...';
+        extraInfo = `<div class="status-subtext" style="font-size: 0.75rem; margin-top: 0.25rem;">${escapeHtml(message)}</div>`;
+    } else if ((job && job.status === 'failed') || status === 'failed') {
+        const reason = job?.error || video.error_message;
+        if (reason) {
+            extraInfo = `<div class="status-error-text" style="font-size: 0.75rem; margin-top: 0.25rem;">${escapeHtml(truncateText(reason, 80))}</div>`;
+        }
+    }
+
+    return `
+        <div class="sermon-card" data-video-id="${video.id}" onclick="toggleMobileCardExpansion(this, ${video.id})">
+            <div class="sermon-card-header">
+                <h3 class="sermon-card-title">${escapeHtml(video.title)}</h3>
+                ${video.suggested_title ? `
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.25rem; display: flex; align-items: center; gap: 0.35rem;">
+                    <span style="background: #0ea5e9; color: white; padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.7rem; font-weight: 600;">IA</span>
+                    ${escapeHtml(video.suggested_title)}
+                </div>
+                ` : ''}
+                <div class="sermon-card-status">
+                    ${statusHtml}
+                </div>
+            </div>
+            <div class="sermon-card-meta">
+                ${speaker ? `
+                <div class="sermon-card-meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
+                    <span>${escapeHtml(speaker)}</span>
+                </div>
+                ` : ''}
+                ${dateDisplay ? `
+                <div class="sermon-card-meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <span>${dateDisplay}</span>
+                </div>
+                ` : ''}
+                <div class="sermon-card-meta-item">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span>${formatDuration(video.duration_sec)}</span>
+                </div>
+            </div>
+            ${extraInfo}
+            <div class="sermon-card-content" id="mobile-content-${video.id}">
+                <div class="transcript-loading" style="padding: 1rem; text-align: center; display: none;">
+                    <span class="progress-indicator"></span> Carregando...
+                </div>
+                <div class="transcript-container" style="display: none;"></div>
+            </div>
+            <div class="sermon-card-actions" onclick="event.stopPropagation();">
+                <button class="sermon-card-action" onclick="event.stopPropagation(); reprocessVideo(${video.id}, '${escapedTitle}')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                    Reprocessar
+                </button>
+                <button class="sermon-card-action danger" onclick="event.stopPropagation(); excludeVideo(${video.id}, '${escapedTitle}')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                    Excluir
+                </button>
+            </div>
+        </div>
+    `;
+}
+
+// Toggle mobile card expansion
+function toggleMobileCardExpansion(cardElement, videoId) {
+    const isExpanded = cardElement.classList.contains('expanded');
+
+    if (isExpanded) {
+        cardElement.classList.remove('expanded');
+    } else {
+        cardElement.classList.add('expanded');
+
+        // Load content if not already loaded
+        const container = cardElement.querySelector('.transcript-container');
+        const loading = cardElement.querySelector('.transcript-loading');
+
+        if (container && !container.innerHTML) {
+            // Trigger the same load as desktop
+            const desktopRow = document.querySelector(`.video-row[data-video-id="${videoId}"]`);
+            if (desktopRow && !desktopRow.classList.contains('expanded')) {
+                toggleTranscript(videoId, desktopRow);
+            }
+
+            // Copy content from desktop version after a short delay
+            setTimeout(() => {
+                const desktopContainer = document.querySelector(`#transcript-${videoId} .transcript-container`);
+                if (desktopContainer && desktopContainer.innerHTML) {
+                    container.innerHTML = desktopContainer.innerHTML;
+                    container.style.display = 'block';
+                    loading.style.display = 'none';
+                }
+            }, 500);
+        }
+    }
+}
+
+function setVideoStatusBadge(videoId, status) {
+    const normalized = normalizeStatus(status);
+    const row = document.querySelector(`.video-row[data-video-id="${videoId}"]`);
+    if (!row) return;
+
+    const cell = row.querySelector('.status-cell');
+    if (!cell) return;
+
+    let badge = cell.querySelector('.status-badge');
+    if (!badge) {
+        badge = document.createElement('div');
+        badge.className = 'status-badge';
+        cell.prepend(badge);
+    }
+
+    badge.className = `status-badge status-${normalized}`;
+    badge.innerHTML = `${STATUS_ICONS[normalized] || STATUS_ICONS.unknown} <span>${STATUS_LABELS[normalized] || STATUS_LABELS.unknown}</span>`;
+}
+
+function setVideoStatusSubtext(videoId, text) {
+    const row = document.querySelector(`.video-row[data-video-id="${videoId}"]`);
+    if (!row) return;
+    const cell = row.querySelector('.status-cell');
+    if (!cell) return;
+
+    let subtext = cell.querySelector('.status-subtext');
+    if (!subtext) {
+        subtext = document.createElement('div');
+        subtext.className = 'status-subtext';
+        cell.appendChild(subtext);
+    }
+
+    subtext.textContent = text || 'Processando...';
+}
+
+function setVideoStatusError(videoId, message) {
+    const row = document.querySelector(`.video-row[data-video-id="${videoId}"]`);
+    if (!row) return;
+    const cell = row.querySelector('.status-cell');
+    if (!cell) return;
+
+    let errorEl = cell.querySelector('.status-error-text');
+    if (!message) {
+        if (errorEl) errorEl.remove();
+        return;
+    }
+
+    if (!errorEl) {
+        errorEl = document.createElement('div');
+        errorEl.className = 'status-error-text';
+        cell.appendChild(errorEl);
+    }
+    errorEl.textContent = message;
+}
+
+function shouldTrackJob(video) {
+    if (video.current_job && ['queued', 'running'].includes(video.current_job.status)) {
+        return true;
+    }
+    return video.status === 'processing';
+}
+
+function initializeVideoStatus(video) {
+    if (video.current_job) {
+        if (['queued', 'running'].includes(video.current_job.status)) {
+            setVideoStatusBadge(video.id, 'processing');
+            if (video.current_job.metadata?.step_message) {
+                setVideoStatusSubtext(video.id, video.current_job.metadata.step_message);
+            }
+            startPolling(video.current_job.id, video.id, 3000);
+        } else if (video.current_job.status === 'failed') {
+            setVideoStatusBadge(video.id, 'failed');
+            setVideoStatusError(video.id, truncateText(video.current_job.error || video.error_message));
+        }
+    } else if ((video.status === 'failed' || video.status === 'processing_failed') && video.error_message) {
+        setVideoStatusBadge(video.id, 'failed');
+        setVideoStatusError(video.id, truncateText(video.error_message));
+    } else if (video.status === 'processing') {
+        setVideoStatusBadge(video.id, 'processing');
+        setVideoStatusSubtext(video.id, 'Processando...');
+    }
+}
+
+function scheduleProcessingRefresh(shouldSchedule) {
+    if (shouldSchedule) {
+        if (!processingRefreshTimer) {
+            processingRefreshTimer = setInterval(() => {
+                loadRecentVideos();
+            }, 20000);
+        }
+    } else if (processingRefreshTimer) {
+        clearInterval(processingRefreshTimer);
+        processingRefreshTimer = null;
+    }
 }
 
 // Toggle date group
@@ -1155,9 +1737,9 @@ async function pollJobStatus(jobId, videoId) {
 
         console.log(`📊 Job ${jobId} status: ${data.status}`);
 
-        // Update UI with progress if available
-        if (data.progress && data.status === 'running') {
-            updateVideoRowProgress(videoId, data.progress);
+        // Update UI with full metadata (step-by-step progress)
+        if (data.metadata && (data.status === 'running' || data.status === 'queued')) {
+            updateVideoRowProgress(videoId, data.metadata);
         }
 
         // Check if job completed
@@ -1169,8 +1751,17 @@ async function pollJobStatus(jobId, videoId) {
         } else if (data.status === 'failed') {
             console.log(`❌ Job ${jobId} failed: ${data.error || 'Unknown error'}`);
             stopPolling(jobId);
-            await loadRecentVideos();
-            showToast(data.error || 'Reprocessamento falhou', 'error');
+
+            // Show detailed error in progress UI
+            showJobError(videoId, data.error || 'Erro desconhecido');
+
+            // Also show toast
+            showToast('Reprocessamento falhou. Veja detalhes abaixo.', 'error');
+
+            // Don't refresh immediately - let user see the error
+            setTimeout(() => {
+                loadRecentVideos();
+            }, 10000); // Refresh after 10 seconds
         }
         // Continue polling if status is 'queued' or 'running'
 
@@ -1229,10 +1820,157 @@ function stopAllPolling() {
     console.log('Stopped all polling');
 }
 
-// Update video row with progress message (placeholder - can be enhanced)
-function updateVideoRowProgress(videoId, progressMessage) {
-    console.log(`📝 Video ${videoId} progress: ${progressMessage}`);
-    // Could update UI here if we add progress indicators
+// Show detailed error when job fails
+function showJobError(videoId, errorMessage) {
+    console.log(`❌ Showing error for video ${videoId}:`, errorMessage);
+
+    // Find the expansion row
+    const expansionRow = document.getElementById(`transcript-${videoId}`);
+    if (!expansionRow) {
+        console.log(`No expansion row found for video ${videoId}`);
+        return;
+    }
+
+    // Make sure row is expanded
+    if (!expansionRow.classList.contains('show')) {
+        expansionRow.classList.add('show');
+    }
+
+    // Simplify long SQL errors (extract just the main message)
+    let displayError = errorMessage;
+    if (errorMessage.length > 500) {
+        // Try to extract the main error message
+        const match = errorMessage.match(/^([^(]+)/);
+        if (match) {
+            displayError = match[1].trim();
+        } else {
+            displayError = errorMessage.substring(0, 500) + '...';
+        }
+    }
+
+    setVideoStatusBadge(videoId, 'failed');
+    setVideoStatusError(videoId, truncateText(displayError));
+
+    // Inject error UI into the expansion row
+    const transcriptDiv = expansionRow.querySelector('.transcript-loading');
+    if (transcriptDiv) {
+        transcriptDiv.style.display = 'block';
+        transcriptDiv.innerHTML = `
+            <div class="progress-tracker" style="border-color: #B91C1C; background: #FEE2E2;">
+                <h4 style="margin-bottom: 1rem; color: #B91C1C;">❌ Reprocessamento falhou</h4>
+                <div style="background: white; border: 1px solid #B91C1C; border-radius: 8px; padding: 1rem; margin-top: 1rem;">
+                    <p style="font-weight: 600; margin-bottom: 0.5rem; color: #B91C1C;">Detalhes do erro:</p>
+                    <p style="font-family: monospace; font-size: 0.9rem; color: #666; white-space: pre-wrap; word-break: break-word;">${displayError}</p>
+                </div>
+                <div style="margin-top: 1rem; padding: 1rem; background: #FEF3C7; border-radius: 8px; border: 1px solid #F59E0B;">
+                    <p style="margin: 0; color: #92400E; font-size: 0.9rem;">
+                        💡 <strong>Sugestão:</strong> Tente reprocessar novamente. O erro pode ter sido corrigido.
+                        Se o problema persistir, entre em contato com o suporte.
+                    </p>
+                </div>
+                <button
+                    onclick="document.getElementById('transcript-${videoId}').classList.remove('show')"
+                    style="margin-top: 1rem; padding: 0.5rem 1rem; background: #6B7280; color: white; border: none; border-radius: 6px; cursor: pointer;"
+                >
+                    Fechar
+                </button>
+            </div>
+        `;
+    }
+}
+
+// Update video row with progress display (step-by-step visual progress)
+function updateVideoRowProgress(videoId, metadata) {
+    console.log(`📝 Video ${videoId} progress update`, metadata);
+
+    if (!metadata || !metadata.steps) {
+        console.log(`No step metadata for video ${videoId}`);
+        return;
+    }
+
+    if (metadata.step_message) {
+        setVideoStatusBadge(videoId, 'processing');
+        setVideoStatusSubtext(videoId, metadata.step_message);
+    }
+
+    // Find the expansion row where we'll show progress
+    const expansionRow = document.getElementById(`transcript-${videoId}`);
+    if (!expansionRow) {
+        console.log(`No expansion row found for video ${videoId}`);
+        return;
+    }
+
+    // Make sure row is expanded
+    if (!expansionRow.classList.contains('show')) {
+        expansionRow.classList.add('show');
+    }
+
+    // Calculate overall progress
+    const currentStep = parseInt(metadata.current_step || "0");
+    const totalSteps = parseInt(metadata.total_steps || 6);
+    const progressPercent = Math.round((currentStep / totalSteps) * 100);
+
+    // Build step HTML
+    let stepsHTML = '';
+    const stepEntries = Object.entries(metadata.steps).sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
+
+    for (const [key, step] of stepEntries) {
+        const icon = {
+            'pending': '⏸️',
+            'running': '⏳',
+            'completed': '✅',
+            'failed': '❌'
+        }[step.status] || '⏸️';
+
+        stepsHTML += `
+            <div class="progress-step ${step.status}">
+                <div class="step-icon ${step.status}">${icon}</div>
+                <div class="step-content">
+                    <div class="step-name">${step.name}</div>
+                    ${step.estimate ? `<div class="step-estimate">${step.estimate}</div>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    // Calculate estimated time remaining
+    let timeRemaining = '';
+    if (currentStep < totalSteps) {
+        const remainingSteps = stepEntries.slice(currentStep);
+        let minTime = 0;
+        let maxTime = 0;
+
+        for (const [, step] of remainingSteps) {
+            if (step.estimate) {
+                const match = step.estimate.match(/(\d+)-?(\d*)/);
+                if (match) {
+                    minTime += parseInt(match[1]);
+                    maxTime += parseInt(match[2] || match[1]);
+                }
+            }
+        }
+
+        if (minTime > 0) {
+            timeRemaining = `<p style="margin-top: 1rem; color: var(--text-muted); font-size: 0.9rem;">⏱️ Tempo estimado restante: ${minTime}${maxTime !== minTime ? `-${maxTime}` : ''}s</p>`;
+        }
+    }
+
+    // Inject progress UI into the expansion row
+    const transcriptDiv = expansionRow.querySelector('.transcript-loading');
+    if (transcriptDiv) {
+        transcriptDiv.style.display = 'block';
+        transcriptDiv.innerHTML = `
+            <div class="progress-tracker">
+                <h4 style="margin-bottom: 1rem;">🔄 Reprocessando vídeo...</h4>
+                <div class="progress-bar-container">
+                    <div class="progress-bar ${progressPercent === 100 ? 'completed' : ''}" style="width: ${progressPercent}%;"></div>
+                </div>
+                <p style="margin: 0.75rem 0; font-weight: 500;">Etapa ${currentStep} de ${totalSteps} (${progressPercent}%)</p>
+                ${stepsHTML}
+                ${timeRemaining}
+            </div>
+        `;
+    }
 }
 
 // Simple toast notification
@@ -1285,18 +2023,30 @@ async function reprocessVideo(videoId, title) {
     const expansionRow = document.getElementById(`transcript-${videoId}`);
 
     try {
-        // If video is expanded, close it
-        if (videoRow && videoRow.classList.contains('expanded')) {
-            videoRow.click(); // Close expansion
+        setVideoStatusBadge(videoId, 'processing');
+        setVideoStatusSubtext(videoId, 'Inicializando reprocessamento...');
+        setVideoStatusError(videoId, '');
+
+        // Expand the video row to show progress (if not already expanded)
+        if (videoRow && !videoRow.classList.contains('expanded')) {
+            videoRow.click(); // Expand to show transcript/progress area
         }
 
-        // Show processing state
-        if (videoRow) {
-            const titleCell = videoRow.querySelector('td:first-child');
-            const originalHTML = titleCell.innerHTML;
-            titleCell.innerHTML = '<span class="progress-indicator"></span> Reprocessando...';
-            videoRow.style.pointerEvents = 'none';
-            videoRow.style.opacity = '0.6';
+        // Show initial processing state in expansion area
+        if (expansionRow) {
+            const transcriptDiv = expansionRow.querySelector('.transcript-loading');
+            if (transcriptDiv) {
+                transcriptDiv.style.display = 'block';
+                transcriptDiv.innerHTML = `
+                    <div class="progress-tracker">
+                        <h4 style="margin-bottom: 1rem;">🔄 Iniciando reprocessamento...</h4>
+                        <div class="progress-bar-container">
+                            <div class="progress-bar" style="width: 0%;"></div>
+                        </div>
+                        <p style="margin: 0.75rem 0; font-weight: 500;">Aguardando início do processamento...</p>
+                    </div>
+                `;
+            }
         }
 
         const response = await fetch(`/api/videos/${videoId}/reprocess`, {
@@ -1311,7 +2061,7 @@ async function reprocessVideo(videoId, title) {
         const data = await response.json();
 
         if (response.ok && data.success) {
-            alert(`Reprocessamento iniciado! O status será atualizado automaticamente.`);
+            showToast('Reprocessamento iniciado! Acompanhe o progresso abaixo.', 'info');
 
             // Start polling with job_id
             if (data.job_id) {
@@ -1550,13 +2300,27 @@ async function fetchAndDisplayTranscript(videoId, expansionRow) {
                                 <div class="biblical-references">
                                     ${(report.biblical_content?.key_passages || []).slice(0, 10).map(p => `
                                         <span class="bible-ref bible-ref-${p.type}"
-                                              title="${p.book} ${p.chapter}:${p.verse_start}${p.verse_end ? '-' + p.verse_end : ''} (${p.type === 'citation' ? 'citação' : 'menção'})">
+                                              title="${p.book} ${p.chapter}:${p.verse_start}${p.verse_end ? '-' + p.verse_end : ''} (${p.type === 'citation' ? 'Citação' : p.type === 'reading' ? 'Leitura' : 'Menção'})">
                                             ${p.book} ${p.chapter}${p.verse_start ? ':' + p.verse_start : ''}${p.verse_end && p.verse_end !== p.verse_start ? '-' + p.verse_end : ''}
                                         </span>
                                     `).join('')}
                                 </div>
                             </div>
                         ` : ''}
+                    </div>
+                `;
+            }
+
+            // Suggested Title (AI-generated descriptive title)
+            if (report.suggested_title) {
+                contentHTML += `
+                    <div class="sermon-section suggested-title-section">
+                        <h3>
+                            <span style="display: inline-flex; align-items: center; gap: 0.5rem;">
+                                🤖 Titulo Sugerido por IA
+                            </span>
+                        </h3>
+                        <p>${report.suggested_title}</p>
                     </div>
                 `;
             }
@@ -1684,12 +2448,15 @@ function toggleChatDrawer() {
     const isVisible = panel.classList.contains('visible');
 
     if (isVisible) {
-        // Hide drawer
+        // Hide drawer - update right position based on current width
+        const currentWidth = panel.offsetWidth;
+        panel.style.right = -currentWidth + 'px';
         panel.classList.remove('visible');
         backdrop.classList.remove('visible');
         fab.style.display = 'flex';
     } else {
         // Show drawer
+        panel.style.right = '0';
         panel.classList.add('visible');
         backdrop.classList.add('visible');
         fab.style.display = 'none';
@@ -1708,6 +2475,150 @@ function refreshChat() {
         </div>
     `;
 }
+
+// Chatbot resize functionality
+(function initChatbotResize() {
+    const panel = document.getElementById('chatbotPanel');
+    const handle = document.getElementById('chatbotResizeHandle');
+
+    if (!panel || !handle) return;
+
+    let isResizing = false;
+    let startX = 0;
+    let startWidth = 0;
+
+    // Minimum and maximum widths (matching CSS)
+    const MIN_WIDTH = 300;
+    const MAX_WIDTH = 800;
+
+    // Load saved width from localStorage
+    const savedWidth = localStorage.getItem('chatbotPanelWidth');
+    if (savedWidth) {
+        const width = parseInt(savedWidth, 10);
+        if (width >= MIN_WIDTH && width <= MAX_WIDTH) {
+            panel.style.width = width + 'px';
+            // Update the hidden position to match new width
+            updateHiddenPosition(width);
+        }
+    }
+
+    function updateHiddenPosition(width) {
+        // Only update if panel is not visible
+        if (!panel.classList.contains('visible')) {
+            panel.style.right = -width + 'px';
+        }
+    }
+
+    // Mouse down on resize handle
+    handle.addEventListener('mousedown', function(e) {
+        // Only allow resize on desktop (screen width > 768px)
+        if (window.innerWidth <= 768) return;
+
+        isResizing = true;
+        startX = e.clientX;
+        startWidth = panel.offsetWidth;
+
+        // Add resizing class to disable transitions
+        panel.classList.add('resizing');
+        handle.classList.add('active');
+
+        // Prevent text selection during resize
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'ew-resize';
+
+        e.preventDefault();
+    });
+
+    // Mouse move for resizing
+    document.addEventListener('mousemove', function(e) {
+        if (!isResizing) return;
+
+        // Calculate new width (dragging left increases width)
+        const deltaX = startX - e.clientX;
+        let newWidth = startWidth + deltaX;
+
+        // Clamp to min/max
+        newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+
+        // Apply new width
+        panel.style.width = newWidth + 'px';
+    });
+
+    // Mouse up to finish resizing
+    document.addEventListener('mouseup', function(e) {
+        if (!isResizing) return;
+
+        isResizing = false;
+
+        // Remove resizing class
+        panel.classList.remove('resizing');
+        handle.classList.remove('active');
+
+        // Restore body styles
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+
+        // Save width to localStorage
+        const currentWidth = panel.offsetWidth;
+        localStorage.setItem('chatbotPanelWidth', currentWidth);
+
+        // Update hidden position for next time drawer is closed
+        if (!panel.classList.contains('visible')) {
+            updateHiddenPosition(currentWidth);
+        }
+    });
+
+    // Handle window resize to reset if screen becomes mobile
+    window.addEventListener('resize', function() {
+        if (window.innerWidth <= 768) {
+            // Reset to default mobile behavior
+            panel.style.width = '';
+        } else {
+            // Restore saved width on desktop
+            const savedWidth = localStorage.getItem('chatbotPanelWidth');
+            if (savedWidth) {
+                const width = parseInt(savedWidth, 10);
+                if (width >= MIN_WIDTH && width <= MAX_WIDTH) {
+                    panel.style.width = width + 'px';
+                }
+            }
+        }
+    });
+
+    // Also handle touch events for better tablet support
+    handle.addEventListener('touchstart', function(e) {
+        if (window.innerWidth <= 768) return;
+
+        isResizing = true;
+        startX = e.touches[0].clientX;
+        startWidth = panel.offsetWidth;
+
+        panel.classList.add('resizing');
+        handle.classList.add('active');
+
+        e.preventDefault();
+    }, { passive: false });
+
+    document.addEventListener('touchmove', function(e) {
+        if (!isResizing) return;
+
+        const deltaX = startX - e.touches[0].clientX;
+        let newWidth = startWidth + deltaX;
+        newWidth = Math.max(MIN_WIDTH, Math.min(MAX_WIDTH, newWidth));
+        panel.style.width = newWidth + 'px';
+    }, { passive: true });
+
+    document.addEventListener('touchend', function(e) {
+        if (!isResizing) return;
+
+        isResizing = false;
+        panel.classList.remove('resizing');
+        handle.classList.remove('active');
+
+        const currentWidth = panel.offsetWidth;
+        localStorage.setItem('chatbotPanelWidth', currentWidth);
+    });
+})();
 
 // Send chat message
 async function sendChatMessage() {
