@@ -2,22 +2,26 @@
 Channel Chatbot Service
 Conversational AI for Q&A about channel sermons
 """
+import json
 import logging
 import os
 import re
 import time
+import unicodedata
 import uuid
 from datetime import datetime, timezone
+from collections import OrderedDict
 from functools import lru_cache
 from typing import Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
-from sqlalchemy import text
+from sqlalchemy import text, func
 
 from app.ai.cache_manager import CacheManager
 from app.ai.embedding_service import EmbeddingService
+from app.ai.hybrid_search import HybridSearchService
 from app.ai.llm_client import get_llm_client
-from app.ai.query_classifier import QueryType, get_query_classifier
+from app.ai.query_classifier import QueryType, QueryIntent, get_query_classifier
 from app.ai.query_parser import (
     DateExtractionResult,
     DateRangeResult,
@@ -30,8 +34,11 @@ from app.ai.biblical_reference_parser import get_biblical_reference_parser
 from app.ai.biblical_passage_service import get_biblical_passage_service
 from app.ai.theme_parser import get_theme_parser
 from app.ai.theme_service import get_theme_service
+from app.ai.search_router import get_router
+from app.ai.multi_layer_cache import get_cache
 from app.common.database import get_db
-from app.common.models import GeminiChatHistory, Video, ChatbotQueryMetrics
+from app.common.models import GeminiChatHistory, Video, ChatbotQueryMetrics, BiblicalPassage
+from app.common.api_keys import get_church_api_key, use_api_key
 
 MONTH_NAMES_PT = [
     "",
@@ -55,7 +62,39 @@ logger = logging.getLogger(__name__)
 CHATBOT_DEDUP_ENABLED = os.getenv("CHATBOT_DEDUP_ENABLED", "true").lower() == "true"
 CHATBOT_DEDUP_THRESHOLD = float(os.getenv("CHATBOT_DEDUP_THRESHOLD", "0.95"))
 CHATBOT_MERGE_ADJACENT_SEC = int(os.getenv("CHATBOT_MERGE_ADJACENT_SEC", "30"))
-CHATBOT_MAX_PER_VIDEO = int(os.getenv("CHATBOT_MAX_PER_VIDEO", "2"))
+DEFAULT_MAX_PER_VIDEO = int(os.getenv("CHATBOT_MAX_PER_VIDEO", "2"))
+
+
+def _get_max_per_video(query_type: str, query_intent: str = 'content') -> int:
+    """Get maximum segments per video based on query type and intent"""
+
+    # List queries: maximize coverage (1 per video)
+    if query_intent == 'list_all':
+        return 1
+
+    # Aggregation/comparison: need full coverage
+    if query_intent in ['aggregation', 'comparison', 'statistics']:
+        return 1
+
+    # Highlights/questions: dedicated handlers
+    if query_intent in ['highlights', 'questions']:
+        return 1
+
+    # Date range queries: maximize coverage
+    date_range_queries = {
+        'single_month', 'month_range', 'custom_range',
+        'last_month', 'last_week', 'last_n_days',
+        'quarter', 'year', 'multiple_specific_days'
+    }
+    if query_type in date_range_queries:
+        return 1
+
+    # Content queries: need depth (show more context)
+    if query_intent in ['content', 'factual']:
+        return 3  # Increased from 2
+
+    # Default
+    return DEFAULT_MAX_PER_VIDEO
 
 
 class ChatbotService:
@@ -72,7 +111,6 @@ class ChatbotService:
 
     def __init__(self):
         """Initialize chatbot service"""
-        self.llm = get_llm_client()
         self.embedding_service = EmbeddingService()
         self.cache_manager = CacheManager()
         self.query_classifier = get_query_classifier()
@@ -81,10 +119,18 @@ class ChatbotService:
         self.passage_service = get_biblical_passage_service()
         self.theme_parser = get_theme_parser()
         self.theme_service = get_theme_service()
+
+        # Phase 2: Query Router and Multi-Layer Cache
+        self.router = get_router()
+        self.multi_cache = get_cache()
+
+        # Initialize hybrid search (Phase 1: Hybrid Search with BM25)
+        self.hybrid_search = None  # Will be initialized per-request with DB session
+
         logger.info(
             f"Chatbot service initialized with unified LLM client, caching, query classification, "
-            f"speaker detection, biblical reference parsing, and theme extraction "
-            f"(dedup_enabled={CHATBOT_DEDUP_ENABLED})"
+            f"speaker detection, biblical reference parsing, theme extraction, hybrid search, "
+            f"and Phase 2 query routing (dedup_enabled={CHATBOT_DEDUP_ENABLED})"
         )
 
     @staticmethod
@@ -200,9 +246,12 @@ class ChatbotService:
     def _deduplicate_segments(
         self,
         segments: List[Dict],
+        query: str = "",
+        query_type: str = 'general',
+        query_intent: str = 'content',
         similarity_threshold: float = None,
         merge_adjacent: bool = True
-    ) -> List[Dict]:
+    ) -> Tuple[List[Dict], Dict[str, int]]:
         """
         Remove duplicate and highly similar segments
 
@@ -216,26 +265,40 @@ class ChatbotService:
 
         Args:
             segments: List of segment dictionaries from search
+            query: User query (for logging)
+            query_type: Query type from date range parsing
             similarity_threshold: Similarity threshold (default from config)
             merge_adjacent: Whether to merge adjacent segments
 
         Returns:
-            Deduplicated list of segments
+            Tuple of (deduplicated list of segments, deduplication stats)
         """
+        stats = {
+            'merged_adjacent': 0,
+            'removed_similar': 0,
+            'limited_per_video': 0
+        }
+
         if not CHATBOT_DEDUP_ENABLED or not segments:
-            return segments
+            return segments, stats
 
         if similarity_threshold is None:
             similarity_threshold = CHATBOT_DEDUP_THRESHOLD
 
         original_count = len(segments)
-        logger.debug(f"🔄 Starting deduplication: {original_count} segments")
+        logger.debug(f"🔄 Starting deduplication: {original_count} segments (query_type={query_type})")
+
+        # Get dynamic max_per_video based on query type and intent
+        # query_intent should be passed from the caller
+        query_intent_str = query_intent if isinstance(query_intent, str) else 'content'
+        max_per_video = _get_max_per_video(query_type, query_intent_str)
+        logger.info(f"📊 Using max_per_video={max_per_video} for query_type={query_type}, query_intent={query_intent_str}")
 
         # First, fetch embeddings for all segments from database
         with get_db() as db:
             # Group segments by video
             segments_by_video = {}
-            for seg in segments:
+            for seg in (segments or []):
                 video_id = seg['video_id']
                 if video_id not in segments_by_video:
                     segments_by_video[video_id] = []
@@ -256,19 +319,54 @@ class ChatbotService:
                     'segment_starts': segment_starts
                 }).fetchall()
 
-                # Map embeddings to segments
-                embedding_map = {row[0]: row[1] for row in result}
+                # Map embeddings to segments with proper conversion
+                embedding_map = {}
+                for row in result:
+                    segment_start = row[0]
+                    raw_embedding = row[1]
 
-                for seg in video_segments:
+                    # Convert pgvector to numpy array
+                    try:
+                        if raw_embedding is None:
+                            continue
+
+                        # Handle different pgvector return types
+                        if isinstance(raw_embedding, str):
+                            # Parse string representation like "[0.1, 0.2, ...]"
+                            if raw_embedding.startswith('['):
+                                embedding_list = json.loads(raw_embedding)
+                            else:
+                                # Handle comma-separated format
+                                embedding_list = [float(x.strip()) for x in raw_embedding.strip('[]').split(',')]
+                            embedding_array = np.array(embedding_list, dtype=np.float32)
+                        elif hasattr(raw_embedding, '__iter__'):
+                            # Already iterable (list, tuple, or numpy array)
+                            embedding_array = np.array(list(raw_embedding), dtype=np.float32)
+                        else:
+                            logger.warning(f"Unexpected embedding type: {type(raw_embedding)}")
+                            continue
+
+                        # Verify dimensions
+                        if len(embedding_array) != 768:
+                            logger.warning(
+                                f"Embedding dimension mismatch for video {video_id}, segment {segment_start}: "
+                                f"expected 768, got {len(embedding_array)}"
+                            )
+                            continue
+
+                        embedding_map[segment_start] = embedding_array
+
+                    except Exception as e:
+                        logger.error(
+                            f"Failed to convert embedding for video {video_id}, segment {segment_start}: {e}"
+                        )
+                        continue
+
+                for seg in (video_segments or []):
                     seg['_embedding'] = embedding_map.get(seg['segment_start'])
 
         # Process each video's segments
         deduplicated = []
-        stats = {
-            'merged_adjacent': 0,
-            'removed_similar': 0,
-            'limited_per_video': 0
-        }
 
         for video_id, video_segments in segments_by_video.items():
             # Sort by timestamp for adjacent merging
@@ -290,14 +388,14 @@ class ChatbotService:
             )
 
             # Step 3: Limit per video (keep top N by relevance)
-            if len(video_segments) > CHATBOT_MAX_PER_VIDEO:
+            if len(video_segments) > max_per_video:
                 # Sort by relevance score
                 video_segments.sort(key=lambda x: x['relevance'], reverse=True)
-                removed_count = len(video_segments) - CHATBOT_MAX_PER_VIDEO
-                video_segments = video_segments[:CHATBOT_MAX_PER_VIDEO]
+                removed_count = len(video_segments) - max_per_video
+                video_segments = video_segments[:max_per_video]
                 stats['limited_per_video'] += removed_count
                 logger.debug(
-                    f"📊 Limited video {video_id} to {CHATBOT_MAX_PER_VIDEO} segments "
+                    f"📊 Limited video {video_id} to {max_per_video} segments "
                     f"(removed {removed_count} lower-scoring segments)"
                 )
 
@@ -321,7 +419,7 @@ class ChatbotService:
             f"Limited: {stats['limited_per_video']}"
         )
 
-        return deduplicated
+        return deduplicated, stats
 
     def _merge_adjacent_segments(
         self,
@@ -458,11 +556,242 @@ class ChatbotService:
 
         return result
 
+    def _format_video_list_response(self, videos: List[Dict], user_message: str) -> str:
+        """Format a list of videos into a response"""
+
+        if not videos:
+            return "Não encontrei sermões que correspondam aos critérios especificados."
+
+        # Build response
+        response_lines = [f"Encontrei {len(videos)} sermões:"]
+
+        for video in videos:
+            # Format date as DD/MM/YYYY
+            date_str = "Data desconhecida"
+            if video.get('date'):
+                try:
+                    date_obj = datetime.fromisoformat(video['date'])
+                    date_str = date_obj.strftime('%d/%m/%Y')
+                except Exception:
+                    date_str = video['date']
+
+            speaker = video.get('speaker')
+            line = f"- {date_str} — {video['title']}"
+            if speaker:
+                line += f" ({speaker})"
+            line += f"  [▶️](https://youtube.com/watch?v={video['youtube_id']})"
+
+            if video.get('summary'):
+                summary = self._clean_summary(video['summary'], max_len=140)
+                if summary:
+                    line += f"\n  Resumo: {summary}"
+
+            response_lines.append(line)
+
+        return "\n".join(response_lines)
+
+    def _handle_highlight_query(
+        self,
+        channel_id: int,
+        user_message: str,
+        date_range: Optional[DateRangeResult] = None
+    ) -> str:
+        """Handle queries for sermon highlights"""
+
+        with get_db() as db:
+            # Build query
+            query = """
+                SELECT
+                    h.title,
+                    h.summary,
+                    h.start_timestamp,
+                    h.end_timestamp,
+                    v.title as video_title,
+                    v.youtube_id,
+                    v.sermon_actual_date,
+                    v.published_at
+                FROM sermon_highlights h
+                JOIN videos v ON h.video_id = v.id
+                WHERE v.channel_id = :channel_id
+                  AND v.status = 'completed'
+            """
+
+            params = {'channel_id': channel_id}
+
+            # Add date filter if present
+            if date_range and date_range.start_date and date_range.end_date:
+                query += """
+                    AND COALESCE(v.sermon_actual_date, DATE(v.published_at))
+                        BETWEEN :start_date AND :end_date
+                """
+                params['start_date'] = date_range.start_date.date() if isinstance(date_range.start_date, datetime) else date_range.start_date
+                params['end_date'] = date_range.end_date.date() if isinstance(date_range.end_date, datetime) else date_range.end_date
+
+            query += """
+                ORDER BY v.sermon_actual_date DESC, h.start_timestamp
+                LIMIT 20
+            """
+
+            results = db.execute(text(query), params).fetchall()
+
+            if not results:
+                return "Não encontrei destaques para este período."
+
+            # Format response
+            response = f"**Destaques encontrados ({len(results)}):**\n\n"
+
+            for r in results:
+                sermon_date = r.sermon_actual_date if r.sermon_actual_date else (r.published_at.date() if r.published_at else None)
+                date_str = sermon_date.strftime('%d/%m/%Y') if sermon_date else 'Data desconhecida'
+                timestamp_link = f"https://youtube.com/watch?v={r.youtube_id}&t={int(r.start_timestamp)}s"
+                response += f"**{r.video_title}** ({date_str})\n"
+                response += f"- {r.title}: {r.summary}\n"
+                response += f"  [▶️ Ver momento]({timestamp_link})\n\n"
+
+            return response
+
+    def _handle_questions_query(
+        self,
+        channel_id: int,
+        user_message: str,
+        date_range: Optional[DateRangeResult] = None
+    ) -> str:
+        """Handle queries for discussion questions"""
+
+        with get_db() as db:
+            query = """
+                SELECT
+                    dq.question,
+                    dq.linked_passage_osis,
+                    v.title as video_title,
+                    v.youtube_id,
+                    v.sermon_actual_date,
+                    v.published_at
+                FROM discussion_questions dq
+                JOIN videos v ON dq.video_id = v.id
+                WHERE v.channel_id = :channel_id
+                  AND v.status = 'completed'
+            """
+
+            params = {'channel_id': channel_id}
+
+            if date_range and date_range.start_date and date_range.end_date:
+                query += """
+                    AND COALESCE(v.sermon_actual_date, DATE(v.published_at))
+                        BETWEEN :start_date AND :end_date
+                """
+                params['start_date'] = date_range.start_date.date() if isinstance(date_range.start_date, datetime) else date_range.start_date
+                params['end_date'] = date_range.end_date.date() if isinstance(date_range.end_date, datetime) else date_range.end_date
+
+            query += """
+                ORDER BY v.sermon_actual_date DESC, dq.question_order
+                LIMIT 30
+            """
+
+            results = db.execute(text(query), params).fetchall()
+
+            if not results:
+                return "Não encontrei perguntas de discussão para este período."
+
+            # Group by video
+            questions_by_video = {}
+            for r in results:
+                sermon_date = r.sermon_actual_date if r.sermon_actual_date else (r.published_at.date() if r.published_at else None)
+                date_str = sermon_date.strftime('%d/%m/%Y') if sermon_date else 'Data desconhecida'
+                video_key = (r.video_title, date_str, r.youtube_id)
+                if video_key not in questions_by_video:
+                    questions_by_video[video_key] = []
+                questions_by_video[video_key].append(r.question)
+
+            # Format response
+            response = f"**Perguntas para Discussão:**\n\n"
+
+            for (title, date, youtube_id), questions in questions_by_video.items():
+                response += f"**{title}** ({date})\n"
+                for q in questions:
+                    response += f"- {q}\n"
+                response += f"  [▶️ Assistir sermão](https://youtube.com/watch?v={youtube_id})\n\n"
+
+            return response
+
+    def _search_with_hybrid(
+        self,
+        channel_id: int,
+        query: str,
+        top_k: int = 10,
+        date_filter=None,
+        start_date=None,
+        end_date=None,
+        speaker_filter: Optional[str] = None,
+        video_ids_filter: Optional[List[int]] = None,
+        use_reranking: bool = True
+    ) -> List[Dict]:
+        """
+        Perform hybrid search combining BM25 and semantic search.
+
+        Args:
+            channel_id: Channel ID
+            query: Search query
+            top_k: Number of results to return
+            date_filter: Single date filter
+            start_date: Start date for range
+            end_date: End date for range
+            speaker_filter: Speaker pattern
+            video_ids_filter: Video IDs to filter
+
+        Returns:
+            List of search results
+        """
+        # Initialize hybrid search with database session
+        with get_db() as db:
+            hybrid_search = HybridSearchService(db, self.embedding_service)
+
+            # Build filter dictionary for hybrid search
+            filters = {}
+            if date_filter:
+                filters['date_filter'] = date_filter
+            if start_date:
+                filters['start_date'] = start_date
+            if end_date:
+                filters['end_date'] = end_date
+            if speaker_filter:
+                filters['speaker_filter'] = speaker_filter
+            if video_ids_filter:
+                filters['video_ids_filter'] = video_ids_filter
+
+            # Perform hybrid search
+            try:
+                results = hybrid_search.search(
+                    query=query,
+                    channel_id=channel_id,
+                    limit=top_k,
+                    filters=filters if filters else None,
+                    use_reranking=use_reranking
+                )
+                logger.info(f"Hybrid search returned {len(results)} results")
+                return results
+            except Exception as e:
+                logger.error(f"Hybrid search failed, falling back to semantic: {e}", exc_info=True)
+                # Fallback to pure semantic search
+                return self.embedding_service.search_similar_segments(
+                    channel_id=channel_id,
+                    query=query,
+                    top_k=top_k,
+                    date_filter=date_filter,
+                    start_date=start_date,
+                    end_date=end_date,
+                    speaker_filter=speaker_filter,
+                    video_ids_filter=video_ids_filter
+                )
+
     def chat(
         self,
         channel_id: int,
         user_message: str,
-        session_id: str = None
+        session_id: str = None,
+        use_reranking: bool = True,
+        knowledge_mode: str = "database_only",
+        api_key: Optional[str] = None
     ) -> Dict:
         """
         Handle a chat message with caching (Phase 2: with metrics tracking)
@@ -471,6 +800,9 @@ class ChatbotService:
             channel_id: Channel ID
             user_message: User's question
             session_id: Optional session ID for conversation history
+            use_reranking: Whether to apply cross-encoder reranking (Phase 1.2)
+            knowledge_mode: 'database_only' or 'global'
+            api_key: Optional explicit API key for this church
 
         Returns:
             Dictionary with response and cited videos
@@ -484,12 +816,111 @@ class ChatbotService:
 
         logger.info(f"Chat request for channel {channel_id}: {user_message[:100]}")
 
+        # Validate mode and resolve API key
+        knowledge_mode = knowledge_mode or "database_only"
+        if knowledge_mode not in ("database_only", "global"):
+            knowledge_mode = "database_only"
+
+        effective_api_key = api_key or get_church_api_key(channel_id)
+        if not effective_api_key:
+            error_message = "Nenhuma chave de API está configurada para esta igreja. Peça a um administrador para adicionar a chave na área de configurações."
+            self._save_history_entry(
+                channel_id=channel_id,
+                session_id=session_id,
+                user_message=user_message,
+                assistant_response=error_message,
+                cited_videos=[]
+            )
+            return {
+                "response": error_message,
+                "error": "missing_api_key",
+                "cited_videos": [],
+                "session_id": session_id,
+                "relevance_scores": [],
+                "cached": False
+            }
+
         # Classify query early to determine optimal response configuration
-        query_type, response_config = self.query_classifier.classify_and_configure(user_message)
-        logger.info(f"🎯 Query classified as {query_type.value}, using max_tokens={response_config.max_tokens}, temperature={response_config.temperature}, context_size={response_config.context_size}")
+        query_type, response_config, query_intent = self.query_classifier.classify_and_configure(user_message)
+        logger.info(f"🎯 Query classified as {query_type.value}, intent={query_intent.value}, using max_tokens={response_config.max_tokens}, temperature={response_config.temperature}, context_size={response_config.context_size}")
 
         # Use dynamic context size from response_config
         top_k = response_config.context_size
+
+        # Phase 2: Extract date range early for routing
+        date_range = extract_date_range(user_message)
+
+        # Heuristic: force list intent for listing questions (e.g., "liste os temas", "lista de pregações")
+        query_lower = user_message.lower()
+        listing_cues = ["liste", "listar", "lista", "quais foram", "temas das prega", "temas das pregações", "temas das mensagens"]
+        if any(cue in query_lower for cue in listing_cues):
+            query_intent = QueryIntent.LIST_ALL
+
+        # Phase 2: Route query to optimal search strategy (skip local retrieval for global mode)
+        relevant_segments = []
+        search_strategy = None
+        search_params = {}
+
+        if knowledge_mode != "global":
+            search_strategy, search_params = self.router.route_query(
+                query=user_message,
+                query_type=query_type.value,
+                query_intent=query_intent.value,
+                channel_id=channel_id,
+                filters={
+                    'start_date': date_range.start_date.isoformat() if date_range and date_range.start_date else None,
+                    'end_date': date_range.end_date.isoformat() if date_range and date_range.end_date else None
+                }
+            )
+
+            logger.info(f"🚀 Search strategy: {search_strategy}")
+
+            # Fast path for direct database queries (LIST_ALL intent)
+            if search_strategy == 'direct_database' and query_intent == QueryIntent.LIST_ALL:
+                videos = self.router.execute_direct_list_query(
+                    channel_id=channel_id,
+                    start_date=search_params['filters'].get('start_date'),
+                    end_date=search_params['filters'].get('end_date')
+                )
+
+                # Format response
+                response = self._format_video_list_response(videos, user_message)
+
+                # Save to history
+                self._save_history_entry(
+                    channel_id=channel_id,
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_response=response,
+                    cited_videos=[]
+                )
+
+                # Log metrics
+                response_time_ms = int((time.time() - start_time) * 1000)
+                self._log_query_metrics(
+                    channel_id=channel_id,
+                    session_id=session_id,
+                    query=user_message,
+                    segments_returned=len(videos),
+                    response_time_ms=response_time_ms,
+                    cache_hit=False,
+                    date_filters_used=date_range is not None,
+                    speaker_filter_used=False,
+                    biblical_filter_used=False,
+                    theme_filter_used=False,
+                    query_type=query_type,
+                    backend_used='direct_database',
+                    metadata={'strategy': search_strategy, 'knowledge_mode': knowledge_mode}
+                )
+
+                return {
+                    'response': response,
+                    'cited_videos': [],
+                    'session_id': session_id,
+                    'relevance_scores': [],
+                    'cached': False,
+                    'backend': 'direct_database'
+                }
 
         # Phase 1.1: Extract speaker from query
         speaker_result = self.speaker_parser.extract_speaker(user_message)
@@ -521,7 +952,7 @@ class ChatbotService:
         theme_result = self.theme_parser.extract_themes(user_message)
         theme_video_ids = None
 
-        if theme_result.found:
+        if theme_result.found and knowledge_mode != "global":
             # Get videos that match these themes
             theme_video_ids = self.theme_service.find_sermons_by_themes(
                 channel_id=channel_id,
@@ -545,9 +976,79 @@ class ChatbotService:
                 # Use theme filter alone
                 video_ids_filter = theme_video_ids
 
-        # Phase 2: Use enhanced date range extraction
-        date_range = extract_date_range(user_message)
+        # Pre-flight quota check: Verify we haven't exhausted daily limit
+        try:
+            from app.ai.gemini_usage_tracker import get_daily_quota_snapshot
+            quota_stats = get_daily_quota_snapshot()
+            # Check if we're at or near daily limit (leave buffer of 5 requests)
+            if quota_stats['daily_requests_used'] >= (quota_stats['daily_requests_limit'] - 5):
+                logger.warning(f"⚠️ Daily quota nearly exhausted: {quota_stats['daily_requests_used']}/{quota_stats['daily_requests_limit']}")
+                error_message = (
+                    "Desculpe, o limite diário de uso da API do Google Gemini foi atingido (250 requisições). "
+                    "O chatbot voltará a funcionar amanhã após a meia-noite (horário do Pacífico). "
+                    f"Requisições hoje: {quota_stats['daily_requests_used']}/{quota_stats['daily_requests_limit']}"
+                )
 
+                self._save_history_entry(
+                    channel_id=channel_id,
+                    session_id=session_id,
+                    user_message=user_message,
+                    assistant_response=error_message,
+                    cited_videos=[]
+                )
+
+                return {
+                    'response': error_message,
+                    'error': 'daily_quota_exhausted',
+                    'cited_videos': [],
+                    'session_id': session_id,
+                    'relevance_scores': [],
+                    'cached': False
+                }
+        except Exception as e:
+            # If quota check fails, log but continue (don't block chatbot)
+            logger.warning(f"⚠️ Could not check quota: {e}")
+
+        # Route to specialized handlers based on query intent
+        if query_intent == QueryIntent.HIGHLIGHTS:
+            response = self._handle_highlight_query(channel_id, user_message, date_range)
+            # Save to history
+            self._save_history_entry(
+                channel_id=channel_id,
+                session_id=session_id,
+                user_message=user_message,
+                assistant_response=response,
+                cited_videos=[]
+            )
+            return {
+                'response': response,
+                'cited_videos': [],
+                'session_id': session_id,
+                'relevance_scores': [],
+                'cached': False,
+                'backend': 'structured_lookup'
+            }
+
+        if query_intent == QueryIntent.QUESTIONS:
+            response = self._handle_questions_query(channel_id, user_message, date_range)
+            # Save to history
+            self._save_history_entry(
+                channel_id=channel_id,
+                session_id=session_id,
+                user_message=user_message,
+                assistant_response=response,
+                cited_videos=[]
+            )
+            return {
+                'response': response,
+                'cited_videos': [],
+                'session_id': session_id,
+                'relevance_scores': [],
+                'cached': False,
+                'backend': 'structured_lookup'
+            }
+
+        # Continue with existing flow for other query types
         if date_range:
             if date_range.is_range and date_range.start_date and date_range.end_date:
                 logger.info(
@@ -564,65 +1065,123 @@ class ChatbotService:
                     date_range.start_date.date(),
                     date_range.query_type
                 )
-        else:
-            logger.debug("No date filter found in query - searching all videos")
 
-        # Use Phase 2 search with date range support + Phase 1.1 speaker filter + Phase 1.2 biblical filter
-        try:
-            if date_range:
-                relevant_segments = self._search_with_date_range(
-                    channel_id=channel_id,
-                    query=user_message,
-                    date_range=date_range,
-                    speaker_filter=speaker_filter,
-                    video_ids_filter=video_ids_filter
-                )
-                if not relevant_segments and date_range.start_date:
-                    logger.info("No segments from vector search; using chronological fallback for date %s", date_range.start_date.date())
-                    relevant_segments = self._fallback_segments_for_date(
-                        channel_id=channel_id,
-                        date_range=date_range,
-                        query=user_message,
-                        speaker_filter=speaker_filter,
-                        video_ids_filter=video_ids_filter,
-                        top_k=top_k
-                    )
-            else:
-                # No date filter - search all videos (with optional speaker and biblical filters)
-                relevant_segments = self.embedding_service.search_similar_segments(
-                    channel_id=channel_id,
-                    query=user_message,
-                    top_k=10,
-                    speaker_filter=speaker_filter,
-                    video_ids_filter=video_ids_filter
-                )
-        except ValueError as e:
-            # Handle case when embeddings are unavailable (Gemini quota exhausted)
-            if "embeddings unavailable" in str(e).lower() or "gemini" in str(e).lower():
-                logger.error(f"❌ Chatbot unavailable due to embedding service failure: {e}")
-                error_message = (
-                    "Desculpe, o chatbot está temporariamente indisponível devido ao limite de uso da API do Google Gemini. "
-                    "Por favor, tente novamente mais tarde (geralmente após 1 minuto)."
-                )
+            # Increase search depth for date range queries to ensure full coverage
+            date_range_queries = {
+                'single_month', 'month_range', 'custom_range',
+                'last_month', 'last_week', 'last_n_days',
+                'quarter', 'year', 'multiple_specific_days'
+            }
+        if date_range and date_range.query_type in date_range_queries:
+            top_k = max(top_k, 50)  # Ensure we search at least 50 segments for date ranges
+            logger.info(f"📈 Increased top_k to {top_k} for date range query (type={date_range.query_type})")
+
+        # Short-circuit responses for last/penultimate when local mode
+        if knowledge_mode != "global" and date_range and date_range.query_type in ['last_sermon', 'second_last_sermon']:
+            offset = 0 if date_range.query_type == 'last_sermon' else 1
+            sermon = self._get_last_sermon(channel_id, offset=offset)
+            if sermon:
+                sermon_date = sermon.sermon_actual_date or sermon.published_at
+                date_str = sermon_date.strftime('%d/%m/%Y') if sermon_date else "Data desconhecida"
+                summary = self._clean_summary(getattr(sermon, 'ai_summary', None), max_len=180)
+                base = f"{'Último' if offset == 0 else 'Penúltimo'} sermão ({date_str}): {sermon.title}."
+                if summary:
+                    response = f"{base} Tema/resumo: {summary}"
+                else:
+                    response = f"{base} Tema não cadastrado ainda."
 
                 self._save_history_entry(
                     channel_id=channel_id,
                     session_id=session_id,
                     user_message=user_message,
-                    assistant_response=error_message,
+                    assistant_response=response,
                     cited_videos=[]
                 )
 
                 return {
-                    'response': error_message,
+                    'response': response,
                     'cited_videos': [],
                     'session_id': session_id,
                     'relevance_scores': [],
                     'cached': False,
-                    'error': 'quota_exceeded'
+                    'backend': 'direct_database'
                 }
-            else:
-                raise
+        else:
+            logger.debug("No date filter found in query - searching all videos")
+
+        # Structured response for “list bible texts” queries
+        if self._is_bible_text_list_query(user_message):
+            return self._handle_bible_text_list_query(
+                channel_id=channel_id,
+                user_message=user_message,
+                session_id=session_id,
+                date_range=date_range,
+                knowledge_mode=knowledge_mode
+            )
+
+        # Use Phase 2 search with date range support + Phase 1.1 speaker filter + Phase 1.2 biblical filter
+        if knowledge_mode == "global":
+            relevant_segments = []
+            logger.info("🌐 Global mode active - skipping local sermon retrieval")
+        else:
+            try:
+                if date_range:
+                    relevant_segments = self._search_with_date_range(
+                        channel_id=channel_id,
+                        query=user_message,
+                        date_range=date_range,
+                        speaker_filter=speaker_filter,
+                        video_ids_filter=video_ids_filter
+                    )
+                    if not relevant_segments and date_range.start_date:
+                        logger.info("No segments from vector search; using chronological fallback for date %s", date_range.start_date.date())
+                        relevant_segments = self._fallback_segments_for_date(
+                            channel_id=channel_id,
+                            date_range=date_range,
+                            query=user_message,
+                            speaker_filter=speaker_filter,
+                            video_ids_filter=video_ids_filter,
+                            top_k=top_k
+                        )
+                else:
+                    # No date filter - search all videos (with optional speaker and biblical filters)
+                    # Use hybrid search (Phase 1: BM25 + Semantic + Phase 1.2: Reranking)
+                    relevant_segments = self._search_with_hybrid(
+                        channel_id=channel_id,
+                        query=user_message,
+                        top_k=10,
+                        speaker_filter=speaker_filter,
+                        video_ids_filter=video_ids_filter,
+                        use_reranking=use_reranking
+                    )
+            except ValueError as e:
+                # Handle case when embeddings are unavailable (Gemini quota exhausted)
+                if "embeddings unavailable" in str(e).lower() or "gemini" in str(e).lower():
+                    logger.error(f"❌ Chatbot unavailable due to embedding service failure: {e}")
+                    error_message = (
+                        "Desculpe, o chatbot está temporariamente indisponível devido ao limite de requisições por minuto da API do Google Gemini. "
+                        "Por favor, aguarde 1 minuto e tente novamente. "
+                        "Se o problema persistir, pode ser que o limite diário (250 requisições) tenha sido atingido."
+                    )
+
+                    self._save_history_entry(
+                        channel_id=channel_id,
+                        session_id=session_id,
+                        user_message=user_message,
+                        assistant_response=error_message,
+                        cited_videos=[]
+                    )
+
+                    return {
+                        'response': error_message,
+                        'cited_videos': [],
+                        'session_id': session_id,
+                        'relevance_scores': [],
+                        'cached': False,
+                        'error': 'quota_exceeded'
+                    }
+                else:
+                    raise
 
         # Apply enhanced relevance scoring
         if relevant_segments:
@@ -633,10 +1192,19 @@ class ChatbotService:
 
         # Apply semantic deduplication (Phase 1: Deduplication)
         if relevant_segments:
-            relevant_segments = self._deduplicate_segments(relevant_segments)
+            # Extract query_type from date_range if available
+            dedup_query_type = date_range.query_type if date_range else 'general'
+            # Convert QueryIntent enum to string
+            query_intent_str = query_intent.value if isinstance(query_intent, QueryIntent) else 'content'
+            relevant_segments, dedup_stats = self._deduplicate_segments(
+                relevant_segments,
+                query=user_message,
+                query_type=dedup_query_type,
+                query_intent=query_intent_str
+            )
 
         # Debug logging
-        logger.info(f"📊 Found {len(relevant_segments)} relevant segments")
+        logger.info(f"📊 Found {len(relevant_segments) if relevant_segments else 0} relevant segments")
         if relevant_segments:
             logger.info(f"📚 Videos: {[s['video_title'] for s in relevant_segments]}")
             # Log speaker information
@@ -653,14 +1221,59 @@ class ChatbotService:
             else:
                 logger.warning(f"⚠️ No relevant segments found for query: {user_message[:100]}")
 
-        # Extract video IDs for cache key
-        video_ids = [seg['video_id'] for seg in relevant_segments]
+        if knowledge_mode == "database_only" and not (relevant_segments and len(relevant_segments) > 0):
+            fallback_response = (
+                "Não encontrei trechos dos sermões deste canal que respondam diretamente a essa pergunta. "
+                "Tente refinar o tema, escolher outra data ou formular de outra maneira."
+            )
 
-        # Check cache first
-        cached_response = self.cache_manager.get_cached_response(
-            user_message,
-            video_ids
-        )
+            self._save_history_entry(
+                channel_id=channel_id,
+                session_id=session_id,
+                user_message=user_message,
+                assistant_response=fallback_response,
+                cited_videos=[]
+            )
+
+            response_time_ms = int((time.time() - start_time) * 1000)
+            self._log_query_metrics(
+                channel_id=channel_id,
+                session_id=session_id,
+                query=user_message,
+                segments_returned=0,
+                response_time_ms=response_time_ms,
+                cache_hit=False,
+                date_filters_used=date_range is not None,
+                speaker_filter_used=speaker_filter is not None,
+                biblical_filter_used=biblical_ref.found if biblical_ref else False,
+                theme_filter_used=theme_result.found if theme_result else False,
+                query_type=query_type,
+                backend_used='database_only_no_context',
+                metadata={
+                    'knowledge_mode': knowledge_mode,
+                }
+            )
+
+            return {
+                'response': fallback_response,
+                'cited_videos': [],
+                'session_id': session_id,
+                'relevance_scores': [],
+                'cached': False,
+                'backend': 'database_only_no_context'
+            }
+
+        # Extract video IDs for cache key
+        video_ids = [seg['video_id'] for seg in relevant_segments] if relevant_segments else []
+
+        # Check cache first (skip cache for global mode to avoid stale local-context answers)
+        cached_response = None
+        if knowledge_mode != "global":
+            cached_response = self.cache_manager.get_cached_response(
+                user_message,
+                video_ids,
+                knowledge_mode=knowledge_mode
+            )
 
         if cached_response:
             logger.info(f"Using cached chatbot response (age={cached_response['cache_age_hours']:.1f}h)")
@@ -680,7 +1293,7 @@ class ChatbotService:
                 channel_id=channel_id,
                 session_id=session_id,
                 query=user_message,
-                segments_returned=len(relevant_segments),
+                segments_returned=len(relevant_segments) if relevant_segments else 0,
                 response_time_ms=response_time_ms,
                 cache_hit=True,
                 date_filters_used=date_range is not None,
@@ -691,7 +1304,8 @@ class ChatbotService:
                 backend_used='cache',
                 metadata={
                     'cache_age_hours': cached_response.get('cache_age_hours'),
-                    'hit_count': cached_response.get('hit_count')
+                    'hit_count': cached_response.get('hit_count'),
+                    'knowledge_mode': knowledge_mode
                 }
             )
 
@@ -721,15 +1335,18 @@ class ChatbotService:
             query_type=query_type,
             response_instruction=response_config.instruction,
             biblical_ref=biblical_ref if biblical_ref.found else None,
-            theme_result=theme_result if theme_result.found else None
+            theme_result=theme_result if theme_result.found else None,
+            knowledge_mode=knowledge_mode
         )
 
         # Generate response using unified LLM client with query-specific max_tokens and temperature
-        llm_response = self.llm.generate(
-            prompt=prompt,
-            max_tokens=response_config.max_tokens,
-            temperature=response_config.temperature  # Now dynamic!
-        )
+        with use_api_key(effective_api_key):
+            llm = get_llm_client(api_key=effective_api_key)
+            llm_response = llm.generate(
+                prompt=prompt,
+                max_tokens=response_config.max_tokens,
+                temperature=response_config.temperature  # Now dynamic!
+            )
         response_text = llm_response["text"]
         backend_used = llm_response["backend"]
 
@@ -739,14 +1356,25 @@ class ChatbotService:
         cited_videos = [entry['citation'] for entry in unique_sources]
         relevance_scores = [entry['relevance'] for entry in unique_sources]
 
-        # Store in cache
-        self.cache_manager.store_response(
-            user_message,
-            video_ids,
-            response_text,
-            cited_videos,
-            relevance_scores
+        cited_videos, relevance_scores = self._ensure_date_range_citation_coverage(
+            channel_id=channel_id,
+            date_range=date_range,
+            cited_videos=cited_videos,
+            relevance_scores=relevance_scores,
+            speaker_filter=speaker_filter,
+            video_ids_filter=video_ids_filter
         )
+
+        # Store in cache (skip for global mode)
+        if knowledge_mode != "global":
+            self.cache_manager.store_response(
+                user_message,
+                video_ids,
+                response_text,
+                cited_videos,
+                relevance_scores,
+                knowledge_mode=knowledge_mode
+            )
 
         # Save to history
         self._save_history_entry(
@@ -763,7 +1391,7 @@ class ChatbotService:
             channel_id=channel_id,
             session_id=session_id,
             query=user_message,
-            segments_returned=len(relevant_segments),
+            segments_returned=len(relevant_segments) if relevant_segments else 0,
             response_time_ms=response_time_ms,
             cache_hit=False,
             date_filters_used=date_range is not None,
@@ -775,7 +1403,8 @@ class ChatbotService:
             metadata={
                 'tokens_used': llm_response.get('tokens_used', 0),
                 'max_tokens': response_config.max_tokens,
-                'temperature': response_config.temperature
+                'temperature': response_config.temperature,
+                'knowledge_mode': knowledge_mode
             }
         )
 
@@ -805,7 +1434,7 @@ class ChatbotService:
             Re-ranked segments with enhanced scores
         """
         with get_db() as db:
-            for seg in segments:
+            for seg in (segments or []):
                 video_id = seg['video_id']
 
                 # Get theme confidence from database
@@ -873,12 +1502,13 @@ class ChatbotService:
         query_type: QueryType = QueryType.GENERAL,
         response_instruction: str = "",
         biblical_ref = None,
-        theme_result = None
+        theme_result = None,
+        knowledge_mode: str = "database_only"
     ) -> str:
         """Build prompt for Gemini with context and query-type specific instructions"""
         # Format relevant segments with dates and speaker for clear identification
         context_parts = []
-        for seg in relevant_segments:
+        for seg in (relevant_segments or []):
             # Use sermon_actual_date if available (actual sermon date), fallback to published_at (upload date)
             sermon_date = seg.get('sermon_actual_date')
             if not sermon_date and seg.get('published_at'):
@@ -901,9 +1531,13 @@ class ChatbotService:
             ])
 
         # Add query-type specific instruction
+        mode_instruction = "\n8. FONTES PERMITIDAS: use SOMENTE os trechos de sermões fornecidos. Se não houver contexto suficiente, diga claramente que os sermões disponíveis não trazem essa informação."
+        if knowledge_mode == "global":
+            mode_instruction = "\n8. FONTES PERMITIDAS: responda usando conhecimento geral/bíblico. Não cite nem resuma sermões locais; se o contexto de sermões estiver vazio, ignore-o. Seja transparente quando estiver usando conhecimento geral."
+
         type_specific_rule = ""
         if response_instruction:
-            type_specific_rule = f"\n8. FORMATO DA RESPOSTA: {response_instruction}"
+            type_specific_rule = f"\n9. FORMATO DA RESPOSTA: {response_instruction}"
 
         # Add biblical reference context if present
         biblical_context = ""
@@ -941,7 +1575,7 @@ REGRAS:
 4. Quando os sermões não cobrem o tema, seja honesto: "Nos sermões disponíveis, não encontrei referência direta a [tema], mas temas relacionados incluem..."
 5. Seja conciso mas informativo (ajuste o tamanho conforme o tipo de pergunta)
 6. Use linguagem pastoral e respeitosa
-7. Quando relevante, conecte insights de diferentes sermões{type_specific_rule}{biblical_context}{theme_context}
+7. Quando relevante, conecte insights de diferentes sermões{mode_instruction}{type_specific_rule}{biblical_context}{theme_context}
 
 SERMÕES RELEVANTES:
 {context_text}
@@ -1166,6 +1800,31 @@ RESPOSTA:
         month_name = MONTH_NAMES_PT[value.month]
         return f"{value.day} de {month_name} de {value.year}"
 
+    @staticmethod
+    def _clean_summary(text: Optional[str], max_len: int = 160) -> str:
+        """Strip simple markdown markers and trim length."""
+        if not text:
+            return ""
+        cleaned = re.sub(r"^#+\s*", "", text, flags=re.MULTILINE)  # headings
+        cleaned = re.sub(r"^[\-•]\s*", "", cleaned, flags=re.MULTILINE)  # bullets
+        cleaned = re.sub(r"[•◆■▶️▪️📕📖📚📊💡]+\s*", "", cleaned)  # icons/emoji
+        cleaned = re.sub(r"(?i)texto\(s\)? bíblico\(s\)?", "", cleaned)
+        cleaned = re.sub(r"(?i)tema central", "", cleaned)
+        cleaned = re.sub(r"(?i)pontos principais", "", cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        # Keep only the first 2 short sentences to avoid walls of text
+        sentences = re.split(r"(?<=[.!?])\\s+", cleaned)
+        short = []
+        for s in sentences:
+            if s:
+                short.append(s)
+            if len(" ".join(short)) >= max_len or len(short) >= 2:
+                break
+        cleaned = " ".join(short).strip()
+        if len(cleaned) > max_len:
+            cleaned = cleaned[:max_len].rstrip() + "..."
+        return cleaned
+
     def _build_unique_citations(
         self,
         segments: List[Dict]
@@ -1177,7 +1836,7 @@ RESPOSTA:
         """
         unique: Dict[int, Dict] = {}
 
-        for seg in segments:
+        for seg in (segments or []):
             video_id = seg['video_id']
             sermon_date = seg.get('sermon_actual_date')
             if not sermon_date:
@@ -1222,6 +1881,406 @@ RESPOSTA:
 
         return sorted(unique.values(), key=lambda entry: entry['relevance'], reverse=True)
 
+    def _ensure_date_range_citation_coverage(
+        self,
+        channel_id: int,
+        date_range: Optional[DateRangeResult],
+        cited_videos: List[Dict],
+        relevance_scores: List[float],
+        speaker_filter: Optional[str],
+        video_ids_filter: Optional[List[int]]
+    ) -> Tuple[List[Dict], List[float]]:
+        """Ensure every sermon in the requested date range is referenced."""
+        if (
+            not date_range
+            or not date_range.start_date
+            or not date_range.end_date
+            or (not date_range.is_range and not getattr(date_range, 'specific_dates', None))
+        ):
+            return cited_videos, relevance_scores
+
+        if getattr(date_range, 'specific_dates', None):
+            return cited_videos, relevance_scores
+
+        if speaker_filter:
+            # Speaker-filtered queries already run with strict filters
+            return cited_videos, relevance_scores
+
+        expected_video_ids = self._get_video_ids_in_range(
+            channel_id=channel_id,
+            start_date=date_range.start_date,
+            end_date=date_range.end_date
+        )
+
+        query_type = getattr(date_range, 'query_type', None)
+        period_queries = {
+            'single_month', 'month_range', 'custom_range',
+            'last_month', 'last_week', 'last_n_days',
+            'multiple_specific_days'
+        }
+
+        if video_ids_filter is not None and query_type not in period_queries:
+            allowed = set(video_ids_filter)
+            expected_video_ids = [vid for vid in expected_video_ids if vid in allowed]
+
+        logger.debug(
+            "Date coverage target=%s filter_applied=%s expected_ids=%s cited_ids=%s",
+            query_type,
+            bool(video_ids_filter) and query_type not in period_queries,
+            expected_video_ids,
+            [entry.get('video_id') for entry in cited_videos]
+        )
+
+        if not expected_video_ids:
+            return cited_videos, relevance_scores
+
+        cited_ids = {entry.get('video_id') for entry in cited_videos if entry.get('video_id')}
+        missing_ids = [vid for vid in expected_video_ids if vid not in cited_ids]
+
+        if not missing_ids:
+            return cited_videos, relevance_scores
+
+        video_lookup = self._fetch_videos_by_ids(missing_ids)
+
+        for video_id in missing_ids:
+            video = video_lookup.get(video_id)
+            if not video:
+                continue
+
+            sermon_date = video.get('sermon_actual_date')
+            published_at = video.get('published_at')
+            if not sermon_date and published_at:
+                sermon_date = published_at.date()
+
+            speaker_name = video.get('speaker') or 'Desconhecido'
+            date_str = sermon_date.strftime('%m/%d/%Y') if sermon_date else 'Data desconhecida'
+            youtube_id = video.get('youtube_id')
+            youtube_link = f"https://youtube.com/watch?v={youtube_id}" if youtube_id else ''
+            title = video.get('title') or f"Sermão {video_id}"
+
+            entry = {
+                'video_id': video_id,
+                'video_title': f"{date_str} - {title}" + (f" ({speaker_name})" if speaker_name != 'Desconhecido' else ''),
+                'youtube_id': youtube_id,
+                'timestamp': 0,
+                'timestamp_sec': 0,
+                'youtube_link': youtube_link,
+                'speaker': speaker_name
+            }
+
+            logger.info(
+                "📋 Adding missing sermon %s to cited_videos to ensure full coverage",
+                entry['video_title']
+            )
+
+            cited_videos.append(entry)
+            relevance_scores.append(0.0)
+
+        return cited_videos, relevance_scores
+
+    def _fetch_videos_by_ids(self, video_ids: Sequence[int]) -> Dict[int, Video]:
+        if not video_ids:
+            return {}
+
+        with get_db() as db:
+            rows = db.query(
+                Video.id,
+                Video.title,
+                Video.youtube_id,
+                Video.sermon_actual_date,
+                Video.published_at,
+                Video.speaker
+            ).filter(Video.id.in_(video_ids)).all()
+
+            return {
+                row.id: {
+                    'id': row.id,
+                    'title': row.title,
+                    'youtube_id': row.youtube_id,
+                    'sermon_actual_date': row.sermon_actual_date,
+                    'published_at': row.published_at,
+                    'speaker': row.speaker
+                }
+                for row in rows
+            }
+
+    def _get_video_ids_in_range(
+        self,
+        channel_id: int,
+        start_date: datetime,
+        end_date: datetime
+    ) -> List[int]:
+        """Return video IDs for completed sermons within a period."""
+        start = start_date.date() if isinstance(start_date, datetime) else start_date
+        end = end_date.date() if isinstance(end_date, datetime) else end_date
+
+        with get_db() as db:
+            rows = db.query(Video.id).filter(
+                Video.channel_id == channel_id,
+                Video.status == 'completed',
+                func.coalesce(
+                    Video.sermon_actual_date,
+                    func.date(Video.published_at)
+                ).between(start, end)
+            ).order_by(
+                func.coalesce(Video.sermon_actual_date, func.date(Video.published_at)).asc(),
+                Video.published_at.asc()
+            ).all()
+
+            return [row.id for row in rows]
+
+    def _get_all_channel_video_ids(self, channel_id: int) -> List[int]:
+        with get_db() as db:
+            rows = db.query(Video.id).filter(
+                Video.channel_id == channel_id,
+                Video.status == 'completed'
+            ).order_by(
+                func.coalesce(Video.sermon_actual_date, func.date(Video.published_at)).asc(),
+                Video.published_at.asc()
+            ).all()
+
+            return [row.id for row in rows]
+
+    def _is_bible_text_list_query(self, query: str) -> bool:
+        q = query.lower()
+        q_norm = self._strip_accents(q)
+
+        keywords = [
+            'texto bíblico',
+            'textos bíblicos',
+            'passagem bíblica',
+            'passagens bíblicas',
+            'leituras bíblicas'
+        ]
+        actions = [
+            'foram lidos', 'foram lidas', 'lidos', 'lidas', 'leram',
+            'liste', 'listar', 'lista', 'quais'
+        ]
+
+        normalized_keywords = [self._strip_accents(term) for term in keywords]
+        normalized_actions = [self._strip_accents(term) for term in actions]
+
+        keyword_match = any(term in q for term in keywords)
+        if not keyword_match:
+            keyword_match = any(term in q_norm for term in normalized_keywords)
+
+        action_match = any(term in q for term in actions)
+        if not action_match:
+            action_match = any(term in q_norm for term in normalized_actions)
+
+        return keyword_match and action_match
+
+    def _handle_bible_text_list_query(
+        self,
+        channel_id: int,
+        user_message: str,
+        session_id: str,
+        date_range: Optional[DateRangeResult],
+        knowledge_mode: str = "database_only"
+    ) -> Dict:
+        target_start = date_range.start_date if date_range and date_range.start_date else None
+        target_end = date_range.end_date if date_range and date_range.end_date else None
+
+        if target_start and target_end:
+            context_video_ids = self._get_video_ids_in_range(channel_id, target_start, target_end)
+        else:
+            context_video_ids = self._get_all_channel_video_ids(channel_id)
+
+        cached_response = None
+        if context_video_ids:
+            cached_response = self.cache_manager.get_cached_response(
+                user_message,
+                context_video_ids,
+                knowledge_mode=knowledge_mode
+            )
+
+        if cached_response:
+            self._save_history_entry(
+                channel_id=channel_id,
+                session_id=session_id,
+                user_message=user_message,
+                assistant_response=cached_response['response'],
+                cited_videos=cached_response['cited_videos']
+            )
+            return {
+                'response': cached_response['response'],
+                'cited_videos': cached_response['cited_videos'],
+                'session_id': session_id,
+                'relevance_scores': cached_response['relevance_scores'],
+                'cached': True,
+                'cache_age_hours': cached_response['cache_age_hours'],
+                'hit_count': cached_response['hit_count']
+            }
+
+        passages = self._fetch_bible_passages(channel_id, target_start, target_end)
+
+        if not passages:
+            response_text = (
+                "Não encontrei leituras bíblicas registradas no período solicitado. "
+                "Tente especificar outra data ou reformule a pergunta."
+            )
+            cited_videos: List[Dict] = []
+        else:
+            period_label = self._format_period_label(target_start, target_end)
+            lines = []
+            for entry in passages:
+                date_label = entry['sermon_date'].strftime('%d/%m/%Y') if entry['sermon_date'] else 'Data desconhecida'
+                refs = ', '.join(entry['references']) if entry['references'] else 'referências não especificadas'
+                lines.append(f"- {date_label}: {refs}")
+
+            response_text = f"Textos bíblicos lidos {period_label}:\n" + "\n".join(lines)
+            cited_videos = [
+                {
+                    'video_id': entry['video_id'],
+                    'video_title': entry['video_title'],
+                    'youtube_id': entry['youtube_id'],
+                    'timestamp': 0,
+                    'timestamp_sec': 0,
+                    'youtube_link': f"https://youtube.com/watch?v={entry['youtube_id']}",
+                    'speaker': entry.get('speaker') or 'Desconhecido'
+                }
+                for entry in passages
+            ]
+
+        self._save_history_entry(
+            channel_id=channel_id,
+            session_id=session_id,
+            user_message=user_message,
+            assistant_response=response_text,
+            cited_videos=cited_videos
+        )
+
+        self._log_query_metrics(
+            channel_id=channel_id,
+            session_id=session_id,
+            query=user_message,
+            segments_returned=0,
+            response_time_ms=0,
+            cache_hit=False,
+            date_filters_used=bool(date_range),
+            speaker_filter_used=False,
+            biblical_filter_used=True,
+            theme_filter_used=False,
+            query_type=QueryType.GENERAL,
+            backend_used='structured_lookup',
+            metadata={'handler': 'bible_text_list', 'entries': len(passages)}
+        )
+
+        if passages and context_video_ids:
+            self.cache_manager.store_response(
+                user_message,
+                context_video_ids,
+                response_text,
+                cited_videos,
+                [],
+                knowledge_mode=knowledge_mode
+            )
+
+        return {
+            'response': response_text,
+            'cited_videos': cited_videos,
+            'session_id': session_id,
+            'relevance_scores': [],
+            'cached': False,
+            'backend': 'structured_lookup'
+        }
+
+    def _fetch_bible_passages(
+        self,
+        channel_id: int,
+        start_date: Optional[datetime],
+        end_date: Optional[datetime]
+    ) -> List[Dict]:
+        date_clause = ""
+        params = {'channel_id': channel_id}
+        if start_date and end_date:
+            date_clause = "AND COALESCE(v.sermon_actual_date, DATE(v.published_at)) BETWEEN :start_date AND :end_date"
+            params['start_date'] = start_date.date()
+            params['end_date'] = end_date.date()
+
+        sql = text(f"""
+            SELECT
+                bp.video_id,
+                bp.book,
+                bp.chapter,
+                bp.verse_start,
+                bp.verse_end,
+                v.title,
+                v.youtube_id,
+                v.speaker,
+                COALESCE(v.sermon_actual_date, DATE(v.published_at)) AS sermon_date,
+                bp.id
+            FROM biblical_passages bp
+            JOIN videos v ON bp.video_id = v.id
+            WHERE v.channel_id = :channel_id
+              AND v.status = 'completed'
+              {date_clause}
+            ORDER BY sermon_date ASC, bp.id ASC
+        """)
+
+        with get_db() as db:
+            rows = db.execute(sql, params).fetchall()
+
+        grouped: "OrderedDict[int, Dict]" = OrderedDict()
+        for row in rows:
+            video_id = row[0]
+            entry = grouped.setdefault(video_id, {
+                'video_id': video_id,
+                'video_title': row[5],
+                'youtube_id': row[6],
+                'speaker': row[7],
+                'sermon_date': row[8],
+                'references': []
+            })
+
+            reference = self._format_bible_reference(row[1], row[2], row[3], row[4])
+            if reference and reference not in entry['references']:
+                entry['references'].append(reference)
+
+        return list(grouped.values())
+
+    def _format_bible_reference(
+        self,
+        book: Optional[str],
+        chapter: Optional[int],
+        verse_start: Optional[int],
+        verse_end: Optional[int]
+    ) -> Optional[str]:
+        if not book:
+            return None
+
+        reference = book.strip()
+        if chapter:
+            if verse_start and verse_end and verse_end != verse_start:
+                reference += f" {chapter}:{verse_start}-{verse_end}"
+            elif verse_start:
+                reference += f" {chapter}:{verse_start}"
+            else:
+                reference += f" {chapter}"
+        return reference
+
+    def _format_period_label(
+        self,
+        start_date: Optional[datetime],
+        end_date: Optional[datetime]
+    ) -> str:
+        if start_date and end_date:
+            start = start_date.date()
+            end = end_date.date()
+            if start.year == end.year:
+                if start.month == 1 and start.day == 1 and end.month == 12 and end.day == 31:
+                    return f"em {start.year}"
+                return f"entre {start.strftime('%d/%m/%Y')} e {end.strftime('%d/%m/%Y')}"
+            return f"entre {start.strftime('%d/%m/%Y')} e {end.strftime('%d/%m/%Y')}"
+        return "nos sermões disponíveis"
+
+    @staticmethod
+    def _strip_accents(value: Optional[str]) -> str:
+        if not value:
+            return ""
+        normalized = unicodedata.normalize('NFD', value)
+        return ''.join(ch for ch in normalized if unicodedata.category(ch) != 'Mn')
+
     def _save_history_entry(
         self,
         channel_id: int,
@@ -1254,16 +2313,47 @@ RESPOSTA:
             Video object or None
         """
         with get_db() as db:
+            # Prefer the actual sermon date when available, otherwise fall back to publish/upload time
+            sort_key = func.coalesce(Video.sermon_actual_date, Video.published_at, Video.created_at)
             sermon = db.query(Video).filter(
                 Video.channel_id == channel_id,
                 Video.status == 'completed'
             ).join(
                 Video.transcript
             ).order_by(
-                Video.published_at.desc()
+                sort_key.desc()
             ).offset(offset).limit(1).first()
 
             return sermon
+
+    def _build_transcript_fallback_segment(self, sermon: Video) -> Optional[Dict]:
+        """Return a minimal segment from the full transcript when embeddings are missing."""
+        from app.common.models import Transcript
+
+        with get_db() as db:
+            transcript = db.query(Transcript).filter(Transcript.video_id == sermon.id).first()
+            if not transcript or not transcript.text:
+                return None
+
+            text = transcript.text.strip()
+            if len(text) > 1500:
+                text = text[:1500] + "..."
+
+            sermon_date = sermon.sermon_actual_date or sermon.published_at
+            return {
+                'video_id': sermon.id,
+                'segment_text': text,
+                'segment_start': 0,
+                'segment_end': min(len(text.split()), 300),
+                'segment_start_sec': 0,
+                'segment_end_sec': sermon.duration_sec or 0,
+                'video_title': sermon.title,
+                'youtube_id': sermon.youtube_id,
+                'published_at': sermon.published_at,
+                'sermon_actual_date': sermon.sermon_actual_date,
+                'speaker': sermon.speaker or "Desconhecido",
+                'relevance': 1.0,
+            }
 
     def _search_with_date_range(
         self,
@@ -1274,33 +2364,56 @@ RESPOSTA:
         video_ids_filter: Optional[List[int]] = None
     ) -> List[Dict]:
         """Route date-aware queries to the embedding service."""
+        specific_dates = getattr(date_range, 'specific_dates', None)
+        if specific_dates:
+            return self._search_specific_dates(
+                channel_id=channel_id,
+                query=query,
+                specific_dates=specific_dates,
+                speaker_filter=speaker_filter,
+                video_ids_filter=video_ids_filter
+            )
         if date_range.query_type == 'last_sermon':
             sermon = self._get_last_sermon(channel_id, offset=0)
             if not sermon:
                 return []
-            return self.embedding_service.search_similar_segments(
+            sermon_date = sermon.sermon_actual_date or sermon.published_at
+            if not sermon_date:
+                return []
+            segments = self.embedding_service.search_similar_segments(
                 channel_id=channel_id,
                 query=query,
                 top_k=10,
-                start_date=sermon.published_at,
-                end_date=sermon.published_at,
+                start_date=sermon_date,
+                end_date=sermon_date,
                 speaker_filter=speaker_filter,
                 video_ids_filter=video_ids_filter
             )
+            if not segments:
+                fallback = self._build_transcript_fallback_segment(sermon)
+                return [fallback] if fallback else []
+            return segments
 
         if date_range.query_type == 'second_last_sermon':
             sermon = self._get_last_sermon(channel_id, offset=1)
             if not sermon:
                 return []
-            return self.embedding_service.search_similar_segments(
+            sermon_date = sermon.sermon_actual_date or sermon.published_at
+            if not sermon_date:
+                return []
+            segments = self.embedding_service.search_similar_segments(
                 channel_id=channel_id,
                 query=query,
                 top_k=10,
-                start_date=sermon.published_at,
-                end_date=sermon.published_at,
+                start_date=sermon_date,
+                end_date=sermon_date,
                 speaker_filter=speaker_filter,
                 video_ids_filter=video_ids_filter
             )
+            if not segments:
+                fallback = self._build_transcript_fallback_segment(sermon)
+                return [fallback] if fallback else []
+            return segments
 
         if date_range.is_range and date_range.start_date and date_range.end_date:
             return self.embedding_service.search_similar_segments(
@@ -1331,27 +2444,41 @@ RESPOSTA:
             video_ids_filter=video_ids_filter
         )
 
-    def _search_with_date_range(
+    def _search_specific_dates(
         self,
         channel_id: int,
         query: str,
-        date_range: DateRangeResult,
-        speaker_filter: Optional[str] = None,
-        video_ids_filter: Optional[List[int]] = None
+        specific_dates: Sequence[datetime],
+        speaker_filter: Optional[str],
+        video_ids_filter: Optional[List[int]]
     ) -> List[Dict]:
-        """
-        Search segments using date range information from Phase 2 parser.
+        """Search each explicit date individually and merge the best segments."""
+        combined: List[Dict] = []
+        seen = set()
 
-        Args:
-            channel_id: Channel ID
-            query: Search query
-            date_range: Parsed date range result
-            speaker_filter: Optional speaker filter pattern (Phase 1.1)
-            video_ids_filter: Optional list of video IDs to restrict search (Phase 1.2)
+        for date_value in specific_dates:
+            segments = self.embedding_service.search_similar_segments(
+                channel_id=channel_id,
+                query=query,
+                top_k=10,
+                date_filter=date_value,
+                speaker_filter=speaker_filter,
+                video_ids_filter=video_ids_filter
+            )
 
-        Returns:
-            List of relevant segments
-        """
+            for seg in segments or []:
+                dedupe_key = (
+                    seg.get('video_id'),
+                    seg.get('segment_start'),
+                    seg.get('segment_end')
+                )
+                if dedupe_key in seen:
+                    continue
+                combined.append(seg)
+                seen.add(dedupe_key)
+
+        combined.sort(key=lambda seg: seg.get('relevance', 0), reverse=True)
+        return combined[:10] if len(combined) > 10 else combined
     def _fallback_segments_for_date(
         self,
         channel_id: int,
@@ -1369,16 +2496,25 @@ RESPOSTA:
             if not sermon:
                 return []
 
+            sermon_date = sermon.sermon_actual_date or sermon.published_at
+            if not sermon_date:
+                return []
+
             segments = self.embedding_service.search_similar_segments(
                 channel_id=channel_id,
                 query=query,
                 top_k=10,
-                start_date=sermon.published_at,
-                end_date=sermon.published_at,
+                start_date=sermon_date,
+                end_date=sermon_date,
                 speaker_filter=speaker_filter,
                 video_ids_filter=video_ids_filter
             )
             logger.info(f"Found {len(segments)} segments in second-last sermon (video_id={sermon.id})")
+            if not segments:
+                fallback = self._build_transcript_fallback_segment(sermon)
+                if fallback:
+                    logger.warning(f"No embeddings found for video {sermon.id}; using transcript fallback")
+                    return [fallback]
             return segments
 
         # Handle date range queries

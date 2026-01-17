@@ -7,6 +7,7 @@ from typing import Dict, List
 from datetime import datetime, timedelta
 from collections import Counter
 from sqlalchemy import func
+from sqlalchemy.dialects.postgresql import insert
 
 from app.common.database import get_db
 from app.common.models import (
@@ -14,6 +15,11 @@ from app.common.models import (
     SermonThemeV2, SermonInconsistency, SermonSuggestion,
     SermonHighlight, DiscussionQuestion, SensitivityFlag,
     TranscriptionError, SermonReport, ChannelRollup
+)
+from app.common.sermon_formatter import (
+    extract_structured_summary,
+    normalize_passage_reference,
+    format_transcript_text,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,14 +41,75 @@ def generate_daily_sermon_report(video_id: int) -> Dict:
             raise ValueError(f"Video {video_id} not found")
 
         transcript = db.query(Transcript).filter(Transcript.video_id == video_id).first()
+        if transcript and transcript.text:
+            formatted = format_transcript_text(transcript.text)
+            if formatted != transcript.text:
+                transcript.text = formatted
+                transcript.word_count = len(formatted.split())
+                transcript.char_count = len(formatted)
+                db.flush()
+
         classification = db.query(SermonClassification).filter(
             SermonClassification.video_id == video_id
         ).first()
+
+        # Normalize structured summary and canonical biblical passages
+        structured_summary = extract_structured_summary(video.ai_summary)
+        canonical_passages = []
+        seen = set()
+        import re as _re
+        for ref in structured_summary.get("biblical_texts", []):
+            for chunk in [c.strip() for c in _re.split(r"[;,]", ref) if c.strip()]:
+                parsed = normalize_passage_reference(chunk)
+                if parsed and parsed["osis_ref"] not in seen:
+                    seen.add(parsed["osis_ref"])
+                    canonical_passages.append(parsed)
+
+        if canonical_passages:
+            # Delete passages that won't be in the new set
+            new_osis_refs = {p["osis_ref"] for p in canonical_passages}
+            db.query(BiblicalPassage).filter(
+                BiblicalPassage.video_id == video_id,
+                ~BiblicalPassage.osis_ref.in_(new_osis_refs)
+            ).delete(synchronize_session=False)
+            # UPSERT new passages to avoid unique constraint violations
+            for p in canonical_passages:
+                insert_stmt = insert(BiblicalPassage).values(
+                    video_id=video_id,
+                    osis_ref=p["osis_ref"],
+                    book=p["book"],
+                    chapter=p["chapter"],
+                    verse_start=p["verse_start"],
+                    verse_end=p["verse_end"],
+                    passage_type="reading",
+                    count=1
+                )
+                upsert_stmt = insert_stmt.on_conflict_do_update(
+                    constraint='biblical_passages_video_osis_unique',
+                    set_={
+                        'book': insert_stmt.excluded.book,
+                        'chapter': insert_stmt.excluded.chapter,
+                        'verse_start': insert_stmt.excluded.verse_start,
+                        'verse_end': insert_stmt.excluded.verse_end,
+                        'passage_type': insert_stmt.excluded.passage_type,
+                        'count': insert_stmt.excluded.count,
+                    }
+                )
+                db.execute(upsert_stmt)
+            db.flush()
+
+        # Clean invalid placeholders
+        db.query(BiblicalPassage).filter(
+            BiblicalPassage.video_id == video_id,
+            (BiblicalPassage.chapter == None) | (BiblicalPassage.chapter == 0) | (BiblicalPassage.verse_start == None) | (BiblicalPassage.verse_start == 0)
+        ).delete(synchronize_session=False)
+        db.flush()
 
         # Build report
         report = {
             'video_id': video_id,
             'title': video.title,
+            'suggested_title': video.suggested_title if video.suggested_title else None,
             'published_at': video.published_at.isoformat(),
             'youtube_id': video.youtube_id,
             'generated_at': datetime.now().isoformat(),
@@ -75,6 +142,9 @@ def generate_daily_sermon_report(video_id: int) -> Dict:
 
             # Themes
             'themes': _get_themes(db, video_id),
+
+            # Structured summary (canonical sections for UI)
+            'structured_summary': structured_summary,
 
             # Quality analysis
             'inconsistencies': _get_inconsistencies(db, video_id),
@@ -217,14 +287,33 @@ def _get_top_books(db, video_id) -> List[Dict]:
 
 
 def _get_key_passages(db, video_id) -> List[Dict]:
-    """Get key passages with timestamps - exclude 'reading' type passages"""
+    """Get key passages with timestamps - include all passage types, ordered by importance"""
+    from app.worker.passage_analyzer import OSIS_BOOK_MAP
+    
     passages = db.query(BiblicalPassage).filter(
-        BiblicalPassage.video_id == video_id,
-        BiblicalPassage.passage_type != 'reading'  # Exclude reading tags
-    ).limit(10).all()
+        BiblicalPassage.video_id == video_id
+    ).order_by(
+        BiblicalPassage.count.desc(),  # Order by count to get most important references first
+        BiblicalPassage.book,
+        BiblicalPassage.chapter
+    ).all()  # No limit - return all references
 
-    return [
-        {
+    logger.info(f"Biblical references retrieved for report (video {video_id}): {len(passages)}")
+
+    # Filter out invalid passages
+    valid_passages = []
+    for p in passages:
+        # Skip if chapter or verse is 0 (invalid)
+        if p.chapter == 0 or p.verse_start == 0:
+            logger.debug(f"Skipping invalid passage with 0:0 reference: {p.book} {p.chapter}:{p.verse_start}")
+            continue
+        
+        # Skip if book doesn't exist in OSIS map (non-existent book)
+        if p.book not in OSIS_BOOK_MAP:
+            logger.debug(f"Skipping passage with non-existent book: {p.book}")
+            continue
+        
+        valid_passages.append({
             'osis_ref': p.osis_ref,
             'book': p.book,  # Full book name (e.g., "Gênesis")
             'chapter': p.chapter,
@@ -232,10 +321,12 @@ def _get_key_passages(db, video_id) -> List[Dict]:
             'verse_end': p.verse_end,
             'type': p.passage_type,
             'timestamp_start': p.start_timestamp,
-            'timestamp_end': p.end_timestamp
-        }
-        for p in passages
-    ]
+            'timestamp_end': p.end_timestamp,
+            'count': p.count  # Number of times this reference appears
+        })
+    
+    logger.info(f"Valid passages after filtering: {len(valid_passages)}/{len(passages)}")
+    return valid_passages
 
 
 def _get_themes(db, video_id) -> List[Dict]:
