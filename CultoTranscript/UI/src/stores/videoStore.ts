@@ -1,9 +1,15 @@
 import { create } from 'zustand';
-import type { VideoDTO, VideoStatus } from '../types';
+import type { VideoDTO, VideoStatus, ChannelDTO } from '../types';
+import { channelService } from '../services/channelService';
 
 interface VideoFilters {
   status?: VideoStatus;
   search?: string;
+  speaker?: string;
+  date_start?: string;
+  date_end?: string;
+  theme?: string;
+  biblical_ref?: string;
 }
 
 interface VideoStore {
@@ -11,6 +17,10 @@ interface VideoStore {
   loading: boolean;
   error: string | null;
   filters: VideoFilters;
+
+  // Channels
+  channels: ChannelDTO[];
+  selectedChannelId: string | null;
 
   // Video detail drawer
   selectedVideoId: string | null;
@@ -23,6 +33,10 @@ interface VideoStore {
   removeVideo: (videoId: string) => void;
   clearFilters: () => void;
   setSelectedVideoId: (id: string | null) => void;
+
+  // Channel actions
+  fetchChannels: () => Promise<void>;
+  setSelectedChannelId: (id: string | null) => void;
 }
 
 export const useVideoStore = create<VideoStore>((set) => ({
@@ -30,6 +44,10 @@ export const useVideoStore = create<VideoStore>((set) => ({
   loading: false,
   error: null,
   filters: {},
+
+  channels: [],
+  selectedChannelId: null,
+
   selectedVideoId: null,
 
   setVideos: (videos) => set({ videos }),
@@ -58,4 +76,36 @@ export const useVideoStore = create<VideoStore>((set) => ({
   clearFilters: () => set({ filters: {} }),
 
   setSelectedVideoId: (id) => set({ selectedVideoId: id }),
+
+  fetchChannels: async () => {
+    try {
+      const { channels, current_channel_id } = await channelService.fetchChannels();
+      set({ channels });
+      set((state) => {
+        const alreadySelected = state.selectedChannelId;
+        const currentFromSession = current_channel_id ? current_channel_id.toString() : null;
+        const fallback = channels.length > 0 ? channels[0].id.toString() : null;
+
+        if (alreadySelected) {
+          return {};
+        }
+
+        return {
+          selectedChannelId: currentFromSession || fallback,
+        };
+      });
+
+      // If backend session had no channel set, align it to the selected one
+      const targetChannelId = (current_channel_id || (channels[0]?.id ?? null));
+      if (!current_channel_id && targetChannelId) {
+        channelService.switchChurch(targetChannelId.toString()).catch((error) => {
+          console.error('Failed to sync church selection', error);
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching channels:', error);
+    }
+  },
+
+  setSelectedChannelId: (id) => set({ selectedChannelId: id }),
 }));
