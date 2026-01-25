@@ -1,5 +1,7 @@
 - alias: Update Plex Priority Config
   id: plex_priority_config_sync
+  description: Sync Plex priority configuration when any priority setting changes
+  mode: single
   trigger:
   - platform: state
     entity_id:
@@ -694,6 +696,7 @@
 - id: netalertx_new_device_alert
   alias: '[NetAlertX] New Unknown Device Detected'
   description: Alert when new/unknown device appears on network
+  mode: single
   trigger:
   - platform: numeric_state
     entity_id: sensor.netalertx_new
@@ -714,6 +717,7 @@
 - id: netalertx_device_down_alert
   alias: '[NetAlertX] Device Down'
   description: Alert when devices go offline
+  mode: single
   trigger:
   - platform: numeric_state
     entity_id: sensor.netalertx_down
