@@ -1,0 +1,21 @@
+- id: ev9_reset_schedule_flags
+  alias: "EV9: Reset Daily Schedule Flags"
+  description: "Reset the evaluated_today flags at midnight so schedules can trigger again tomorrow"
+  trigger:
+    - platform: time
+      at: "00:00:00"
+  action:
+    - service: input_boolean.turn_off
+      target:
+        entity_id:
+          - input_boolean.ev9_schedule_1_evaluated_today
+          - input_boolean.ev9_schedule_2_evaluated_today
+          - input_boolean.ev9_schedule_3_evaluated_today
+          - input_boolean.ev9_schedule_4_evaluated_today
+          - input_boolean.ev9_schedule_5_evaluated_today
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - DAILY_RESET: Schedule flags cleared for new day"
+  mode: single

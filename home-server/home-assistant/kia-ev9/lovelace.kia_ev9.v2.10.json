@@ -344,6 +344,13 @@
                   "type": "entities",
                   "entities": [
                     {
+                      "entity": "weather.forecast_home",
+                      "type": "attribute",
+                      "attribute": "temperature",
+                      "name": "Outside Temp",
+                      "suffix": "\u00b0F"
+                    },
+                    {
                       "entity": "sensor.ev9_car_mode",
                       "name": "Mode"
                     },
@@ -413,8 +420,10 @@
           "icon": "mdi:thermostat",
           "cards": [
             {
-              "type": "custom:layout-card",
-              "layout_type": "custom:vertical-layout",
+              "type": "vertical-stack",
+              "card_mod": {
+                "style": "\n                ha-card {\n                    width: 100% !important;\n                    max-width: 100% !important;\n                }\n                :host {\n                    width: 100% !important;\n                    max-width: 800px !important;\n                    margin: 0 auto !important;\n                }\n            "
+              },
               "cards": [
                 {
                   "type": "vertical-stack",
@@ -426,6 +435,13 @@
                     {
                       "type": "entities",
                       "entities": [
+                        {
+                          "entity": "weather.forecast_home",
+                          "type": "attribute",
+                          "attribute": "temperature",
+                          "name": "Outside Temp",
+                          "suffix": "\u00b0F"
+                        },
                         {
                           "entity": "sensor.ev9_car_mode",
                           "name": "Mode"
@@ -485,7 +501,7 @@
                     },
                     {
                       "type": "markdown",
-                      "content": "**Outside Temp**: {{ state_attr('weather.forecast_home', 'temperature') | default('--') }}F\n\n*Smart Mode calculates runtime as: |target - outside| x rate (min/\u00b0F)*\n"
+                      "content": "*Smart Mode calculates runtime as: |target - outside| \u00d7 rate (min/\u00b0F)*"
                     }
                   ]
                 },
@@ -1042,7 +1058,7 @@
                       ],
                       "card": {
                         "type": "markdown",
-                        "content": "**Calculation Debug:**\n- Outside Temp: {{ state_attr('weather.forecast_home', 'temperature') | default('--') }}\u00b0F\n- Target Temp: {{ states('input_number.ev9_schedule_1_temperature') }}\u00b0F\n- Temp Diff: {{ ((states('input_number.ev9_schedule_1_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) | round(1) }}\u00b0F\n- Rate: {{ states('input_number.ev9_schedule_1_rate') }} min/\u00b0F\n- Runtime: {{ (((states('input_number.ev9_schedule_1_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) * states('input_number.ev9_schedule_1_rate') | float(1)) | round(0) }} min\n- Departure: {{ states('input_datetime.ev9_schedule_1_time') }}\n- Eval Window: {{ states('input_number.ev9_evaluation_window') }} min"
+                        "content": "*Smart Mode calculates runtime as: |target - outside| \u00d7 rate (min/\u00b0F)*"
                       }
                     }
                   ]
@@ -1600,7 +1616,7 @@
                       ],
                       "card": {
                         "type": "markdown",
-                        "content": "**Calculation Debug:**\n- Outside Temp: {{ state_attr('weather.forecast_home', 'temperature') | default('--') }}\u00b0F\n- Target Temp: {{ states('input_number.ev9_schedule_2_temperature') }}\u00b0F\n- Temp Diff: {{ ((states('input_number.ev9_schedule_2_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) | round(1) }}\u00b0F\n- Rate: {{ states('input_number.ev9_schedule_2_rate') }} min/\u00b0F\n- Runtime: {{ (((states('input_number.ev9_schedule_2_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) * states('input_number.ev9_schedule_2_rate') | float(1)) | round(0) }} min\n- Departure: {{ states('input_datetime.ev9_schedule_2_time') }}\n- Eval Window: {{ states('input_number.ev9_evaluation_window') }} min"
+                        "content": "*Smart Mode calculates runtime as: |target - outside| \u00d7 rate (min/\u00b0F)*"
                       }
                     }
                   ]
@@ -2158,7 +2174,7 @@
                       ],
                       "card": {
                         "type": "markdown",
-                        "content": "**Calculation Debug:**\n- Outside Temp: {{ state_attr('weather.forecast_home', 'temperature') | default('--') }}\u00b0F\n- Target Temp: {{ states('input_number.ev9_schedule_3_temperature') }}\u00b0F\n- Temp Diff: {{ ((states('input_number.ev9_schedule_3_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) | round(1) }}\u00b0F\n- Rate: {{ states('input_number.ev9_schedule_3_rate') }} min/\u00b0F\n- Runtime: {{ (((states('input_number.ev9_schedule_3_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) * states('input_number.ev9_schedule_3_rate') | float(1)) | round(0) }} min\n- Departure: {{ states('input_datetime.ev9_schedule_3_time') }}\n- Eval Window: {{ states('input_number.ev9_evaluation_window') }} min"
+                        "content": "*Smart Mode calculates runtime as: |target - outside| \u00d7 rate (min/\u00b0F)*"
                       }
                     }
                   ]
@@ -2716,7 +2732,7 @@
                       ],
                       "card": {
                         "type": "markdown",
-                        "content": "**Calculation Debug:**\n- Outside Temp: {{ state_attr('weather.forecast_home', 'temperature') | default('--') }}\u00b0F\n- Target Temp: {{ states('input_number.ev9_schedule_4_temperature') }}\u00b0F\n- Temp Diff: {{ ((states('input_number.ev9_schedule_4_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) | round(1) }}\u00b0F\n- Rate: {{ states('input_number.ev9_schedule_4_rate') }} min/\u00b0F\n- Runtime: {{ (((states('input_number.ev9_schedule_4_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) * states('input_number.ev9_schedule_4_rate') | float(1)) | round(0) }} min\n- Departure: {{ states('input_datetime.ev9_schedule_4_time') }}\n- Eval Window: {{ states('input_number.ev9_evaluation_window') }} min"
+                        "content": "*Smart Mode calculates runtime as: |target - outside| \u00d7 rate (min/\u00b0F)*"
                       }
                     }
                   ]
@@ -3274,14 +3290,15 @@
                       ],
                       "card": {
                         "type": "markdown",
-                        "content": "**Calculation Debug:**\n- Outside Temp: {{ state_attr('weather.forecast_home', 'temperature') | default('--') }}\u00b0F\n- Target Temp: {{ states('input_number.ev9_schedule_5_temperature') }}\u00b0F\n- Temp Diff: {{ ((states('input_number.ev9_schedule_5_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) | round(1) }}\u00b0F\n- Rate: {{ states('input_number.ev9_schedule_5_rate') }} min/\u00b0F\n- Runtime: {{ (((states('input_number.ev9_schedule_5_temperature') | float(72) - state_attr('weather.forecast_home', 'temperature') | float(72)) | abs) * states('input_number.ev9_schedule_5_rate') | float(1)) | round(0) }} min\n- Departure: {{ states('input_datetime.ev9_schedule_5_time') }}\n- Eval Window: {{ states('input_number.ev9_evaluation_window') }} min"
+                        "content": "*Smart Mode calculates runtime as: |target - outside| \u00d7 rate (min/\u00b0F)*"
                       }
                     }
                   ]
                 }
               ]
             }
-          ]
+          ],
+          "panel": true
         },
         {
           "title": "Config",

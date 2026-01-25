@@ -1,0 +1,212 @@
+- id: ev9_precondition_schedule
+  alias: "EV9: Scheduled Pre-conditioning"
+  description: "Start climate control before scheduled departure - evaluates conditions, computes optimal start time, and verifies climate actually started"
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  condition:
+    - condition: state
+      entity_id: binary_sensor.ev9_air_conditioner
+      state: "off"
+    - condition: template
+      value_template: >
+        {% set day_map = {'Monday': 'mon', 'Tuesday': 'tue', 'Wednesday': 'wed',
+                          'Thursday': 'thu', 'Friday': 'fri', 'Saturday': 'sat', 'Sunday': 'sun'} %}
+        {% set today = day_map[now().strftime('%A')] %}
+        {% set eval_window = states('input_number.ev9_evaluation_window') | int(30) %}
+        {% set ns = namespace(is_eval_time=false) %}
+        {% for sched_num in range(1, 6) %}
+          {% if not ns.is_eval_time %}
+            {% set enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_enabled', 'on') %}
+            {% set day_enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_' ~ today, 'on') %}
+            {% set already_evaluated = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_evaluated_today', 'on') %}
+            {% set departure = states('input_datetime.ev9_schedule_' ~ sched_num ~ '_time') %}
+            {% if enabled and day_enabled and not already_evaluated and departure not in ['unknown', 'unavailable', ''] %}
+              {% set dep_time = today_at(departure) %}
+              {% set eval_time = dep_time - timedelta(minutes=eval_window) %}
+              {% if eval_time <= now() < dep_time %}
+                {% set ns.is_eval_time = true %}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+        {{ ns.is_eval_time }}
+  action:
+    - variables:
+        day_map: >
+          {{ {'Monday': 'mon', 'Tuesday': 'tue', 'Wednesday': 'wed',
+              'Thursday': 'thu', 'Friday': 'fri', 'Saturday': 'sat', 'Sunday': 'sun'} }}
+        today: "{{ day_map[now().strftime('%A')] }}"
+        eval_window: "{{ states('input_number.ev9_evaluation_window') | int(30) }}"
+        smart_rate: "{{ states('input_number.ev9_smart_mode_rate') | float(1.0) }}"
+        outside_temp: "{{ state_attr('weather.forecast_home', 'temperature') | float(72) }}"
+        global_temp: "{{ states('input_number.ev9_target_temperature') | float(72) }}"
+        matched_schedule: >
+          {% set ns = namespace(matched=0) %}
+          {% for sched_num in range(1, 6) %}
+            {% if ns.matched == 0 %}
+              {% set enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_enabled', 'on') %}
+              {% set day_enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_' ~ today, 'on') %}
+              {% set already_evaluated = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_evaluated_today', 'on') %}
+              {% set departure = states('input_datetime.ev9_schedule_' ~ sched_num ~ '_time') %}
+              {% if enabled and day_enabled and not already_evaluated and departure not in ['unknown', 'unavailable', ''] %}
+                {% set dep_time = today_at(departure) %}
+                {% set eval_time = dep_time - timedelta(minutes=eval_window) %}
+                {% if eval_time <= now() < dep_time %}
+                  {% set ns.matched = sched_num %}
+                {% endif %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.matched }}
+        target_temp: >
+          {% if matched_schedule | int > 0 %}
+            {{ states('input_number.ev9_schedule_' ~ matched_schedule ~ '_temperature') | float(global_temp) }}
+          {% else %}
+            {{ global_temp }}
+          {% endif %}
+        temp_diff: "{{ (target_temp | float - outside_temp | float) | abs }}"
+        runtime_minutes: "{{ (temp_diff * smart_rate) | round(0) | int }}"
+        climate_mode: >
+          {% if outside_temp | float > target_temp | float %}
+            cooling
+          {% else %}
+            heating
+          {% endif %}
+        departure_time_str: >
+          {% if matched_schedule | int > 0 %}
+            {{ states('input_datetime.ev9_schedule_' ~ matched_schedule ~ '_time') }}
+          {% else %}
+            00:00:00
+          {% endif %}
+        delay_seconds: >
+          {% set dep_str = departure_time_str | trim %}
+          {% set dep_time = today_at(dep_str) %}
+          {% set start = dep_time - timedelta(minutes=runtime_minutes | int) %}
+          {{ [((start - now()).total_seconds()) | int, 0] | max }}
+        start_time_str: >
+          {% set dep_str = departure_time_str | trim %}
+          {% set dep_time = today_at(dep_str) %}
+          {% set start = dep_time - timedelta(minutes=runtime_minutes | int) %}
+          {{ start.strftime('%H:%M') }}
+        departure_formatted: >
+          {% set dep_str = departure_time_str | trim %}
+          {% set dep_time = today_at(dep_str) %}
+          {{ dep_time.strftime('%I:%M %p') }}
+    # Mark this schedule as evaluated today (prevents re-triggering)
+    - service: input_boolean.turn_on
+      target:
+        entity_id: "input_boolean.ev9_schedule_{{ matched_schedule }}_evaluated_today"
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: >
+          {{ now().strftime('%H:%M') }} - PRECONDITION_EVAL: Schedule {{ matched_schedule }} - Outside {{ outside_temp | round(0) }}F, target {{ target_temp | round(0) }}F, runtime {{ runtime_minutes }}min, start at {{ start_time_str }}
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ delay_seconds | int > 0 }}"
+          sequence:
+            - delay:
+                seconds: "{{ delay_seconds }}"
+    # Attempt 1: Start climate
+    - service: kia_uvo.start_climate
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+        climate: true
+        temperature: "{{ target_temp | int }}"
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - PRECONDITION_CMD: Climate start command sent (attempt 1)"
+    # Wait for car to respond
+    - delay:
+        seconds: 45
+    # Force data refresh
+    - service: kia_uvo.force_update
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    # Wait for data to arrive
+    - delay:
+        seconds: 90
+    # Verify climate started
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: binary_sensor.ev9_air_conditioner
+              state: "on"
+          sequence:
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_last_precondition_result
+              data:
+                value: "{{ now().strftime('%H:%M') }} - SUCCESS: Schedule {{ matched_schedule }}, {{ target_temp | round(0) }}F, climate VERIFIED running"
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - PRECONDITION_SUCCESS: Climate verified running"
+            - service: notify.mobile_app_andre_iphone
+              data:
+                title: "EV9 Climate Started"
+                message: >
+                  Schedule {{ matched_schedule }} - Climate confirmed running.
+                  Outside: {{ outside_temp | round(0) }}F -> Target: {{ target_temp | round(0) }}F ({{ climate_mode }})
+                  Departure: {{ departure_formatted }}
+      default:
+        # Retry - Attempt 2
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: "{{ now().strftime('%H:%M') }} - PRECONDITION_RETRY: Climate not detected, retrying..."
+        - service: kia_uvo.start_climate
+          data:
+            device_id: "{{ states('input_text.ev9_device_id') }}"
+            climate: true
+            temperature: "{{ target_temp | int }}"
+        - delay:
+            seconds: 120
+        - service: kia_uvo.force_update
+          data:
+            device_id: "{{ states('input_text.ev9_device_id') }}"
+        - delay:
+            seconds: 90
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: binary_sensor.ev9_air_conditioner
+                  state: "on"
+              sequence:
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.ev9_last_precondition_result
+                  data:
+                    value: "{{ now().strftime('%H:%M') }} - SUCCESS: Schedule {{ matched_schedule }}, climate started on retry"
+                - service: python_script.shift_event_log
+                  data:
+                    entity_prefix: input_text.ev9_event
+                    max_events: 10
+                    new_event: "{{ now().strftime('%H:%M') }} - PRECONDITION_SUCCESS: Climate started on retry"
+                - service: notify.mobile_app_andre_iphone
+                  data:
+                    title: "EV9 Climate Started (Retry)"
+                    message: "Schedule {{ matched_schedule }} - Climate confirmed running after retry."
+          default:
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_last_precondition_result
+              data:
+                value: "{{ now().strftime('%H:%M') }} - FAILED: Schedule {{ matched_schedule }}, climate did not start after 2 attempts"
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - PRECONDITION_FAILED: Climate did not start after 2 attempts"
+            - service: notify.mobile_app_andre_iphone
+              data:
+                title: "EV9 Climate FAILED"
+                message: "Schedule {{ matched_schedule }} - Climate did not start after 2 attempts. Check car connectivity."
+  mode: single
