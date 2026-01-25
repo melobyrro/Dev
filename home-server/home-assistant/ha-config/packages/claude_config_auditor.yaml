@@ -4,8 +4,8 @@
 # ============================================
 # Purpose: Monitor Claude Code configuration files across projects
 #          and surface actionable recommendations via dashboard
-# Version: 1.0
-# Last Updated: 2026-01-24
+# Version: 1.1
+# Last Updated: 2026-01-25
 # ============================================
 
 # ============================================
@@ -23,14 +23,15 @@ rest:
         json_attributes:
           - projects
           - total_projects
+          - total_files_discovered
+          - total_commands
+          - total_skills
           - critical_count
           - error_count
           - warning_count
           - info_count
-          - pass_count
           - health_score
           - last_sync
-          - pending_candidates
 
 # ============================================
 # TEMPLATE SENSORS
@@ -86,10 +87,42 @@ template:
         icon: mdi:information
         state: "{{ state_attr('sensor.claude_config_audit_raw', 'info_count') | default(0) }}"
 
-      - name: "Claude Config Pass Count"
-        unique_id: claude_config_pass_count
-        icon: mdi:check
-        state: "{{ state_attr('sensor.claude_config_audit_raw', 'pass_count') | default(0) }}"
+      - name: "Claude Config Files Discovered"
+        unique_id: claude_config_files_discovered
+        icon: mdi:file-document-multiple
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'total_files_discovered') | default(0) }}"
+
+      - name: "Claude Config Commands Count"
+        unique_id: claude_config_commands_count
+        icon: mdi:console
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'total_commands') | default(0) }}"
+
+      - name: "Claude Config Skills Count"
+        unique_id: claude_config_skills_count
+        icon: mdi:robot
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'total_skills') | default(0) }}"
+
+      - name: "Claude Config Commands List"
+        unique_id: claude_config_commands_list
+        icon: mdi:console
+        state: >
+          {% set projects = state_attr('sensor.claude_config_audit_raw', 'projects') %}
+          {% if projects and projects[0] and projects[0].commands %}
+            {{ projects[0].commands | join(', ') }}
+          {% else %}
+            none
+          {% endif %}
+
+      - name: "Claude Config Skills List"
+        unique_id: claude_config_skills_list
+        icon: mdi:robot
+        state: >
+          {% set projects = state_attr('sensor.claude_config_audit_raw', 'projects') %}
+          {% if projects and projects[0] and projects[0].skills %}
+            {{ projects[0].skills | join(', ') }}
+          {% else %}
+            none
+          {% endif %}
 
       - name: "Claude Config Last Sync"
         unique_id: claude_config_last_sync
@@ -159,9 +192,9 @@ input_boolean:
 
 rest_command:
   claude_config_force_scan:
-    url: "http://192.168.1.11:5678/webhook/force-scan"
+    url: "http://192.168.1.11:5678/webhook/scan-repos"
     method: POST
-    timeout: 60
+    timeout: 120
     content_type: "application/json"
     payload: '{"source": "home_assistant"}'
 

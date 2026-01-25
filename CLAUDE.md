@@ -14,8 +14,10 @@ Before starting work, read these files for context:
 
 ## Sync Protocol (Automated via Hooks)
 
-**Automated actions (via `.claude/settings.json` hooks):**
+**User-level hooks (`~/.claude/settings.json`):**
 - **Session start:** Git pull runs automatically - check for errors before proceeding
+
+**Project-level hooks (`.claude/settings.json`):**
 - **After git push:** VM deployment triggers automatically (pulls to VM + deploys configs)
 
 **Manual actions:**
@@ -24,6 +26,8 @@ Before starting work, read these files for context:
 - Never auto-commit or auto-push without explicit user approval
 
 **If hooks fail:** Claude will see the error output and can help resolve conflicts or connection issues.
+
+**New project setup:** Claude Code only reads `.claude/settings.json` from the current directory (no parent traversal). For project-specific hooks, create `.claude/settings.json` in the project root.
 
 ## ChatGPT Integration
 - ChatGPT writes plans to `PLANS/YYYY-MM-DD-<topic>.md`
