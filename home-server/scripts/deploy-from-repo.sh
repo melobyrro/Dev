@@ -50,16 +50,33 @@ rsync -av \
     --exclude='.env' \
     "$REPO/docker/" "/home/byrro/docker/"
 
-# Step 4: Deploy scripts
+# Step 4: Deploy container configs to docker-data
 echo ""
-echo "=== Step 4: Deploying scripts ==="
+echo "=== Step 4: Deploying container configs ==="
+DOCKER_DATA="/mnt/ByrroServer/docker-data"
+
+# Caddy
+rsync -av "$REPO/docker/caddy/Caddyfile" "$DOCKER_DATA/caddy/"
+
+# Homepage
+rsync -av "$REPO/docker/homepage/"*.yaml "$DOCKER_DATA/homepage/"
+
+# Loki
+rsync -av "$REPO/docker/loki/config.yml" "$DOCKER_DATA/loki/"
+
+# Promtail
+rsync -av "$REPO/docker/promtail/promtail-config.yml" "$DOCKER_DATA/promtail/"
+
+# Step 5: Deploy scripts
+echo ""
+echo "=== Step 5: Deploying scripts ==="
 rsync -av \
     --exclude='__pycache__' \
     "$REPO/scripts/" "/home/byrro/scripts/"
 
-# Step 5: Restart Home Assistant (optional - comment out if not desired)
+# Step 6: Restart Home Assistant (optional - comment out if not desired)
 echo ""
-echo "=== Step 5: Restarting Home Assistant ==="
+echo "=== Step 6: Restarting Home Assistant ==="
 docker restart homeassistant
 
 echo ""

@@ -1,0 +1,27 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 30s
+    relabel_configs:
+      - source_labels: ['__meta_docker_container_name']
+        target_label: container_name
+        regex: '/(.*)'
+    pipeline_stages:
+      - match:
+          selector: '{container_name="immich-server"}'
+          stages:
+            - regex:
+                expression: 'duplicate key value violates unique constraint "UQ_assets_owner_checksum"|code: ''23505'''
+            - labels:
+                dupkey: "true"

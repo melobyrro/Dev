@@ -1,0 +1,35 @@
+---
+- Admin Group:
+    - Portainer:
+        href: https://portainer.byrroserver.com
+        icon: portainer.png
+        description: Docker management
+- Media Stack:
+    - Sonarr:
+        href: http://sonarr.byrroserver.com
+        icon: sonarr.png
+        description: TV show automation
+    - Radarr:
+        href: http://radarr.byrroserver.com
+        icon: radarr.png
+        description: Movie automation
+    - qBittorrent:
+        href: http://qbittorrent.byrroserver.com
+        icon: qbittorrent.png
+        description: Torrent client via Gluetun
+    - Portainer:
+        href: https://portainer.byrroserver.com
+        icon: portainer.png
+        description: Docker management
+    - Immich (TODO):
+        href: http://immich.byrroserver.com
+        icon: immich.png
+        description: Self-hosted photos
+    - Grafana (TODO):
+        href: http://grafana.byrroserver.com
+        icon: grafana.png
+        description: Metrics dashboard
+    - Prometheus (TODO):
+        href: http://prometheus.byrroserver.com
+        icon: prometheus.png
+        description: Metrics collector

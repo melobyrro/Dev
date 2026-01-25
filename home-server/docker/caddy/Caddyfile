@@ -1,0 +1,224 @@
+# Global
+{
+	acme_dns cloudflare {env.CLOUDFLARE_API_TOKEN}
+	# optional: email your-email@example.com
+}
+
+# Reusable snippet
+(common) {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options nosniff
+		Referrer-Policy strict-origin-when-cross-origin
+		Permissions-Policy "camera=(), microphone=(), geolocation=()"
+	}
+}
+
+# Authelia forward auth snippet
+(authelia) {
+	forward_auth authelia:9091 {
+		uri /api/authz/forward-auth
+		copy_headers Remote-User Remote-Groups Remote-Email Remote-Name
+	}
+}
+
+# --- Authelia Portal ---
+auth.byrroserver.com {
+	import common
+	reverse_proxy authelia:9091
+}
+
+# --- Media Stack ---
+sonarr.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy sonarr:8989
+}
+
+radarr.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy radarr:7878
+}
+
+prowlarr.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy prowlarr:9696
+}
+
+bazarr.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy bazarr:6767
+}
+
+qbittorrent.byrroserver.com {
+	import common
+	import authelia
+	# your qBittorrent UI runs behind gluetun on 8181
+	reverse_proxy gluetun:8181
+}
+
+plex.byrroserver.com {
+	import common
+	reverse_proxy http://192.168.1.11:32400
+}
+
+
+autobrr.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy autobrr:7474
+}
+
+
+# --- Management Stack ---
+portainer.byrroserver.com {
+	import common
+	reverse_proxy portainer:9000
+}
+
+adguard.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy adguardhome:80
+}
+
+# Grafana - Protected with Authelia
+grafana.byrroserver.com {
+	import common
+	import authelia
+	# Grafana uses websockets on /api/live; default reverse_proxy is fine
+	reverse_proxy grafana:3000
+}
+
+# --- Other Services ---
+
+# Immich - Using native authentication (no Authelia)
+immich.byrroserver.com, immich-direct.byrroserver.com {
+	import common
+	# Rewrite legacy Immich endpoints if the web UI still calls them
+	@legacy path_regexp legacy ^/api/server-info/(.*)
+	rewrite @legacy /api/server/{re.legacy.1}
+	reverse_proxy immich-server:2283
+}
+
+proxmox.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy https://192.168.1.10:8006 {
+		transport http {
+			tls_insecure_skip_verify
+		}
+		# Proxmox SSO is picky about Origin; this helps in some setups
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+		header_up X-Forwarded-For {remote_host}
+	}
+}
+
+router.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy http://192.168.1.1
+}
+
+# Jellyseerr - Protected with Authelia
+jellyseerr.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy jellyseerr:5055
+}
+
+
+# --- Church Services ---
+church.byrroserver.com {
+	import common
+
+	# Prevent caching of index.html to ensure users get latest UI updates
+	@html {
+		path /index.html /
+	}
+	header @html {
+		Cache-Control "no-cache, no-store, must-revalidate"
+		Pragma "no-cache"
+		Expires "0"
+	}
+
+	# All routes go directly to the app - it handles its own authentication
+	# The app has built-in login at /login and protects /admin, /reports, etc.
+	reverse_proxy culto_web:8000
+}
+
+# Dawarich - Location tracking (native auth, no Authelia)
+dawarich.byrroserver.com {
+	import common
+	reverse_proxy dawarich-app:3000
+}
+
+# --- Password Manager ---
+vault.byrroserver.com {
+	import common
+	# import authelia - REMOVED: breaks mobile app
+	reverse_proxy vaultwarden:80
+}
+
+# Tautulli - Plex Monitoring (protected with Authelia)
+tautulli.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy tautulli:8181
+}
+
+# Paperless-ngx - Document Management (protected with Authelia)
+paperless.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy paperless:8000
+}
+
+# --- Monitoring & Notifications ---
+
+# Uptime Kuma - Service Health Monitoring (protected with Authelia)
+uptime.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy uptime-kuma:3001
+}
+
+# ntfy - Push Notification Server (native auth, no Authelia)
+ntfy.byrroserver.com {
+	import common
+	import authelia
+	reverse_proxy ntfy:80
+}
+
+# --- Home Automation ---
+
+# Home Assistant - Smart Home Hub (selective Authelia)
+home.byrroserver.com {
+	import common
+
+	# Direct proxy to Home Assistant - no Authelia
+	# Home Assistant handles its own authentication
+	
+	# If the request is proxied via Cloudflare, use CF-Connecting-IP for the real client IP.
+	@cloudflare {
+		remote_ip 173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32
+		header CF-Connecting-IP *
+	}
+
+	reverse_proxy @cloudflare http://192.168.1.11:8123 {
+		header_up Host {host}
+		header_up X-Forwarded-For {http.request.header.CF-Connecting-IP}
+		header_up X-Forwarded-Proto {scheme}
+	}
+
+	# Fallback for non-Cloudflare clients (LAN access, etc.)
+	reverse_proxy http://192.168.1.11:8123 {
+		header_up Host {host}
+		header_up X-Forwarded-For {remote_host}
+		header_up X-Forwarded-Proto {scheme}
+	}
+}
