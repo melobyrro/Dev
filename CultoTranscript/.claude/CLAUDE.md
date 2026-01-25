@@ -852,3 +852,8 @@ When implementing a significant feature:
 
 - `ARCHITECTURE.md` - Full system architecture with technical deep-dives
 - `/docker/docker-compose.yml` - Container configuration (source of truth for services)
+
+## Sync Protocol
+
+This project syncs via the Dev monorepo. See `/CLAUDE.md` for system-wide context.
+Check `/PLANS/` for pending tasks from ChatGPT before starting new work.
