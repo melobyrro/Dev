@@ -1,0 +1,68 @@
+input_number:
+  plex_niceness:
+    name: Plex Niceness
+    min: -20
+    max: 19
+    step: 1
+    icon: mdi:speedometer
+    unit_of_measurement: nice
+  qbit_niceness:
+    name: qBittorrent Niceness
+    min: -20
+    max: 19
+    step: 1
+    icon: mdi:snail
+    unit_of_measurement: nice
+
+input_boolean:
+  plex_priority_enabled:
+    name: Enable Priority Optimization
+    icon: mdi:rocket
+
+input_select:
+  plex_io_class:
+    name: Plex I/O Class
+    options:
+      - "1 (Realtime)"
+      - "2 (Best Effort)"
+      - "3 (Idle)"
+    icon: mdi:harddisk-plus
+  qbit_io_class:
+    name: qBittorrent I/O Class
+    options:
+      - "1 (Realtime)"
+      - "2 (Best Effort)"
+      - "3 (Idle)"
+    icon: mdi:harddisk-minus
+
+shell_command:
+  update_plex_priority_config: >
+    ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /config/ssh_keys/id_rsa byrro@192.168.1.11 "echo 'PLEX_NICENESS={{ states('input_number.plex_niceness') | int }}
+    QBIT_NICENESS={{ states('input_number.qbit_niceness') | int }}
+    PLEX_IONICE_CLASS={{ states('input_select.plex_io_class').split(' ')[0] }}
+    QBIT_IONICE_CLASS={{ states('input_select.qbit_io_class').split(' ')[0] }}
+    ENABLED={{ states('input_boolean.plex_priority_enabled') | lower }}' > /tmp/plex_priority.conf"
+
+command_line:
+  - sensor:
+      name: Plex Priority Log
+      command: "ssh -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i /config/ssh_keys/id_rsa byrro@192.168.1.11 'tail -n 10 /tmp/plex_priority.log'"
+      refresh_interval: 30
+      value_template: "OK"
+      json_attributes:
+        - log_content
+      scan_interval: 30
+      unique_id: plex_priority_log_sensor
+
+automation:
+  - alias: "Update Plex Priority Config"
+    trigger:
+      - platform: state
+        entity_id:
+          - input_number.plex_niceness
+          - input_number.qbit_niceness
+          - input_select.plex_io_class
+          - input_select.qbit_io_class
+          - input_boolean.plex_priority_enabled
+    action:
+      - service: shell_command.update_plex_priority_config

@@ -1,0 +1,14 @@
+# Worktrees for isolated development
+.worktrees/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets (never commit)
+secrets.yaml

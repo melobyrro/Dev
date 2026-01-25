@@ -1,0 +1,425 @@
+# Kia EV9 Automations
+# Version: 1.1
+# Last Updated: 2025-01-19
+#
+# DEPLOYMENT:
+# Add these automations to your automations.yaml or create via UI
+# Then reload automations: Settings → Automations → Reload
+
+# ============================================================
+# CHARGING NOTIFICATIONS
+# ============================================================
+
+- id: ev9_charging_complete
+  alias: "EV9: Charging Complete Notification"
+  description: "Notify when EV9 finishes charging"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      from: "on"
+      to: "off"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_charging_complete
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      state: "on"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔋 EV9 Charging Complete"
+        message: >
+          Battery at {{ states('sensor.ev9_ev_battery_level') }}%
+          Range: {{ states('sensor.ev9_ev_range') }} miles
+        data:
+          push:
+            sound: default
+            interruption-level: active
+  mode: single
+
+- id: ev9_low_battery_alert
+  alias: "EV9: Low Battery Alert"
+  description: "Notify when battery drops below threshold"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.ev9_ev_battery_level
+      below: input_number.ev9_low_battery_threshold
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_low_battery
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      state: "off"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "⚠️ EV9 Low Battery"
+        message: >
+          Battery at {{ states('sensor.ev9_ev_battery_level') }}%
+          Range: {{ states('sensor.ev9_ev_range') }} miles
+          Consider charging soon.
+        data:
+          push:
+            sound: default
+            interruption-level: time-sensitive
+  mode: single
+
+# ============================================================
+# CHARGING INTERRUPTION MONITORING (NEW)
+# ============================================================
+
+- id: ev9_charging_interrupted
+  alias: "EV9: Charging Interrupted Alert"
+  description: "Alert if charging stops unexpectedly while plugged in"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      from: "on"
+      to: "off"
+      for:
+        minutes: "{{ states('input_number.ev9_charge_interrupt_check_delay') | int(10) }}"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_charging_interrupted
+      state: "on"
+    # Still plugged in
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      state: "on"
+    # Not fully charged (below 95%)
+    - condition: numeric_state
+      entity_id: sensor.ev9_ev_battery_level
+      below: 95
+    # It's nighttime (overnight charging window)
+    - condition: time
+      after: "20:00:00"
+      before: "07:00:00"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "⚡ EV9 Charging Stopped!"
+        message: >
+          Charging interrupted at {{ states('sensor.ev9_ev_battery_level') }}%
+          Car is still plugged in but not charging.
+          Last power: {{ states('sensor.ev9_ev_charging_power') }} kW
+        data:
+          push:
+            sound: default
+            interruption-level: time-sensitive
+          actions:
+            - action: EV9_RESTART_CHARGE
+              title: "Restart Charging"
+            - action: EV9_FORCE_UPDATE
+              title: "Refresh Status"
+  mode: single
+
+- id: ev9_restart_charge_from_notification
+  alias: "EV9: Restart Charge from Notification"
+  description: "Handle restart charging action from notification"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: EV9_RESTART_CHARGE
+  action:
+    - service: kia_uvo.stop_charge
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+    - delay:
+        seconds: 30
+    - service: kia_uvo.start_charge
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔌 EV9 Charging Restarted"
+        message: "Sent command to restart charging. Check status in a few minutes."
+  mode: single
+
+# ============================================================
+# LOW CHARGING POWER ALERT (NEW)
+# ============================================================
+
+- id: ev9_low_charging_power
+  alias: "EV9: Low Charging Power Alert"
+  description: "Alert if charging power drops below expected threshold"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.ev9_ev_charging_power
+      below: input_number.ev9_low_power_threshold
+      for:
+        minutes: 5
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_low_charging_power
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      state: "on"
+    # Only alert if not near full charge (tapering is normal above 80%)
+    - condition: numeric_state
+      entity_id: sensor.ev9_ev_battery_level
+      below: 80
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "⚡ EV9 Low Charging Power"
+        message: >
+          Charging at {{ states('sensor.ev9_ev_charging_power') }} kW
+          Expected: {{ states('input_number.ev9_expected_charge_power') }} kW
+          Battery: {{ states('sensor.ev9_ev_battery_level') }}%
+
+          Possible causes: Temperature, EVSE issue, or car limiting charge.
+        data:
+          push:
+            sound: default
+          actions:
+            - action: EV9_RESTART_CHARGE
+              title: "Restart Charging"
+  mode: single
+
+# ============================================================
+# SECURITY NOTIFICATIONS
+# ============================================================
+
+- id: ev9_unlocked_at_home
+  alias: "EV9: Unlocked at Home Alert"
+  description: "Notify if car is unlocked at home for too long"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_locked
+      to: "off"
+      for:
+        minutes: "{{ states('input_number.ev9_unlocked_alert_delay') | int(10) }}"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_unlocked_at_home
+      state: "on"
+    - condition: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔓 EV9 Unlocked"
+        message: >
+          Your EV9 has been unlocked at home for {{ states('input_number.ev9_unlocked_alert_delay') | int }} minutes.
+        data:
+          push:
+            sound: default
+          actions:
+            - action: LOCK_EV9
+              title: "Lock Now"
+              destructive: false
+  mode: single
+
+- id: ev9_lock_from_notification
+  alias: "EV9: Lock from Notification Action"
+  description: "Lock car when notification action is tapped"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: LOCK_EV9
+  action:
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔒 EV9 Locked"
+        message: "Your EV9 has been locked."
+  mode: single
+
+# ============================================================
+# WALK-AWAY LOCK (NEW)
+# ============================================================
+
+- id: ev9_walk_away_lock
+  alias: "EV9: Walk-Away Auto Lock"
+  description: "Auto-lock when leaving home zone"
+  trigger:
+    - platform: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+      event: leave
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_walk_away_lock_enabled
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_locked
+      state: "off"
+  action:
+    - delay:
+        minutes: "{{ states('input_number.ev9_walk_away_lock_delay') | int(2) }}"
+    # Re-check conditions after delay
+    - condition: state
+      entity_id: binary_sensor.ev9_locked
+      state: "off"
+    - condition: not
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.ev9_location
+          zone: zone.home
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔒 EV9 Auto-Locked"
+        message: "Walk-away lock activated after leaving home."
+        data:
+          push:
+            sound: default
+  mode: single
+
+# ============================================================
+# AUTO-CLOSE WINDOWS (NEW)
+# ============================================================
+
+- id: ev9_auto_close_windows
+  alias: "EV9: Auto-Close Windows on Leave"
+  description: "Auto-close windows when leaving home zone"
+  trigger:
+    - platform: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+      event: leave
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_auto_close_windows_enabled
+      state: "on"
+  action:
+    - delay:
+        minutes: "{{ states('input_number.ev9_auto_close_windows_delay') | int(2) }}"
+    # Re-check we're still away from home
+    - condition: not
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.ev9_location
+          zone: zone.home
+    - service: kia_uvo.set_windows
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+        close_all: true
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🪟 EV9 Windows Closed"
+        message: "Auto-close windows activated after leaving home."
+  mode: single
+
+# ============================================================
+# PRE-CONDITIONING AUTOMATION
+# ============================================================
+
+- id: ev9_precondition_schedule
+  alias: "EV9: Scheduled Pre-conditioning"
+  description: "Start climate control before scheduled departure"
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_precondition_enabled
+      state: "on"
+    - condition: template
+      value_template: >
+        {% set day = now().strftime('%A').lower() %}
+        {% set enabled = states('input_boolean.ev9_precondition_' ~ day) %}
+        {{ enabled == 'on' }}
+    - condition: template
+      value_template: >
+        {% set day = now().strftime('%A').lower() %}
+        {% set departure = states('input_datetime.ev9_departure_' ~ day) %}
+        {% set lead_time = states('input_number.ev9_precondition_lead_time') | int %}
+        {% if departure not in ['unknown', 'unavailable'] %}
+          {% set dep_time = today_at(departure) %}
+          {% set start_time = dep_time - timedelta(minutes=lead_time) %}
+          {{ start_time <= now() < start_time + timedelta(minutes=1) }}
+        {% else %}
+          false
+        {% endif %}
+    - condition: state
+      entity_id: binary_sensor.ev9_air_conditioner
+      state: "off"
+  action:
+    - service: kia_uvo.start_climate
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+        climate: true
+        temperature: "{{ states('input_number.ev9_target_temperature') | int }}"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "❄️ EV9 Pre-conditioning Started"
+        message: >
+          Climate control started. Target: {{ states('input_number.ev9_target_temperature') }}°F
+          Departure in {{ states('input_number.ev9_precondition_lead_time') }} minutes.
+  mode: single
+
+# ============================================================
+# DATA REFRESH
+# ============================================================
+
+- id: ev9_force_update_on_plug
+  alias: "EV9: Force Update When Plugged In"
+  description: "Refresh data when charging cable is connected"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      to: "on"
+  action:
+    - delay:
+        seconds: 30
+    - service: kia_uvo.force_update
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+  mode: single
+
+- id: ev9_force_update_from_notification
+  alias: "EV9: Force Update from Notification"
+  description: "Handle force update action from notification"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: EV9_FORCE_UPDATE
+  action:
+    - service: kia_uvo.force_update
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔄 EV9 Status Refreshing"
+        message: "Requested fresh data from vehicle. Check back in 1-2 minutes."
+  mode: single
+
+# ============================================================
+# CHARGING CURRENT CONTROL
+# ============================================================
+
+- id: ev9_set_charging_current
+  alias: "EV9: Set Charging Current from Input Select"
+  description: "Change charging current when input_select changes"
+  trigger:
+    - platform: state
+      entity_id: input_select.ev9_charging_current
+  condition:
+    - condition: template
+      value_template: "{{ trigger.to_state.state != trigger.from_state.state }}"
+  action:
+    - service: kia_uvo.set_charging_current
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+        charging_current: >
+          {% set current = states('input_select.ev9_charging_current') %}
+          {% if current == '100%' %}100
+          {% elif current == '90%' %}90
+          {% else %}60{% endif %}
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "⚡ EV9 Charging Current Changed"
+        message: "Set to {{ states('input_select.ev9_charging_current') }}"
+  mode: single

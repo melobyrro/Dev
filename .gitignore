@@ -48,3 +48,7 @@ build/
 secrets.yaml
 *.pem
 *.key
+SERVICE_ACCOUNT.json
+**/SERVICE_ACCOUNT.json
+*credentials*.json
+*service_account*.json

@@ -1,0 +1,178 @@
+# Dawarich Trip Automations
+# Updated 2026-01-19 with debounce logic and improved extend interval
+# These automations trigger the dawarich_trip.py script based on location zone changes
+
+# ============================================================================
+# CORE TRIP AUTOMATIONS
+# ============================================================================
+
+- id: dawarich_trip_start
+  alias: "Dawarich Trip - Start"
+  description: "Start or resume a trip when leaving home zone"
+  mode: single
+  trigger:
+    - platform: zone
+      entity_id: person.andre_byrro
+      zone: zone.home
+      event: leave
+  condition:
+    - condition: state
+      entity_id: input_boolean.dawarich_on_trip
+      state: "off"
+    # Debounce: Only start if we haven't just finalized
+    - condition: state
+      entity_id: timer.dawarich_trip_debounce
+      state: "idle"
+  action:
+    - service: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.dawarich_on_trip
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.dawarich_trip_start
+      data:
+        datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    - service: shell_command.dawarich_trip_create
+
+- id: dawarich_trip_extend
+  alias: "Dawarich Trip - Extend"
+  description: "Extend the current trip based on configurable interval"
+  mode: single
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  condition:
+    - condition: state
+      entity_id: input_boolean.dawarich_on_trip
+      state: "on"
+    # Only extend at the configured interval (default 10 minutes)
+    - condition: template
+      value_template: >
+        {% set interval = states('input_number.dawarich_extend_minutes') | int(10) %}
+        {{ now().minute % interval == 0 }}
+  action:
+    - service: shell_command.dawarich_trip_extend
+    - service: input_datetime.set_datetime
+      target:
+        entity_id: input_datetime.dawarich_trip_last_update
+      data:
+        datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+- id: dawarich_trip_finalize
+  alias: "Dawarich Trip - Finalize"
+  description: "Finalize the trip when returning home"
+  mode: single
+  trigger:
+    - platform: zone
+      entity_id: person.andre_byrro
+      zone: zone.home
+      event: enter
+  condition:
+    - condition: state
+      entity_id: input_boolean.dawarich_on_trip
+      state: "on"
+  action:
+    - service: shell_command.dawarich_trip_finalize
+    - service: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.dawarich_on_trip
+    # Start debounce timer to prevent rapid re-triggering
+    - service: timer.start
+      target:
+        entity_id: timer.dawarich_trip_debounce
+      data:
+        duration: "{{ (states('input_number.dawarich_debounce_minutes') | int(5)) * 60 }}"
+
+# ============================================================================
+# ACTIVITY LOGGING AUTOMATIONS
+# Event-driven logging instead of polling
+# ============================================================================
+
+- id: dawarich_log_start
+  alias: "Dawarich Log - Trip Started"
+  description: "Log when a trip starts"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: automation.dawarich_trip_start
+      attribute: last_triggered
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.dawarich_activity_log
+      data:
+        value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}|Start|zone|success|Trip started"
+
+- id: dawarich_log_extend
+  alias: "Dawarich Log - Trip Extended"
+  description: "Log when a trip is extended"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: automation.dawarich_trip_extend
+      attribute: last_triggered
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.dawarich_activity_log
+      data:
+        value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}|Extend|scheduled|success|-"
+
+- id: dawarich_log_finalize
+  alias: "Dawarich Log - Trip Finalized"
+  description: "Log when a trip is finalized"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: automation.dawarich_trip_finalize
+      attribute: last_triggered
+  action:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.dawarich_activity_log
+      data:
+        value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}|Finalize|zone|success|Trip finalized"
+
+# ============================================================================
+# ERROR NOTIFICATION AUTOMATIONS
+# ============================================================================
+
+- id: dawarich_error_notify
+  alias: "Dawarich Error - Notify on Failure"
+  description: "Send notification when Dawarich automations become unavailable"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id:
+        - automation.dawarich_trip_start
+        - automation.dawarich_trip_extend
+        - automation.dawarich_trip_finalize
+      to: "unavailable"
+      for:
+        minutes: 5
+  action:
+    - service: persistent_notification.create
+      data:
+        title: "Dawarich Automation Error"
+        message: "One or more Dawarich trip automations are unavailable. Please check the configuration."
+        notification_id: "dawarich_automation_error"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "Dawarich Error"
+        message: "Trip automations are unavailable"
+        data:
+          tag: "dawarich_error"
+
+- id: dawarich_error_clear
+  alias: "Dawarich Error - Clear Notification"
+  description: "Clear error notification when automations recover"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: automation.dawarich_trip_start
+      from: "unavailable"
+      to: "on"
+  action:
+    - service: persistent_notification.dismiss
+      data:
+        notification_id: "dawarich_automation_error"

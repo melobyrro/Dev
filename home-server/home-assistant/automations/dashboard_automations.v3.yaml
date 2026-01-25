@@ -1,0 +1,256 @@
+views:
+  - title: Dawarich
+    path: dawarich
+    icon: mdi:map-marker-path
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            title: Overview
+            content: >
+              ## Dawarich Trip Automation
+
+              **Purpose**: Automatically manages trips in Dawarich based on your location. It rolls monthly trips (e.g., 2026-01) and yearly trips (2026) so movement events are correctly grouped.
+
+
+              **How it works**: When you leave the 'home' zone, a trip is started or resumed. While away, the trip is extended every 10 minutes. When you return home, the trip is finalized.
+
+
+              **Automation jobs covered**:
+
+              - **Monthly Trip**: rolls over on the 1st of each month.
+
+              - **Yearly Trip**: rolls over on Jan 1st.
+
+
+              **Implementation Links**:
+
+              - `/home/byrro/automation/dawarich-trips/dawarich_trip.py`
+          - type: entities
+            entities:
+              - entity: sensor.dawarich_status
+                name: Last Run
+              - entity: sensor.dawarich_next_run
+                name: Next Run
+              - entity: input_boolean.dawarich_on_trip
+                name: Status
+                icon: mdi:check-circle
+          - type: markdown
+            title: Activity Logs
+            content: "{{ state_attr('sensor.dawarich_status', 'recent_log_table') }}"
+          - type: entities
+            title: Controls
+            entities:
+              - entity: automation.dawarich_trip_start
+                name: Start Trip Automation
+              - entity: automation.dawarich_trip_extend
+                name: Extend Trip Automation
+              - entity: automation.dawarich_trip_finalize
+                name: Finalize Trip Automation
+
+  - title: Immich
+    path: immich
+    icon: mdi:image-multiple
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            title: Overview
+            content: >
+              ## Immich Album Maintenance
+
+              **Purpose**: Automatically populates dynamic albums (Portrait, Selfies, Videos) based on metadata and filenames.
+
+
+              **How it works**: Daily cron jobs query the Immich database for new assets matching specific criteria and add them to the designated albums via the Immich API.
+
+
+              **Automation jobs covered**:
+
+              - **Portrait Update**: Runs daily at 04:30.
+
+              - **Selfies Update**: Runs daily at 04:15.
+
+              - **Videos Update**: Runs daily at 04:00.
+
+
+              **Implementation Links**:
+
+              - `/home/byrro/scripts/update_videos_album.py`
+
+              - `/home/byrro/scripts/update_selfies_album.py`
+
+              - `/home/byrro/scripts/update_portrait_album.py`
+          - type: entities
+            entities:
+              - entity: sensor.immich_videos_next_run
+                name: Next Videos Update
+              - entity: sensor.immich_selfies_next_run
+                name: Next Selfies Update
+              - entity: sensor.immich_portrait_next_run
+                name: Next Portrait Update
+          - type: markdown
+            title: Activity Logs
+            content: "{{ state_attr('sensor.immich_status', 'recent_log_table') }}"
+
+  - title: Autobrr
+    path: autobrr
+    icon: mdi:robot-industrial
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            title: Overview
+            content: >
+              ## Hardlink + Filebot Pipeline
+
+              **Purpose**: Periodically checks for new downloads, creates hardlinks to keep the original file seeding, and uses Filebot to rename and organize them into your media library.
+
+
+              **How it works**: 
+
+              1. **Hardlink Sweep** runs every 5 minutes checking inbox folders.
+
+              2. **Filebot Organize** runs every 15 minutes to match and move linked files.
+
+              3. Unmatched files are moved to an `_unmatched` subfolder for manual review.
+
+
+              **Automation jobs covered**:
+
+              - **Hardlink Sweep**: Processes 'prowlarr' and 'sports' categories.
+
+              - **Filebot Organize**: Standard AMC rename/move logic.
+
+
+              **Implementation Links**:
+
+              - `/home/byrro/scripts/hardlink_other_sweep.sh`
+
+              - `/home/byrro/scripts/filebot_other.sh`
+          - type: entities
+            entities:
+              - entity: sensor.hardlink_next_run
+                name: Next Hardlink Sweep
+              - entity: sensor.filebot_next_run
+                name: Next Filebot Organize
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: button
+                entity: input_button.hardlink_other_run
+                name: Run Hardlink Now
+              - type: button
+                entity: input_button.filebot_other_run
+                name: Run Filebot Now
+          - type: markdown
+            title: Activity Logs
+            content: "{{ state_attr('sensor.autobrr_status', 'recent_log_table') }}"
+
+  - title: Plex Priority
+    path: plex-priority
+    icon: mdi:plex
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            title: Plex Dynamic Priority
+            content: >
+              **Control resource allocation when Plex is active.**
+
+              Lower niceness = Higher priority.
+
+              Class 1 (Realtime) > Class 2 (Best Effort) > Class 3 (Idle).
+          - type: entities
+            title: Service Control
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.plex_priority_enabled
+                name: Enable Optimization
+          - type: entities
+            title: CPU Priority (Niceness)
+            show_header_toggle: false
+            entities:
+              - entity: input_number.plex_niceness
+                name: Plex Priority (-20 to 19)
+              - entity: input_number.qbit_niceness
+                name: Torrent Throttling (-20 to 19)
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: entities
+                title: Plex I/O
+                entities:
+                  - entity: input_select.plex_io_class
+                    name: Class
+              - type: entities
+                title: qBittorrent I/O
+                entities:
+                  - entity: input_select.qbit_io_class
+                    name: Class
+          - type: button
+            name: Force Sync Configuration
+            icon: mdi:sync
+            show_name: true
+            tap_action:
+              action: call-service
+              service: shell_command.update_plex_priority_config
+          - type: markdown
+            title: Service Log
+            content: |
+              ```text
+              {{ state_attr('sensor.plex_priority_log', 'log_content') }}
+              ```
+          - type: markdown
+            title: How it Works
+            content: >
+              ### 🧠 **The Logic**
+
+              This automation monitors **Plex**. When a stream starts (Active), it automatically re-allocates system resources to prevent buffering. When the stream stops (Idle), it restores balance.
+
+
+              ### 🎛️ **Controls Reference**
+
+              **1. Service Control**
+
+              *   **Enable Optimization:** Master switch. If OFF, no automatic changes happen.
+
+
+              **2. CPU Priority (Niceness)**
+
+              *   Values range from **-20** (Highest Priority) to **19** (Lowest Priority).
+
+              *   **Plex (-5):** "VIP" status. It cuts in line for CPU time.
+
+              *   **Torrents (10):** "Background" status. It only runs when the CPU is free.
+
+
+              **3. Disk I/O Class**
+
+              *   **Realtime (1):** Dangerous. First access to disk.
+
+              *   **Best Effort (2):** Standard default.
+
+              *   **Idle (3):** Polite. Only reads/writes when the disk is completely silent. **Ideal for Torrents.**
+
+
+              ### 💡 **Usage Examples**
+
+              **"No Buffering Mode" (Recommended)**
+
+              *   Plex Priority: **-5** (High)
+
+              *   Torrent Throttling: **15** (Very Low)
+
+              *   Torrent I/O: **Idle (3)** (Stops torrents during heavy playback)
+
+
+              **"Balanced Mode"**
+
+              *   Plex Priority: **0** (Normal)
+
+              *   Torrent Throttling: **5** (Slightly Lower)
+
+              *   Torrent I/O: **Best Effort (2)** (Torrents continue but might slow down Plex)

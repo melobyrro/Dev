@@ -1,0 +1,66 @@
+title: Wyze Cameras
+views:
+  - title: Overview
+    path: overview
+    icon: mdi:cctv
+    badges: []
+    cards:
+      - type: grid
+        columns: 2
+        square: false
+        cards:
+          - type: picture-glance
+            title: Living Room
+            camera_image: camera.living_room_cam
+            camera_view: live
+            entities:
+              - entity: binary_sensor.wyze_living_room_cam_online
+                name: Online
+              - entity: binary_sensor.wyze_living_room_cam_motion
+                name: Motion
+          - type: picture-glance
+            title: Patio
+            camera_image: camera.patio_cam
+            camera_view: live
+            entities:
+              - entity: binary_sensor.wyze_patio_cam_online
+                name: Online
+              - entity: binary_sensor.wyze_patio_cam_motion
+                name: Motion
+          - type: picture-glance
+            title: Front Door
+            camera_image: camera.front_door_cam
+            camera_view: live
+            entities:
+              - entity: binary_sensor.wyze_front_door_cam_online
+                name: Online
+              - entity: binary_sensor.wyze_front_door_cam_motion
+                name: Motion
+          - type: picture-glance
+            title: Baby Room
+            camera_image: camera.baby_room
+            camera_view: live
+            entities:
+              - entity: binary_sensor.wyze_baby_room_online
+                name: Online
+              - entity: binary_sensor.wyze_baby_room_motion
+                name: Motion
+      - type: entities
+        title: Camera Status
+        entities:
+          - entity: binary_sensor.wyze_living_room_cam_online
+            name: Living Room Online
+          - entity: binary_sensor.wyze_living_room_cam_motion
+            name: Living Room Motion
+          - entity: binary_sensor.wyze_patio_cam_online
+            name: Patio Online
+          - entity: binary_sensor.wyze_patio_cam_motion
+            name: Patio Motion
+          - entity: binary_sensor.wyze_front_door_cam_online
+            name: Front Door Online
+          - entity: binary_sensor.wyze_front_door_cam_motion
+            name: Front Door Motion
+          - entity: binary_sensor.wyze_baby_room_online
+            name: Baby Room Online
+          - entity: binary_sensor.wyze_baby_room_motion
+            name: Baby Room Motion

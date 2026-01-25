@@ -1,0 +1,181 @@
+# ============================================================================
+# Patio AC - Threshold Validation Automations v2
+# ============================================================================
+#
+# PURPOSE:
+#   Ensures target temperature/dew point is ALWAYS at least 1 degree below
+#   the trigger threshold. This prevents infinite run conditions where the
+#   AC would never stop (if target >= trigger).
+#
+# v2 CHANGES (2026-01-21):
+#   - Added clamping for Heat Guard values to AC's supported range (61-86°F)
+#   - Heat target is clamped to min 61°F (AC min_temp)
+#   - Heat threshold is clamped to max 86°F (AC max_temp)
+#   - Updated Day/Night to use independent targets (dewpoint_day_stop, dewpoint_night_stop)
+#
+# AC CONSTRAINTS:
+#   - min_temp: 61°F
+#   - max_temp: 86°F
+#
+# BEHAVIOR (Bidirectional Validation):
+#   - When you LOWER a trigger slider → target automatically follows down
+#   - When you RAISE a target slider → trigger automatically follows up
+#   - The 1° minimum gap is always maintained
+#   - Values are clamped to AC's supported range
+#
+# COMPONENTS:
+#   1. Heat Guard (Cooling) - COOL mode, respects AC temp limits
+#      - Trigger: input_number.patio_ac_heat_threshold (max 86°F)
+#      - Target:  input_number.patio_ac_heat_target (min 61°F)
+#
+#   2. Day Humidity (Dehumidifying) - DRY mode, no temp limits
+#      - Trigger: input_number.patio_ac_dewpoint_start
+#      - Target:  input_number.patio_ac_dewpoint_day_stop
+#
+#   3. Night Humidity (Dehumidifying) - DRY mode, no temp limits
+#      - Trigger: input_number.patio_ac_dewpoint_night_start
+#      - Target:  input_number.patio_ac_dewpoint_night_stop
+#
+# DEPLOYMENT:
+#   These automations are included in the main automations.yaml on Home Assistant.
+#   After changes, reload automations via Developer Tools or call automation.reload.
+#
+# ADDED: 2026-01-17
+# UPDATED: 2026-01-19 - Added bidirectional validation (target→trigger)
+# UPDATED: 2026-01-21 - v2: Independent day/night targets, AC temp clamping
+#
+# ============================================================================
+
+# === DAY HUMIDITY TRIGGER ===
+# When day dew point trigger is lowered below (target + 1), lower the target
+- id: patio_ac_validate_day_humidity_trigger
+  alias: "Patio AC - Validate Day Humidity Trigger"
+  description: "When day trigger changes, ensure day target is at least 1 below"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_number.patio_ac_dewpoint_start
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_dewpoint_day_stop') | float(0) >=
+           states('input_number.patio_ac_dewpoint_start') | float(0) }}
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_dewpoint_day_stop
+      data:
+        value: "{{ (states('input_number.patio_ac_dewpoint_start') | float(0) - 1) | round(0) }}"
+
+# === DAY DEW POINT TARGET ===
+# When day target is raised to meet/exceed day trigger, raise the trigger
+- id: patio_ac_validate_day_dewpoint_target
+  alias: "Patio AC - Validate Day Dew Point Target"
+  description: "When day target changes, ensure day trigger is at least 1 above"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_number.patio_ac_dewpoint_day_stop
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_dewpoint_day_stop') | float(0) >=
+           states('input_number.patio_ac_dewpoint_start') | float(0) }}
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_dewpoint_start
+      data:
+        value: "{{ (states('input_number.patio_ac_dewpoint_day_stop') | float(0) + 1) | round(0) }}"
+
+# === NIGHT HUMIDITY TRIGGER ===
+# When night dew point trigger is lowered below (target + 1), lower the target
+- id: patio_ac_validate_night_humidity_trigger
+  alias: "Patio AC - Validate Night Humidity Trigger"
+  description: "When night trigger changes, ensure night target is at least 1 below"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_number.patio_ac_dewpoint_night_start
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_dewpoint_night_stop') | float(0) >=
+           states('input_number.patio_ac_dewpoint_night_start') | float(0) }}
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_dewpoint_night_stop
+      data:
+        value: "{{ (states('input_number.patio_ac_dewpoint_night_start') | float(0) - 1) | round(0) }}"
+
+# === NIGHT DEW POINT TARGET ===
+# When night target is raised to meet/exceed night trigger, raise the trigger
+- id: patio_ac_validate_night_dewpoint_target
+  alias: "Patio AC - Validate Night Dew Point Target"
+  description: "When night target changes, ensure night trigger is at least 1 above"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_number.patio_ac_dewpoint_night_stop
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_dewpoint_night_stop') | float(0) >=
+           states('input_number.patio_ac_dewpoint_night_start') | float(0) }}
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_dewpoint_night_start
+      data:
+        value: "{{ (states('input_number.patio_ac_dewpoint_night_stop') | float(0) + 1) | round(0) }}"
+
+# === HEAT GUARD TRIGGER ===
+# When heat trigger is lowered below (target + 1), lower the target
+# Clamps target to AC's min_temp (61°F) to prevent invalid setpoints
+- id: patio_ac_validate_heat_guard_trigger
+  alias: "Patio AC - Validate Heat Guard Trigger"
+  description: "When heat trigger changes, ensure target is at least 1 below (min 61°F)"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_number.patio_ac_heat_threshold
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_heat_target') | float(0) >=
+           states('input_number.patio_ac_heat_threshold') | float(0) }}
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_heat_target
+      data:
+        # Clamp to AC min_temp (61°F) - AC cannot set temp below this
+        value: >
+          {% set new_target = states('input_number.patio_ac_heat_threshold') | float(0) - 1 %}
+          {% set ac_min = 61 %}
+          {{ [new_target, ac_min] | max | round(0) }}
+
+# === HEAT GUARD TARGET ===
+# When heat target is raised to meet/exceed trigger, raise the trigger
+# Clamps trigger to AC's max_temp (86°F) to prevent invalid setpoints
+- id: patio_ac_validate_heat_guard_target
+  alias: "Patio AC - Validate Heat Guard Target"
+  description: "When heat target changes, ensure trigger is at least 1 above (max 86°F)"
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_number.patio_ac_heat_target
+  condition:
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_heat_threshold') | float(0) <=
+           states('input_number.patio_ac_heat_target') | float(0) }}
+  action:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_heat_threshold
+      data:
+        # Note: Don't clamp trigger - it can be above AC max since we're measuring room temp
+        # Room can get hotter than 86°F even though AC can't set that high
+        value: "{{ (states('input_number.patio_ac_heat_target') | float(0) + 1) | round(0) }}"

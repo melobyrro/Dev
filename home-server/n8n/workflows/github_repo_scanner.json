@@ -1,0 +1,726 @@
+{
+  "name": "GitHub Repo Scanner",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every 6 Hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "scan-github",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Manual Scan Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 450]
+    },
+    {
+      "parameters": {
+        "resource": "repo",
+        "operation": "getAll",
+        "returnAll": true,
+        "additionalFields": {
+          "visibility": "all",
+          "affiliation": "owner"
+        }
+      },
+      "id": "list-repos",
+      "name": "List All Repos",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [500, 375],
+      "credentials": {
+        "githubApi": {
+          "id": "github-pat",
+          "name": "GitHub PAT"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Filter repos and prepare for scanning\nconst repos = $input.all();\nconst reposToScan = [];\n\nfor (const repo of repos) {\n  const r = repo.json;\n  // Skip archived and forked repos\n  if (r.archived || r.fork) continue;\n  \n  reposToScan.push({\n    json: {\n      owner: r.owner?.login || r.full_name?.split('/')[0],\n      repo: r.name,\n      full_name: r.full_name,\n      default_branch: r.default_branch || 'main',\n      private: r.private\n    }\n  });\n}\n\nreturn reposToScan;"
+      },
+      "id": "filter-repos",
+      "name": "Filter Repos",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [700, 375]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "loop-repos",
+      "name": "Loop Over Repos",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [900, 375]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/contents/.claude",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "check-claude-dir",
+      "name": "Check .claude/ Exists",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1100, 375],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-header-auth",
+          "name": "GitHub Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "check-status",
+              "leftValue": "={{ $json.statusCode }}",
+              "rightValue": 200,
+              "operator": {
+                "type": "number",
+                "operation": "equals"
+              }
+            }
+          ]
+        }
+      },
+      "id": "if-claude-exists",
+      "name": "Has .claude/ Dir?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1300, 375]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Repo has .claude/ directory - prepare to fetch files\nconst item = $('Loop Over Repos').first();\nconst owner = item.json.owner;\nconst repo = item.json.repo;\nconst full_name = item.json.full_name;\nconst branch = item.json.default_branch;\n\nreturn [{\n  json: {\n    owner,\n    repo,\n    full_name,\n    branch,\n    has_claude_dir: true\n  }\n}];"
+      },
+      "id": "prepare-fetch",
+      "name": "Prepare Fetch",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 300]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.repo }}/contents/.claude/settings.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-settings-json",
+      "name": "Fetch settings.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 150],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-header-auth",
+          "name": "GitHub Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $('Prepare Fetch').first().json.owner }}/{{ $('Prepare Fetch').first().json.repo }}/contents/.claude/settings.local.json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-settings-local",
+      "name": "Fetch settings.local.json",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-header-auth",
+          "name": "GitHub Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $('Prepare Fetch').first().json.owner }}/{{ $('Prepare Fetch').first().json.repo }}/contents/CLAUDE.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-claude-md-root",
+      "name": "Fetch CLAUDE.md (root)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 450],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-header-auth",
+          "name": "GitHub Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $('Prepare Fetch').first().json.owner }}/{{ $('Prepare Fetch').first().json.repo }}/contents/.claude/CLAUDE.md",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-claude-md-claude",
+      "name": "Fetch CLAUDE.md (.claude/)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1700, 600],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-header-auth",
+          "name": "GitHub Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $('Prepare Fetch').first().json.owner }}/{{ $('Prepare Fetch').first().json.repo }}/contents/.claude/commands",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-commands",
+      "name": "Fetch commands/",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1900, 225],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-header-auth",
+          "name": "GitHub Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $('Prepare Fetch').first().json.owner }}/{{ $('Prepare Fetch').first().json.repo }}/contents/.claude/skills",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true
+            }
+          }
+        }
+      },
+      "id": "fetch-skills",
+      "name": "Fetch skills/",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [1900, 525],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "github-header-auth",
+          "name": "GitHub Header Auth"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Merge all fetched data into a single project record\nconst crypto = require('crypto');\n\nconst prepareData = $('Prepare Fetch').first().json;\nconst settingsRes = $('Fetch settings.json').first().json;\nconst settingsLocalRes = $('Fetch settings.local.json').first().json;\nconst claudeMdRootRes = $('Fetch CLAUDE.md (root)').first().json;\nconst claudeMdClaudeRes = $('Fetch CLAUDE.md (.claude/)').first().json;\nconst commandsRes = $('Fetch commands/').first().json;\nconst skillsRes = $('Fetch skills/').first().json;\n\n// Helper to decode base64 content\nfunction decodeContent(response) {\n  if (response.statusCode !== 200 || !response.body?.content) return null;\n  try {\n    return Buffer.from(response.body.content, 'base64').toString('utf8');\n  } catch (e) {\n    return null;\n  }\n}\n\n// Helper to parse JSON safely\nfunction parseJson(content) {\n  if (!content) return null;\n  try {\n    return JSON.parse(content);\n  } catch (e) {\n    return null;\n  }\n}\n\n// Helper to extract file list from directory response\nfunction extractFileList(response) {\n  if (response.statusCode !== 200 || !Array.isArray(response.body)) return [];\n  return response.body\n    .filter(f => f.type === 'file')\n    .map(f => f.name);\n}\n\n// Decode and parse all content\nconst settingsJsonContent = decodeContent(settingsRes);\nconst settingsLocalJsonContent = decodeContent(settingsLocalRes);\nconst claudeMdContent = decodeContent(claudeMdClaudeRes) || decodeContent(claudeMdRootRes);\n\nconst settingsJson = parseJson(settingsJsonContent);\nconst settingsLocalJson = parseJson(settingsLocalJsonContent);\nconst commandsList = extractFileList(commandsRes);\nconst skillsList = extractFileList(skillsRes);\n\n// Compute config hash for change detection\nconst hashContent = JSON.stringify({\n  settings: settingsJson,\n  settings_local: settingsLocalJson,\n  claude_md_hash: claudeMdContent ? crypto.createHash('sha256').update(claudeMdContent).digest('hex') : null,\n  skills: skillsList,\n  commands: commandsList\n}, null, 0);\nconst configHash = crypto.createHash('sha256').update(hashContent).digest('hex');\n\nreturn [{\n  json: {\n    name: prepareData.repo,\n    path: `github:${prepareData.full_name}`,\n    config_hash: configHash,\n    settings_json: settingsJson,\n    settings_local_json: settingsLocalJson,\n    claude_md: claudeMdContent,\n    skills_list: skillsList,\n    commands_list: commandsList,\n    scanned_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "merge-data",
+      "name": "Merge All Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2100, 375]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO projects (name, path, config_hash, last_seen_at)\nVALUES ($1, $2, $3, NOW())\nON CONFLICT (path) DO UPDATE SET\n  name = EXCLUDED.name,\n  config_hash = EXCLUDED.config_hash,\n  last_seen_at = NOW()\nRETURNING id;",
+        "options": {
+          "queryParams": "={{ [$json.name, $json.path, $json.config_hash] }}"
+        }
+      },
+      "id": "upsert-project",
+      "name": "Upsert Project",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2300, 375],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare data for snapshot insert\nconst mergedData = $('Merge All Data').first().json;\nconst projectResult = $('Upsert Project').first().json;\n\nreturn [{\n  json: {\n    project_id: projectResult.id,\n    config_hash: mergedData.config_hash,\n    settings_json: mergedData.settings_json,\n    settings_local_json: mergedData.settings_local_json,\n    claude_md: mergedData.claude_md,\n    skills_list: mergedData.skills_list,\n    commands_list: mergedData.commands_list\n  }\n}];"
+      },
+      "id": "prepare-snapshot",
+      "name": "Prepare Snapshot",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2500, 375]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO config_snapshots (project_id, config_hash, settings_json, settings_local_json, claude_md, skills_list, commands_list)\nVALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7);",
+        "options": {
+          "queryParams": "={{ [$json.project_id, $json.config_hash, $json.settings_json ? JSON.stringify($json.settings_json) : null, $json.settings_local_json ? JSON.stringify($json.settings_local_json) : null, $json.claude_md, $json.skills_list, $json.commands_list] }}"
+        }
+      },
+      "id": "insert-snapshot",
+      "name": "Insert Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [2700, 375],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {},
+      "id": "no-op",
+      "name": "No Claude Dir",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [1500, 450]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Check if we have more repos to process\nconst loopData = $('Loop Over Repos').context;\nreturn [{ json: { continue: true } }];"
+      },
+      "id": "continue-loop",
+      "name": "Continue Loop",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2900, 375]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $workflow.id }}",
+        "options": {}
+      },
+      "id": "trigger-audit",
+      "name": "Trigger Audit Engine",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1300, 600]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"scan_complete\", \"timestamp\": new Date().toISOString() } }}"
+      },
+      "id": "respond-webhook",
+      "name": "Respond to Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1500, 600]
+    }
+  ],
+  "connections": {
+    "Every 6 Hours": {
+      "main": [
+        [
+          {
+            "node": "List All Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Manual Scan Webhook": {
+      "main": [
+        [
+          {
+            "node": "List All Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List All Repos": {
+      "main": [
+        [
+          {
+            "node": "Filter Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter Repos": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Repos": {
+      "main": [
+        [
+          {
+            "node": "Check .claude/ Exists",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Trigger Audit Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check .claude/ Exists": {
+      "main": [
+        [
+          {
+            "node": "Has .claude/ Dir?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has .claude/ Dir?": {
+      "main": [
+        [
+          {
+            "node": "Prepare Fetch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Claude Dir",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Fetch": {
+      "main": [
+        [
+          {
+            "node": "Fetch settings.json",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch settings.local.json",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch CLAUDE.md (root)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Fetch CLAUDE.md (.claude/)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch settings.json": {
+      "main": [
+        [
+          {
+            "node": "Fetch commands/",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch settings.local.json": {
+      "main": [
+        [
+          {
+            "node": "Fetch skills/",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CLAUDE.md (root)": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch CLAUDE.md (.claude/)": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch commands/": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch skills/": {
+      "main": [
+        [
+          {
+            "node": "Merge All Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge All Data": {
+      "main": [
+        [
+          {
+            "node": "Upsert Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Project": {
+      "main": [
+        [
+          {
+            "node": "Prepare Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Insert Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Continue Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Claude Dir": {
+      "main": [
+        [
+          {
+            "node": "Continue Loop",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Continue Loop": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Repos",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger Audit Engine": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

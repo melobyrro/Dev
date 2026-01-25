@@ -1,0 +1,23 @@
+# Daikin Fit Enhanced Monitoring - Utility Meters
+# Add to configuration.yaml: utility_meter: !include daikin_utility_meters.yaml
+
+# Energy Consumption Tracking
+daikin_energy_daily:
+  source: sensor.daikin_energy
+  name: Daikin Energy Daily
+  cycle: daily
+
+daikin_energy_weekly:
+  source: sensor.daikin_energy
+  name: Daikin Energy Weekly
+  cycle: weekly
+
+daikin_energy_monthly:
+  source: sensor.daikin_energy
+  name: Daikin Energy Monthly
+  cycle: monthly
+
+daikin_energy_yearly:
+  source: sensor.daikin_energy
+  name: Daikin Energy Yearly
+  cycle: yearly

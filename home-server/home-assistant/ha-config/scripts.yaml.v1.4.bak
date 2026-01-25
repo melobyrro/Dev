@@ -1,0 +1,234 @@
+patio_ac_control:
+  alias: Patio AC Control (Protected)
+  mode: queued
+  max: 3
+  fields:
+    action:
+      description: Turn on or off
+      example: 'on'
+      selector:
+        select:
+          options:
+          - 'on'
+          - 'off'
+    mode:
+      description: AC mode (if turning on)
+      example: cool
+      selector:
+        select:
+          options:
+          - cool
+          - dry
+          - fan_only
+    temperature:
+      description: Target temperature (if turning on)
+      example: 75
+      selector:
+        number:
+          min: 65
+          max: 85
+          unit_of_measurement: "°F"
+    reason:
+      description: Reason for operation
+      example: heat_guard
+      selector:
+        select:
+          options:
+          - heat_guard
+          - humidity_night
+          - humidity_day
+          - humidity_emergency
+          - manual
+          - safety_lock
+    duration:
+      description: Max runtime in minutes (optional)
+      example: 60
+      selector:
+        number:
+          min: 5
+          max: 180
+          unit_of_measurement: min
+  sequence:
+  - condition: state
+    entity_id: timer.patio_ac_command_throttle
+    state: idle
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: >
+          {{ action == 'on' }}
+      sequence:
+      - condition: template
+        value_template: >
+          {{ reason != 'heat_guard' or
+             states('input_number.patio_ac_daily_runtime')|float < states('input_number.patio_ac_daily_limit')|float }}
+      - condition: template
+        value_template: >
+          {{ reason not in ['humidity_day','humidity_night'] or is_state('input_boolean.patio_ac_humidity_emergency_only', 'off') }}
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: timer.patio_ac_compressor_protection
+          state: idle
+        - condition: template
+          value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+      - condition: template
+        value_template: >
+          {{ reason not in ['humidity_day','humidity_night'] or
+             is_state('timer.patio_ac_humidity_min_off', 'idle') }}
+      - condition: template
+        value_template: >
+          {{ states('climate.150633095083490_climate') == 'off' or
+             state_attr('climate.150633095083490_climate', 'hvac_mode') != mode or
+             (state_attr('climate.150633095083490_climate', 'temperature')|int(0) != temperature|int(0) if mode in ["cool", "dry"] else false) }}
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.patio_ac_reason
+        data:
+          option: '{{ reason }}'
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.150633095083490_climate
+        data:
+          hvac_mode: '{{ mode }}'
+      - if:
+        - condition: template
+          value_template: '{{ mode in ["cool", "dry"] }}'
+        then:
+        - service: climate.set_temperature
+          target:
+            entity_id: climate.150633095083490_climate
+          data:
+            temperature: '{{ temperature }}'
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_runtime_start
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - if:
+        - condition: template
+          value_template: '{{ duration is defined and duration|int > 0 and reason == "heat_guard" }}'
+        then:
+        - service: timer.start
+          target:
+            entity_id: timer.patio_ac_heat_spike
+          data:
+            duration: '{{ ''00:%02d:00''|format(duration|int) }}'
+      - if:
+        - condition: template
+          value_template: '{{ reason in ["humidity_day","humidity_night","humidity_emergency"] }}'
+        then:
+        - service: timer.start
+          target:
+            entity_id: timer.patio_ac_humidity_min_on
+          data:
+            duration: >
+              {{ '00:%02d:00'|format(states('input_number.patio_ac_humidity_min_on')|int) }}
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_command
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - service: timer.start
+        target:
+          entity_id: timer.patio_ac_command_throttle
+    - conditions:
+      - condition: template
+        value_template: >
+          {{ action == 'off' }}
+      sequence:
+      - condition: template
+        value_template: >
+          {{ states('input_select.patio_ac_reason') == reason or reason == 'safety_lock' }}
+      - condition: template
+        value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.patio_ac_daily_runtime
+        data:
+          value: >
+            {% set start = states('input_datetime.patio_ac_runtime_start') %}
+            {% set runtime = states('input_number.patio_ac_daily_runtime')|float %}
+            {% if start not in ['unknown', '', 'unavailable'] %}
+              {% set elapsed = (now().timestamp() - as_timestamp(start)) / 60 %}
+              {{ (runtime + elapsed)|round(1) }}
+            {% else %}
+              {{ runtime }}
+            {% endif %}
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_select.patio_ac_reason'') in ["humidity_day","humidity_night","humidity_emergency"] }}'
+        then:
+        - service: input_number.set_value
+          target:
+            entity_id: input_number.patio_ac_humidity_runtime
+          data:
+            value: >
+              {% set start = states('input_datetime.patio_ac_runtime_start') %}
+              {% set runtime = states('input_number.patio_ac_humidity_runtime')|float %}
+              {% if start not in ['unknown', '', 'unavailable'] %}
+                {% set elapsed = (now().timestamp() - as_timestamp(start)) / 60 %}
+                {{ (runtime + elapsed)|round(1) }}
+              {% else %}
+                {{ runtime }}
+              {% endif %}
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.150633095083490_climate
+        data:
+          hvac_mode: 'off'
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.patio_ac_reason
+        data:
+          option: idle
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_off
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - choose:
+          - conditions:
+              - condition: template
+                value_template: '{{ reason in ["humidity_day","humidity_night","humidity_emergency"] }}'
+            sequence:
+              - service: timer.cancel
+                target:
+                  entity_id: timer.patio_ac_humidity_min_on
+              - service: timer.start
+                target:
+                  entity_id: timer.patio_ac_humidity_min_off
+                data:
+                  duration: >
+                    {{ '00:%02d:00'|format(states('input_number.patio_ac_humidity_min_off')|int) }}
+      - service: timer.start
+        target:
+          entity_id: timer.patio_ac_compressor_protection
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_command
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - service: timer.start
+        target:
+          entity_id: timer.patio_ac_command_throttle
+patio_ac_temp_up:
+  alias: Patio AC - Temperature Up
+  sequence:
+  - service: climate.set_temperature
+    target:
+      entity_id: climate.150633095083490_climate
+    data:
+      temperature: "{% set current = state_attr('climate.150633095083490_climate',\
+        \ 'temperature') %}\n{% if current is none or current < 61 %}\n  72\n{% else\
+        \ %}\n  {{ [86, current + 1] | min }}\n{% endif %}"
+patio_ac_temp_down:
+  alias: Patio AC - Temperature Down
+  sequence:
+  - service: climate.set_temperature
+    target:
+      entity_id: climate.150633095083490_climate
+    data:
+      temperature: "{% set current = state_attr('climate.150633095083490_climate',\
+        \ 'temperature') %}\n{% if current is none or current < 61 %}\n  72\n{% else\
+        \ %}\n  {{ [61, current - 1] | max }}\n{% endif %}"

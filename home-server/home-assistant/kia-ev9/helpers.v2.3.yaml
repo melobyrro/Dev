@@ -1,0 +1,718 @@
+# Kia EV9 Helper Entities
+# Version: 2.3
+# Last Updated: 2026-01-21
+#
+# CHANGES from v2.2:
+# - Added connection watchdog helpers:
+#   - input_boolean.ev9_connection_watchdog_enabled (master toggle)
+#   - input_text.ev9_last_recovery_attempt (cooldown timestamp)
+#   - input_text.ev9_last_recovery_result (SUCCESS/FAILED + details)
+#
+# CHANGES from v2.1 (retained in v2.2/v2.3):
+# - Added theft/movement alert helpers (AUT-05):
+#   - input_boolean.ev9_theft_alert_enabled
+#   - input_number.ev9_theft_distance_threshold (50-500m)
+#   - input_number.ev9_theft_phone_distance_threshold (100-1000m)
+#   - input_text.ev9_last_theft_alert (cooldown timestamp)
+#   - input_text.ev9_last_known_location (lat,lon of parked location)
+#   - input_text.ev9_last_theft_result (last alert result)
+#   - sensor.ev9_movement_distance (distance from parked location)
+#
+# CHANGES from v2.0 (retained in v2.1/v2.2/v2.3):
+# - Added ev9_device_id input_text for centralized device ID management
+# - Added ev9_walkaway_conditions_met template sensor for debugging walk-away lock
+#
+# CHANGES from v1.4 (retained in v2.0/v2.1/v2.2):
+# - Renamed ev9_proximity_lock_distance -> ev9_walkaway_distance (1-20m range)
+# - Added ev9_unlock_timeout for timeout failsafe (5-120 min)
+# - Added ev9_timeout_lock_enabled toggle
+# - Added ev9_event_1 through ev9_event_10 for automation event logging
+# - Added ev9_last_walkaway_result, ev9_last_timeout_lock_result, ev9_last_precondition_result
+# - Removed ev9_charging_current (read-only per spec)
+# - Removed ev9_graph_scale (using fixed 1.5kW scale)
+#
+# DEPLOYMENT:
+# Option 1: Add to configuration.yaml packages and restart HA
+# Option 2: Create via UI (Settings -> Devices & Services -> Helpers)
+
+# ============================================================
+# SCHEDULE TIMES
+# ============================================================
+
+input_datetime:
+  ev9_schedule_1_time:
+    name: "EV9 Schedule 1 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_2_time:
+    name: "EV9 Schedule 2 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_3_time:
+    name: "EV9 Schedule 3 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_4_time:
+    name: "EV9 Schedule 4 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_5_time:
+    name: "EV9 Schedule 5 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+# ============================================================
+# SCHEDULE ENABLE/DISABLE TOGGLES
+# ============================================================
+
+input_boolean:
+  # Schedule 1
+  ev9_schedule_1_enabled:
+    name: "EV9 Schedule 1 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_1_mon:
+    name: "EV9 Schedule 1 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_tue:
+    name: "EV9 Schedule 1 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_wed:
+    name: "EV9 Schedule 1 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_thu:
+    name: "EV9 Schedule 1 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_fri:
+    name: "EV9 Schedule 1 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_sat:
+    name: "EV9 Schedule 1 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_sun:
+    name: "EV9 Schedule 1 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 2
+  ev9_schedule_2_enabled:
+    name: "EV9 Schedule 2 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_2_mon:
+    name: "EV9 Schedule 2 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_tue:
+    name: "EV9 Schedule 2 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_wed:
+    name: "EV9 Schedule 2 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_thu:
+    name: "EV9 Schedule 2 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_fri:
+    name: "EV9 Schedule 2 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_sat:
+    name: "EV9 Schedule 2 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_sun:
+    name: "EV9 Schedule 2 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 3
+  ev9_schedule_3_enabled:
+    name: "EV9 Schedule 3 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_3_mon:
+    name: "EV9 Schedule 3 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_tue:
+    name: "EV9 Schedule 3 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_wed:
+    name: "EV9 Schedule 3 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_thu:
+    name: "EV9 Schedule 3 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_fri:
+    name: "EV9 Schedule 3 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_sat:
+    name: "EV9 Schedule 3 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_sun:
+    name: "EV9 Schedule 3 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 4
+  ev9_schedule_4_enabled:
+    name: "EV9 Schedule 4 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_4_mon:
+    name: "EV9 Schedule 4 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_tue:
+    name: "EV9 Schedule 4 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_wed:
+    name: "EV9 Schedule 4 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_thu:
+    name: "EV9 Schedule 4 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_fri:
+    name: "EV9 Schedule 4 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_sat:
+    name: "EV9 Schedule 4 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_sun:
+    name: "EV9 Schedule 4 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 5
+  ev9_schedule_5_enabled:
+    name: "EV9 Schedule 5 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_5_mon:
+    name: "EV9 Schedule 5 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_tue:
+    name: "EV9 Schedule 5 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_wed:
+    name: "EV9 Schedule 5 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_thu:
+    name: "EV9 Schedule 5 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_fri:
+    name: "EV9 Schedule 5 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_sat:
+    name: "EV9 Schedule 5 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_sun:
+    name: "EV9 Schedule 5 Sunday"
+    icon: mdi:calendar
+
+  # ============================================================
+  # GLOBAL PRE-CONDITIONING SETTINGS
+  # ============================================================
+
+  ev9_precondition_enabled:
+    name: "EV9 Pre-conditioning Enabled"
+    icon: mdi:air-conditioner
+
+  ev9_smart_precondition:
+    name: "EV9 Smart Pre-conditioning"
+    icon: mdi:weather-partly-cloudy
+
+  # ============================================================
+  # NOTIFICATION TOGGLES
+  # ============================================================
+
+  ev9_notify_charging_complete:
+    name: "EV9 Notify Charging Complete"
+    icon: mdi:bell-ring
+
+  ev9_notify_low_battery:
+    name: "EV9 Notify Low Battery"
+    icon: mdi:battery-alert
+
+  ev9_notify_unlocked_at_home:
+    name: "EV9 Notify Unlocked at Home"
+    icon: mdi:lock-open-alert
+
+  ev9_notify_charging_interrupted:
+    name: "EV9 Notify Charging Interrupted"
+    icon: mdi:ev-plug-type1
+
+  ev9_notify_low_charging_power:
+    name: "EV9 Notify Low Charging Power"
+    icon: mdi:flash-alert
+
+  ev9_notify_trunk_open:
+    name: "EV9 Notify Trunk Open"
+    icon: mdi:car-back
+
+  # ============================================================
+  # WALK-AWAY LOCK SETTINGS (v2.0)
+  # ============================================================
+
+  ev9_walk_away_lock_enabled:
+    name: "EV9 Walk-Away Lock Enabled"
+    icon: mdi:lock-clock
+
+  # v2.0: Timeout failsafe lock toggle
+  ev9_timeout_lock_enabled:
+    name: "EV9 Timeout Lock Enabled"
+    icon: mdi:timer-lock
+
+  ev9_auto_close_windows_enabled:
+    name: "EV9 Auto-Close Windows Enabled"
+    icon: mdi:window-closed
+
+  # ============================================================
+  # OVERNIGHT CHARGING MONITOR
+  # ============================================================
+
+  ev9_overnight_charge_monitor:
+    name: "EV9 Overnight Charge Monitor"
+    icon: mdi:weather-night
+
+  # ============================================================
+  # THEFT/MOVEMENT ALERT (v2.2 - AUT-05)
+  # ============================================================
+
+  ev9_theft_alert_enabled:
+    name: "EV9 Theft Alert Enabled"
+    icon: mdi:shield-alert
+
+  # ============================================================
+  # CONNECTION WATCHDOG (v2.3)
+  # ============================================================
+
+  ev9_connection_watchdog_enabled:
+    name: "EV9 Connection Watchdog Enabled"
+    icon: mdi:connection
+
+# ============================================================
+# CONFIGURABLE THRESHOLDS
+# ============================================================
+
+input_number:
+  # Pre-conditioning settings
+  ev9_precondition_lead_time:
+    name: "EV9 Pre-condition Lead Time"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:clock-start
+    mode: slider
+
+  ev9_target_temperature:
+    name: "EV9 Target Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  # ============================================================
+  # PER-SCHEDULE TEMPERATURES
+  # ============================================================
+
+  ev9_schedule_1_temperature:
+    name: "EV9 Schedule 1 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_2_temperature:
+    name: "EV9 Schedule 2 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_3_temperature:
+    name: "EV9 Schedule 3 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_4_temperature:
+    name: "EV9 Schedule 4 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_5_temperature:
+    name: "EV9 Schedule 5 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  # ============================================================
+  # CLIMATE TIMER DURATION
+  # ============================================================
+
+  ev9_climate_duration:
+    name: "EV9 Climate Duration"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer
+    mode: slider
+
+  # Battery alerts
+  ev9_low_battery_threshold:
+    name: "EV9 Low Battery Threshold"
+    min: 10
+    max: 50
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-20
+    mode: slider
+
+  # Unlocked alert
+  ev9_unlocked_alert_delay:
+    name: "EV9 Unlocked Alert Delay"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer-outline
+    mode: slider
+
+  # ============================================================
+  # WALK-AWAY LOCK SETTINGS (v2.0 - UPDATED)
+  # ============================================================
+
+  # v2.0: Walk-away distance (1-20m, default 5m)
+  ev9_walkaway_distance:
+    name: "EV9 Walk-Away Distance"
+    min: 1
+    max: 20
+    step: 1
+    unit_of_measurement: "m"
+    icon: mdi:map-marker-distance
+    mode: slider
+
+  # v2.0: Timeout failsafe duration (5-120 min, default 30 min)
+  ev9_unlock_timeout:
+    name: "EV9 Unlock Timeout"
+    min: 5
+    max: 120
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer-lock
+    mode: slider
+
+  # Auto-close windows delay
+  ev9_auto_close_windows_delay:
+    name: "EV9 Auto-Close Windows Delay"
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer
+    mode: slider
+
+  # Charging power monitoring
+  ev9_expected_charge_power:
+    name: "EV9 Expected Charge Power"
+    min: 0.5
+    max: 20
+    step: 0.1
+    unit_of_measurement: "kW"
+    icon: mdi:flash
+    mode: box
+
+  ev9_low_power_threshold:
+    name: "EV9 Low Power Alert Threshold"
+    min: 0.3
+    max: 5
+    step: 0.1
+    unit_of_measurement: "kW"
+    icon: mdi:flash-alert
+    mode: box
+
+  ev9_charge_interrupt_check_delay:
+    name: "EV9 Charge Interrupt Check Delay"
+    min: 5
+    max: 60
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:clock-alert
+    mode: slider
+
+  ev9_trunk_open_delay:
+    name: "EV9 Trunk Open Alert Delay"
+    min: 1
+    max: 15
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer-alert
+    mode: slider
+
+  # ============================================================
+  # THEFT/MOVEMENT ALERT SETTINGS (v2.2 - AUT-05)
+  # ============================================================
+
+  ev9_theft_distance_threshold:
+    name: "EV9 Theft Detection Distance"
+    min: 50
+    max: 500
+    step: 25
+    unit_of_measurement: "m"
+    icon: mdi:map-marker-distance
+    mode: slider
+
+  ev9_theft_phone_distance_threshold:
+    name: "EV9 Theft Phone Away Distance"
+    min: 100
+    max: 1000
+    step: 50
+    unit_of_measurement: "m"
+    icon: mdi:cellphone-off
+    mode: slider
+
+# ============================================================
+# AUTOMATION EVENT LOG (v2.0)
+# ============================================================
+
+input_text:
+  # v2.1: Centralized device ID for kia_uvo services
+  ev9_device_id:
+    name: "EV9 Device ID"
+    icon: mdi:identifier
+    initial: "7f6b71f10dc261408a02149c68aa3e23"
+    mode: text
+    max: 64
+
+  ev9_event_1:
+    name: "EV9 Event 1"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_2:
+    name: "EV9 Event 2"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_3:
+    name: "EV9 Event 3"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_4:
+    name: "EV9 Event 4"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_5:
+    name: "EV9 Event 5"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_6:
+    name: "EV9 Event 6"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_7:
+    name: "EV9 Event 7"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_8:
+    name: "EV9 Event 8"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_9:
+    name: "EV9 Event 9"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_10:
+    name: "EV9 Event 10"
+    max: 255
+    icon: mdi:text-box-outline
+
+  # Last run status helpers
+  ev9_last_walkaway_result:
+    name: "EV9 Last Walk-Away Result"
+    max: 255
+    icon: mdi:lock-check
+
+  ev9_last_timeout_lock_result:
+    name: "EV9 Last Timeout Lock Result"
+    max: 255
+    icon: mdi:timer-check
+
+  ev9_last_precondition_result:
+    name: "EV9 Last Precondition Result"
+    max: 255
+    icon: mdi:air-conditioner
+
+  # ============================================================
+  # THEFT/MOVEMENT ALERT HELPERS (v2.2 - AUT-05)
+  # ============================================================
+
+  ev9_last_theft_alert:
+    name: "EV9 Last Theft Alert Timestamp"
+    max: 64
+    icon: mdi:clock-alert
+
+  ev9_last_known_location:
+    name: "EV9 Last Known Location"
+    max: 64
+    icon: mdi:map-marker-check
+
+  ev9_last_theft_result:
+    name: "EV9 Last Theft Alert Result"
+    max: 255
+    icon: mdi:shield-check
+
+  # ============================================================
+  # CONNECTION WATCHDOG HELPERS (v2.3)
+  # ============================================================
+
+  ev9_last_recovery_attempt:
+    name: "EV9 Last Recovery Attempt"
+    max: 64
+    icon: mdi:clock-alert
+
+  ev9_last_recovery_result:
+    name: "EV9 Last Recovery Result"
+    max: 255
+    icon: mdi:connection
+
+# ============================================================
+# TIMER
+# ============================================================
+
+timer:
+  ev9_climate_timer:
+    name: "EV9 Climate Timer"
+    duration: "00:15:00"
+    icon: mdi:timer
+
+# ============================================================
+# TEMPLATE SENSORS
+# ============================================================
+
+template:
+  - sensor:
+      # L2 Charging Power (filters out DC fast charging >20kW)
+      - name: "EV9 L2 Charging Power"
+        unique_id: ev9_l2_charging_power
+        unit_of_measurement: "kW"
+        state_class: measurement
+        device_class: power
+        state: >
+          {% set power = states('sensor.ev9_ev_charging_power') | float(0) %}
+          {{ power if power < 20 else 0 }}
+        icon: mdi:ev-plug-type2
+
+      # Phone-to-Vehicle Distance (for walk-away locking)
+      - name: "EV9 Phone Distance"
+        unique_id: ev9_phone_distance
+        unit_of_measurement: "m"
+        state_class: measurement
+        state: >
+          {% set ev9_lat = state_attr('device_tracker.ev9_location', 'latitude') %}
+          {% set ev9_lon = state_attr('device_tracker.ev9_location', 'longitude') %}
+          {% set phone_lat = state_attr('device_tracker.andre_iphone', 'latitude') %}
+          {% set phone_lon = state_attr('device_tracker.andre_iphone', 'longitude') %}
+          {% if ev9_lat and ev9_lon and phone_lat and phone_lon %}
+            {{ (distance(ev9_lat, ev9_lon, phone_lat, phone_lon) * 1000) | round(0) }}
+          {% else %}
+            unknown
+          {% endif %}
+        icon: mdi:map-marker-distance
+
+      # v2.1: Walk-Away Conditions Debug Sensor
+      - name: "EV9 Walkaway Conditions Met"
+        unique_id: ev9_walkaway_conditions_met
+        icon: mdi:check-circle
+        state: >
+          {% set distance_ok = states('sensor.ev9_phone_distance') | float(0) > states('input_number.ev9_walkaway_distance') | float(5) %}
+          {% set enabled = is_state('input_boolean.ev9_walk_away_lock_enabled', 'on') %}
+          {% set unlocked = is_state('lock.ev9_door_lock', 'unlocked') %}
+          {% set engine_off = is_state('binary_sensor.ev9_engine', 'off') %}
+          {{ distance_ok and enabled and unlocked and engine_off }}
+        attributes:
+          distance_check: "{{ states('sensor.ev9_phone_distance') | float(0) > states('input_number.ev9_walkaway_distance') | float(5) }}"
+          enabled_check: "{{ is_state('input_boolean.ev9_walk_away_lock_enabled', 'on') }}"
+          unlocked_check: "{{ is_state('lock.ev9_door_lock', 'unlocked') }}"
+          engine_off_check: "{{ is_state('binary_sensor.ev9_engine', 'off') }}"
+          current_distance: "{{ states('sensor.ev9_phone_distance') }}m"
+          threshold: "{{ states('input_number.ev9_walkaway_distance') }}m"
+
+      # v2.2: Movement Distance from Parked Location (for theft detection)
+      - name: "EV9 Movement Distance"
+        unique_id: ev9_movement_distance
+        unit_of_measurement: "m"
+        state_class: measurement
+        icon: mdi:map-marker-alert
+        state: >
+          {% set last = states('input_text.ev9_last_known_location') %}
+          {% if last in ['unknown', 'unavailable', ''] %}
+            0
+          {% else %}
+            {% set parts = last.split(',') %}
+            {% if parts | length == 2 %}
+              {% set last_lat = parts[0] | float %}
+              {% set last_lon = parts[1] | float %}
+              {% set curr_lat = state_attr('device_tracker.ev9_location', 'latitude') | float %}
+              {% set curr_lon = state_attr('device_tracker.ev9_location', 'longitude') | float %}
+              {{ (distance(last_lat, last_lon, curr_lat, curr_lon) * 1000) | round(0) }}
+            {% else %}
+              0
+            {% endif %}
+          {% endif %}

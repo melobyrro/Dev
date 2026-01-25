@@ -1,0 +1,224 @@
+# System Health Dashboard View
+# Add to an existing dashboard or create as standalone
+# Location: dashboards/system_health.yaml
+# Version: 1.0
+# Created: 2026-01-24
+
+title: System Health
+path: system-health
+icon: mdi:heart-pulse
+type: sections
+max_columns: 2
+
+sections:
+  # ============================================================
+  # LEFT COLUMN: Status Overview
+  # ============================================================
+  - type: grid
+    cards:
+      # Overall Health Summary
+      - type: tile
+        entity: sensor.integration_health_summary
+        name: Integration Health
+        color: >
+          {% if is_state('sensor.integration_health_summary', 'healthy') %}
+            green
+          {% elif 'offline' in states('sensor.integration_health_summary') %}
+            red
+          {% else %}
+            orange
+          {% endif %}
+        icon: mdi:heart-pulse
+        tap_action:
+          action: more-info
+
+      # Status Grid - Visual Health Indicators
+      - type: custom:mushroom-chips-card
+        chips:
+          - type: template
+            icon: mdi:car-electric
+            icon_color: >
+              {% if is_state('sensor.ev9_integration_status', 'online') %}
+                green
+              {% elif is_state('sensor.ev9_integration_status', 'stale') %}
+                orange
+              {% else %}
+                red
+              {% endif %}
+            content: EV9
+            tap_action:
+              action: more-info
+              entity: sensor.ev9_ev_battery_level
+
+          - type: template
+            icon: mdi:robot-vacuum
+            icon_color: >
+              {% if is_state('sensor.jose_integration_status', 'online') %}
+                green
+              {% elif is_state('sensor.jose_integration_status', 'stale') %}
+                orange
+              {% else %}
+                red
+              {% endif %}
+            content: Jose
+            tap_action:
+              action: more-info
+              entity: sensor.jose_battery
+
+          - type: template
+            icon: mdi:air-conditioner
+            icon_color: >
+              {% if is_state('sensor.daikin_integration_status', 'online') %}
+                green
+              {% elif is_state('sensor.daikin_integration_status', 'stale') %}
+                orange
+              {% else %}
+                red
+              {% endif %}
+            content: Daikin
+            tap_action:
+              action: more-info
+              entity: climate.daikin
+
+          - type: template
+            icon: mdi:hvac
+            icon_color: >
+              {% if is_state('sensor.patio_ac_integration_status', 'online') %}
+                green
+              {% elif is_state('sensor.patio_ac_integration_status', 'stale') %}
+                orange
+              {% else %}
+                red
+              {% endif %}
+            content: Patio
+            tap_action:
+              action: more-info
+              entity: climate.patio_ac
+
+      # Legend
+      - type: markdown
+        content: |
+          **Status Legend**
+          - 🟢 **Online** - Working normally
+          - 🟡 **Stale** - No updates >1 hour
+          - 🔴 **Offline** - Unavailable
+
+      # Integration Details Table
+      - type: markdown
+        title: Integration Details
+        content: |
+          | Integration | Status | Recovery |
+          |:------------|:------:|:--------:|
+          | **Kia EV9** | {{ states('sensor.ev9_integration_status') }} | Auto (OTP) |
+          | **Jose** | {{ states('sensor.jose_integration_status') }} | Auto |
+          | **Daikin** | {{ states('sensor.daikin_integration_status') }} | Manual |
+          | **Patio AC** | {{ states('sensor.patio_ac_integration_status') }} | Manual |
+
+  # ============================================================
+  # RIGHT COLUMN: Self-Healing Status & Controls
+  # ============================================================
+  - type: grid
+    cards:
+      # EV9 Watchdog Status
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.ev9_connection_watchdog_enabled
+        name: EV9 Watchdog
+        icon: mdi:car-connected
+        tap_action:
+          action: toggle
+        secondary_info: >
+          {% if states('input_text.ev9_last_recovery_result') not in ['', 'unknown', 'unavailable'] %}
+            {{ states('input_text.ev9_last_recovery_result')[:40] }}...
+          {% else %}
+            No recovery attempts
+          {% endif %}
+
+      # Jose Watchdog Status
+      - type: custom:mushroom-entity-card
+        entity: input_boolean.ecovacs_recovery_enabled
+        name: Jose Watchdog
+        icon: mdi:robot-vacuum
+        tap_action:
+          action: toggle
+        secondary_info: >
+          {% if states('input_text.jose_last_recovery_result') not in ['', 'unknown', 'unavailable'] %}
+            {{ states('input_text.jose_last_recovery_result')[:40] }}...
+          {% else %}
+            No recovery attempts
+          {% endif %}
+
+      # Recovery State Cards
+      - type: entities
+        title: Recovery Status
+        show_header_toggle: false
+        entities:
+          - entity: input_text.ev9_recovery_state
+            name: EV9 State
+            icon: mdi:state-machine
+          - entity: input_text.jose_recovery_state
+            name: Jose State
+            icon: mdi:state-machine
+          - type: divider
+          - entity: input_text.ev9_last_recovery_result
+            name: EV9 Last Result
+          - entity: input_text.jose_last_recovery_result
+            name: Jose Last Result
+
+      # Manual Recovery Actions
+      - type: custom:mushroom-title-card
+        title: Manual Recovery
+        subtitle: Use if auto-recovery fails
+
+      - type: horizontal-stack
+        cards:
+          - type: custom:mushroom-template-card
+            primary: Reload EV9
+            icon: mdi:refresh
+            icon_color: blue
+            tap_action:
+              action: call-service
+              service: homeassistant.reload_config_entry
+              data:
+                entry_id: "{{ states('input_text.ev9_device_id') }}"
+              confirmation:
+                text: Reload EV9 integration?
+
+          - type: custom:mushroom-template-card
+            primary: Reload Jose
+            icon: mdi:refresh
+            icon_color: blue
+            tap_action:
+              action: call-service
+              service: homeassistant.reload_config_entry
+              data:
+                entry_id: "{{ states('input_text.ecovacs_entry_id') }}"
+              confirmation:
+                text: Reload Jose integration?
+
+      # Quick Links
+      - type: custom:mushroom-chips-card
+        alignment: center
+        chips:
+          - type: action
+            icon: mdi:cog
+            tap_action:
+              action: navigate
+              navigation_path: /config/integrations
+          - type: action
+            icon: mdi:text-box-outline
+            tap_action:
+              action: navigate
+              navigation_path: /config/logs
+
+      # Recent Events Log
+      - type: markdown
+        title: Recent Recovery Events
+        content: |
+          **EV9:**
+          {{ states('input_text.ev9_last_recovery_result') or 'No events' }}
+
+          **Jose:**
+          {{ states('input_text.jose_last_recovery_result') or 'No events' }}
+
+          ---
+          *Last checked: {{ now().strftime('%H:%M') }}*

@@ -1,0 +1,186 @@
+{
+  "name": "Audit Engine",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "When Called by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "Every Hour",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [250, 450]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.id as project_id, p.name, p.path, cs.id as snapshot_id, cs.config_hash, cs.settings_json, cs.settings_local_json, cs.claude_md, cs.skills_list, cs.commands_list\nFROM projects p\nJOIN config_snapshots cs ON p.id = cs.project_id\nWHERE cs.id = (SELECT MAX(id) FROM config_snapshots WHERE project_id = p.id);"
+      },
+      "id": "get-latest-snapshots",
+      "name": "Get Latest Snapshots",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [500, 375],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM rules WHERE enabled = true;"
+      },
+      "id": "get-rules",
+      "name": "Get Active Rules",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [500, 525],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Perform audit checks\nconst snapshots = $('Get Latest Snapshots').all();\nconst rules = $('Get Active Rules').all();\nconst results = [];\n\nfor (const snapshot of snapshots) {\n  const s = snapshot.json;\n  \n  for (const rule of rules) {\n    const r = rule.json;\n    const config = r.check_config;\n    let status = 'skip';\n    let details = {};\n    \n    try {\n      switch (r.check_type) {\n        case 'file_exists':\n          if (config.file === 'settings.json') {\n            status = s.settings_json ? 'pass' : 'fail';\n          } else if (config.file === 'settings.local.json') {\n            status = s.settings_local_json ? 'pass' : 'fail';\n          } else if (config.file === 'CLAUDE.md') {\n            status = s.claude_md ? 'pass' : 'fail';\n          }\n          break;\n          \n        case 'directory_exists':\n          if (config.directory === 'skills') {\n            status = (s.skills_list && s.skills_list.length > 0) ? 'pass' : 'fail';\n          } else if (config.directory === 'commands') {\n            status = (s.commands_list && s.commands_list.length > 0) ? 'pass' : 'fail';\n          }\n          break;\n          \n        case 'json_path_not_equals':\n          if (s.settings_json) {\n            const val = s.settings_json[config.path.replace('$.', '')];\n            status = (val !== config.forbidden_value) ? 'pass' : 'fail';\n            details = { actual_value: val };\n          }\n          break;\n          \n        case 'json_path_exists':\n          if (s.settings_json) {\n            const val = s.settings_json[config.path.replace('$.', '')];\n            status = (val !== undefined && val !== null) ? 'pass' : 'fail';\n          }\n          break;\n          \n        case 'file_regex_match':\n          if (config.file === 'CLAUDE.md' && s.claude_md) {\n            const regex = new RegExp(config.pattern, 'i');\n            status = regex.test(s.claude_md) ? 'pass' : 'fail';\n          }\n          break;\n          \n        case 'json_path_contains':\n          if (s.settings_json && Array.isArray(s.settings_json[config.path.replace('$.', '')])) {\n            const arr = s.settings_json[config.path.replace('$.', '')];\n            const hasAll = config.should_contain.every(item => arr.some(a => a.includes(item)));\n            status = hasAll ? 'pass' : 'fail';\n            details = { actual: arr, expected: config.should_contain };\n          }\n          break;\n          \n        case 'json_path_not_contains':\n          if (s.settings_json && Array.isArray(s.settings_json[config.path.replace('$.', '')])) {\n            const arr = s.settings_json[config.path.replace('$.', '')];\n            const hasForbidden = arr.some(a => a === config.forbidden_value);\n            status = hasForbidden ? 'fail' : 'pass';\n            details = { actual: arr };\n          }\n          break;\n      }\n    } catch (e) {\n      status = 'error';\n      details = { error: e.message };\n    }\n    \n    results.push({\n      project_id: s.project_id,\n      snapshot_id: s.snapshot_id,\n      rule_id: r.id,\n      status: status,\n      details: JSON.stringify(details)\n    });\n  }\n}\n\nreturn results.map(r => ({ json: r }));"
+      },
+      "id": "audit-logic",
+      "name": "Run Audit Checks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [750, 375]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM audit_results WHERE project_id = $1 AND snapshot_id = $2;",
+        "options": {
+          "queryParams": "={{ [$json.project_id, $json.snapshot_id] }}"
+        }
+      },
+      "id": "clear-old-results",
+      "name": "Clear Old Results",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [950, 375],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO audit_results (project_id, snapshot_id, rule_id, status, details)\nVALUES ($1, $2, $3, $4, $5::jsonb);",
+        "options": {
+          "queryParams": "={{ [$json.project_id, $json.snapshot_id, $json.rule_id, $json.status, $json.details] }}"
+        }
+      },
+      "id": "insert-results",
+      "name": "Insert Audit Results",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [1150, 375],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "When Called by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Snapshots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every Hour": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Snapshots",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Snapshots": {
+      "main": [
+        [
+          {
+            "node": "Run Audit Checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Rules": {
+      "main": [
+        [
+          {
+            "node": "Run Audit Checks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Audit Checks": {
+      "main": [
+        [
+          {
+            "node": "Clear Old Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Old Results": {
+      "main": [
+        [
+          {
+            "node": "Insert Audit Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

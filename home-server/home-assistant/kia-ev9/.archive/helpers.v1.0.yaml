@@ -1,0 +1,174 @@
+# Kia EV9 Helper Entities
+# Version: 1.0
+# Last Updated: 2025-01-19
+#
+# These helpers enable UI-configurable departure schedules and alert thresholds.
+# Add this content to your Home Assistant configuration.yaml or use the UI.
+#
+# DEPLOYMENT:
+# Option 1: Add to configuration.yaml and restart HA
+# Option 2: Create via UI (Settings → Devices & Services → Helpers)
+
+# ============================================================
+# DEPARTURE TIME SCHEDULE
+# Configure what time you typically leave each day
+# ============================================================
+
+input_datetime:
+  ev9_departure_monday:
+    name: "EV9 Monday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_tuesday:
+    name: "EV9 Tuesday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_wednesday:
+    name: "EV9 Wednesday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_thursday:
+    name: "EV9 Thursday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_friday:
+    name: "EV9 Friday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_saturday:
+    name: "EV9 Saturday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_sunday:
+    name: "EV9 Sunday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+# ============================================================
+# PRE-CONDITIONING ENABLE/DISABLE PER DAY
+# Toggle which days should auto-precondition
+# ============================================================
+
+input_boolean:
+  ev9_precondition_monday:
+    name: "EV9 Pre-condition Monday"
+    icon: mdi:car-electric
+
+  ev9_precondition_tuesday:
+    name: "EV9 Pre-condition Tuesday"
+    icon: mdi:car-electric
+
+  ev9_precondition_wednesday:
+    name: "EV9 Pre-condition Wednesday"
+    icon: mdi:car-electric
+
+  ev9_precondition_thursday:
+    name: "EV9 Pre-condition Thursday"
+    icon: mdi:car-electric
+
+  ev9_precondition_friday:
+    name: "EV9 Pre-condition Friday"
+    icon: mdi:car-electric
+
+  ev9_precondition_saturday:
+    name: "EV9 Pre-condition Saturday"
+    icon: mdi:car-electric
+
+  ev9_precondition_sunday:
+    name: "EV9 Pre-condition Sunday"
+    icon: mdi:car-electric
+
+  # Master enable/disable for all pre-conditioning
+  ev9_precondition_enabled:
+    name: "EV9 Pre-conditioning Enabled"
+    icon: mdi:air-conditioner
+
+  # Enable/disable charging complete notifications
+  ev9_notify_charging_complete:
+    name: "EV9 Notify Charging Complete"
+    icon: mdi:bell-ring
+
+  # Enable/disable low battery notifications
+  ev9_notify_low_battery:
+    name: "EV9 Notify Low Battery"
+    icon: mdi:battery-alert
+
+  # Enable/disable unlocked at home notifications
+  ev9_notify_unlocked_at_home:
+    name: "EV9 Notify Unlocked at Home"
+    icon: mdi:lock-open-alert
+
+# ============================================================
+# CONFIGURABLE THRESHOLDS
+# Set your preferred values for automations
+# ============================================================
+
+input_number:
+  ev9_precondition_lead_time:
+    name: "EV9 Pre-condition Lead Time"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:clock-start
+    mode: slider
+
+  ev9_low_battery_threshold:
+    name: "EV9 Low Battery Threshold"
+    min: 10
+    max: 50
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-20
+    mode: slider
+
+  ev9_unlocked_alert_delay:
+    name: "EV9 Unlocked Alert Delay"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer-outline
+    mode: slider
+
+  ev9_target_temperature:
+    name: "EV9 Target Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+# ============================================================
+# TEMPLATE SENSORS (Optional - for dashboard display)
+# ============================================================
+
+# Add to configuration.yaml under 'template:' section:
+#
+# template:
+#   - sensor:
+#       - name: "EV9 Today Departure Time"
+#         state: >
+#           {% set day = now().strftime('%A').lower() %}
+#           {{ states('input_datetime.ev9_departure_' ~ day) }}
+#         icon: mdi:clock-outline
+#
+#       - name: "EV9 Today Precondition Enabled"
+#         state: >
+#           {% set day = now().strftime('%A').lower() %}
+#           {{ states('input_boolean.ev9_precondition_' ~ day) }}
+#         icon: mdi:car-electric

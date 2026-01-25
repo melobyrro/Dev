@@ -1,0 +1,4181 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "lovelace.kia_ev9",
+  "data": {
+    "config": {
+      "title": "Kia EV9",
+      "views": [
+        {
+          "title": "Status",
+          "path": "status",
+          "icon": "mdi:car-electric",
+          "cards": [
+            {
+              "type": "horizontal-stack",
+              "cards": [
+                {
+                  "type": "gauge",
+                  "entity": "sensor.ev9_ev_battery_level",
+                  "name": "Battery",
+                  "min": 0,
+                  "max": 100,
+                  "severity": {
+                    "green": 50,
+                    "yellow": 20,
+                    "red": 10
+                  },
+                  "needle": true
+                },
+                {
+                  "type": "vertical-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "sensor.ev9_ev_range",
+                      "name": "EV Range",
+                      "icon": "mdi:road-variant"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "sensor.ev9_odometer",
+                      "name": "Odometer",
+                      "icon": "mdi:counter"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "conditional",
+              "conditions": [
+                {
+                  "condition": "state",
+                  "entity": "binary_sensor.ev9_ev_battery_plug",
+                  "state": "on"
+                }
+              ],
+              "card": {
+                "type": "vertical-stack",
+                "cards": [
+                  {
+                    "type": "markdown",
+                    "content": "## Charging Status"
+                  },
+                  {
+                    "type": "horizontal-stack",
+                    "cards": [
+                      {
+                        "type": "entity",
+                        "entity": "sensor.ev9_ev_charging_power",
+                        "name": "Current Power",
+                        "icon": "mdi:flash"
+                      },
+                      {
+                        "type": "entity",
+                        "entity": "input_number.ev9_expected_charge_power",
+                        "name": "Expected Power",
+                        "icon": "mdi:flash-outline"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "entities",
+                    "entities": [
+                      {
+                        "entity": "binary_sensor.ev9_ev_battery_charge",
+                        "name": "Charging Active"
+                      },
+                      {
+                        "entity": "sensor.ev9_estimated_charge_duration",
+                        "name": "Time Remaining"
+                      },
+                      {
+                        "entity": "number.ev9_ac_charging_limit",
+                        "name": "AC Charge Limit"
+                      },
+                      {
+                        "entity": "number.ev9_dc_charging_limit",
+                        "name": "DC Charge Limit"
+                      },
+                      {
+                        "entity": "input_select.ev9_charging_current",
+                        "name": "Charging Current"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "horizontal-stack",
+                    "cards": [
+                      {
+                        "type": "button",
+                        "name": "Stop Charging",
+                        "icon": "mdi:stop-circle",
+                        "icon_height": "40px",
+                        "tap_action": {
+                          "action": "call-service",
+                          "service": "kia_uvo.stop_charge",
+                          "data": {
+                            "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                          },
+                          "confirmation": {
+                            "text": "Stop charging?"
+                          }
+                        }
+                      },
+                      {
+                        "type": "button",
+                        "name": "Start Charging",
+                        "icon": "mdi:play-circle",
+                        "icon_height": "40px",
+                        "tap_action": {
+                          "action": "call-service",
+                          "service": "kia_uvo.start_charge",
+                          "data": {
+                            "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                          }
+                        }
+                      },
+                      {
+                        "type": "button",
+                        "name": "Refresh",
+                        "icon": "mdi:refresh",
+                        "icon_height": "40px",
+                        "tap_action": {
+                          "action": "call-service",
+                          "service": "kia_uvo.force_update",
+                          "data": {
+                            "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                          }
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## Climate Control"
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_number.ev9_target_temperature",
+                      "name": "Temperature"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_number.ev9_climate_duration",
+                      "name": "Duration"
+                    }
+                  ]
+                },
+                {
+                  "type": "conditional",
+                  "conditions": [
+                    {
+                      "condition": "state",
+                      "entity": "timer.ev9_climate_timer",
+                      "state_not": "idle"
+                    }
+                  ],
+                  "card": {
+                    "type": "entity",
+                    "entity": "timer.ev9_climate_timer",
+                    "name": "Timer Remaining"
+                  }
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "button",
+                      "name": "Start Climate",
+                      "icon": "mdi:air-conditioner",
+                      "icon_height": "40px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "script.turn_on",
+                        "data": {},
+                        "target": {
+                          "entity_id": "script.ev9_start_climate_with_timer"
+                        }
+                      }
+                    },
+                    {
+                      "type": "button",
+                      "name": "Stop Climate",
+                      "icon": "mdi:fan-off",
+                      "icon_height": "40px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "kia_uvo.stop_climate",
+                        "data": {
+                          "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "entity",
+                  "entity": "binary_sensor.ev9_air_conditioner",
+                  "name": "Climate Status"
+                }
+              ]
+            },
+            {
+              "type": "horizontal-stack",
+              "cards": [
+                {
+                  "type": "button",
+                  "entity": "lock.ev9_door_lock",
+                  "name": "Lock",
+                  "icon": "mdi:lock",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "lock.lock",
+                    "target": {
+                      "entity_id": "lock.ev9_door_lock"
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "entity": "lock.ev9_door_lock",
+                  "name": "Unlock",
+                  "icon": "mdi:lock-open",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "lock.unlock",
+                    "target": {
+                      "entity_id": "lock.ev9_door_lock"
+                    }
+                  }
+                },
+                {
+                  "type": "button",
+                  "name": "Refresh",
+                  "icon": "mdi:refresh",
+                  "tap_action": {
+                    "action": "call-service",
+                    "service": "kia_uvo.force_update",
+                    "data": {
+                      "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Vehicle Status",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "binary_sensor.ev9_locked",
+                  "name": "Lock Status",
+                  "secondary_info": "last-changed"
+                },
+                {
+                  "entity": "binary_sensor.ev9_air_conditioner",
+                  "name": "Climate Active"
+                },
+                {
+                  "entity": "sensor.ev9_car_battery_level",
+                  "name": "12V Battery"
+                },
+                {
+                  "entity": "sensor.ev9_last_updated_at",
+                  "name": "Last Update"
+                }
+              ]
+            },
+            {
+              "type": "glance",
+              "title": "Doors & Openings",
+              "columns": 4,
+              "show_state": false,
+              "entities": [
+                {
+                  "entity": "binary_sensor.ev9_front_left_door",
+                  "name": "FL"
+                },
+                {
+                  "entity": "binary_sensor.ev9_front_right_door",
+                  "name": "FR"
+                },
+                {
+                  "entity": "binary_sensor.ev9_back_left_door",
+                  "name": "BL"
+                },
+                {
+                  "entity": "binary_sensor.ev9_back_right_door",
+                  "name": "BR"
+                },
+                {
+                  "entity": "binary_sensor.ev9_trunk",
+                  "name": "Trunk"
+                },
+                {
+                  "entity": "binary_sensor.ev9_hood",
+                  "name": "Hood"
+                }
+              ]
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_select.ev9_graph_scale",
+                      "name": "Scale"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_graph_exclude_dc",
+                      "name": "Exclude DC",
+                      "toggle": true
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:apexcharts-card",
+                  "header": {
+                    "title": "Charging History (7 Days)",
+                    "show": true
+                  },
+                  "graph_span": "7d",
+                  "apex_config": {
+                    "chart": {
+                      "height": 250
+                    },
+                    "tooltip": {
+                      "x": {
+                        "format": "ddd MMM d, HH:mm"
+                      }
+                    },
+                    "legend": {
+                      "show": true,
+                      "position": "top"
+                    }
+                  },
+                  "yaxis": [
+                    {
+                      "id": "battery",
+                      "min": 0,
+                      "max": 100,
+                      "decimals": 0,
+                      "apex_config": {
+                        "title": {
+                          "text": "Battery %"
+                        },
+                        "labels": {
+                          "style": {
+                            "colors": "#4CAF50"
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "id": "power",
+                      "opposite": true,
+                      "min": 0,
+                      "max": "~5",
+                      "decimals": 1,
+                      "apex_config": {
+                        "title": {
+                          "text": "Power (kW)"
+                        },
+                        "labels": {
+                          "style": {
+                            "colors": "#FF9800"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "series": [
+                    {
+                      "entity": "sensor.ev9_ev_battery_level",
+                      "name": "Battery Level",
+                      "yaxis_id": "battery",
+                      "color": "#4CAF50",
+                      "stroke_width": 2,
+                      "group_by": {
+                        "func": "avg",
+                        "duration": "30min"
+                      }
+                    },
+                    {
+                      "entity": "sensor.ev9_ev_charging_power",
+                      "name": "Charging Power",
+                      "yaxis_id": "power",
+                      "color": "#FF9800",
+                      "stroke_width": 2,
+                      "group_by": {
+                        "func": "avg",
+                        "duration": "30min"
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "entities": [
+                {
+                  "entity": "device_tracker.ev9_location"
+                }
+              ],
+              "dark_mode": true,
+              "default_zoom": 15,
+              "aspect_ratio": "16:9"
+            }
+          ]
+        },
+        {
+          "title": "Settings",
+          "path": "settings",
+          "icon": "mdi:cog",
+          "cards": [
+            {
+              "type": "entities",
+              "title": "Security Automation",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "type": "section",
+                  "label": "Walk-Away Lock"
+                },
+                {
+                  "entity": "input_boolean.ev9_walk_away_lock_enabled",
+                  "name": "Enabled"
+                },
+                {
+                  "entity": "input_number.ev9_walk_away_lock_delay",
+                  "name": "Delay After Leaving Home"
+                },
+                {
+                  "type": "section",
+                  "label": "Auto-Close Windows"
+                },
+                {
+                  "entity": "input_boolean.ev9_auto_close_windows_enabled",
+                  "name": "Enabled"
+                },
+                {
+                  "entity": "input_number.ev9_auto_close_windows_delay",
+                  "name": "Delay After Leaving Home"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Proximity Lock (GPS)",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_proximity_lock_enabled",
+                  "name": "Enabled"
+                },
+                {
+                  "entity": "input_number.ev9_proximity_lock_distance",
+                  "name": "Lock Distance (m)"
+                },
+                {
+                  "entity": "sensor.ev9_phone_distance",
+                  "name": "Current Distance"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Trunk Alert",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_notify_trunk_open",
+                  "name": "Alert Enabled"
+                },
+                {
+                  "entity": "input_number.ev9_trunk_open_delay",
+                  "name": "Alert Delay (min)"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Charging Monitor",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_number.ev9_expected_charge_power",
+                  "name": "Expected Charge Power (kW)"
+                },
+                {
+                  "entity": "input_number.ev9_low_power_threshold",
+                  "name": "Low Power Alert Threshold"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_low_charging_power",
+                  "name": "Alert on Low Power"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_charging_interrupted",
+                  "name": "Alert on Charge Interrupted"
+                },
+                {
+                  "entity": "input_number.ev9_charge_interrupt_check_delay",
+                  "name": "Interrupt Check Delay"
+                },
+                {
+                  "entity": "input_boolean.ev9_overnight_charge_monitor",
+                  "name": "Overnight Monitor Enabled"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Graph Controls",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_select.ev9_graph_scale",
+                  "name": "Graph Scale"
+                },
+                {
+                  "entity": "input_boolean.ev9_graph_exclude_dc",
+                  "name": "Exclude DC Charging"
+                }
+              ]
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "entities",
+                  "title": "Pre-conditioning Schedules",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_boolean.ev9_precondition_enabled",
+                      "name": "Master Enable"
+                    }
+                  ]
+                },
+                {
+                  "type": "markdown",
+                  "content": "Tap time/temp to edit. Tap days to toggle."
+                },
+                {
+                  "type": "custom:stack-in-card",
+                  "mode": "horizontal",
+                  "card_mod": {
+                    "style": "\n                ha-card {\n                    padding: 8px 12px;\n                    display: flex;\n                    align-items: center;\n                }\n            "
+                  },
+                  "cards": [
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_boolean.ev9_schedule_1_enabled",
+                      "show_name": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "toggle"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "36px"
+                          },
+                          {
+                            "min-width": "36px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "width": "22px"
+                          },
+                          {
+                            "height": "22px"
+                          }
+                        ]
+                      },
+                      "state": [
+                        {
+                          "value": "on",
+                          "icon": "mdi:checkbox-marked-circle",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--primary-color)"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "value": "off",
+                          "icon": "mdi:checkbox-blank-circle-outline",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--disabled-text-color)"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "name": "1",
+                      "show_icon": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "none"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "20px"
+                          },
+                          {
+                            "min-width": "20px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "font-size": "14px"
+                          },
+                          {
+                            "font-weight": "bold"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_datetime.ev9_schedule_1_time",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "70px"
+                          },
+                          {
+                            "min-width": "70px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_number.ev9_schedule_1_temperature",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "50px"
+                          },
+                          {
+                            "min-width": "50px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "12px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      },
+                      "state_display": "[[[ return entity.state + '\u00b0F' ]]]"
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_1_mon",
+                          "name": "M",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_1_tue",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_1_wed",
+                          "name": "W",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_1_thu",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_1_fri",
+                          "name": "F",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_1_sat",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_1_sun",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:stack-in-card",
+                  "mode": "horizontal",
+                  "card_mod": {
+                    "style": "\n                ha-card {\n                    padding: 8px 12px;\n                    display: flex;\n                    align-items: center;\n                }\n            "
+                  },
+                  "cards": [
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_boolean.ev9_schedule_2_enabled",
+                      "show_name": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "toggle"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "36px"
+                          },
+                          {
+                            "min-width": "36px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "width": "22px"
+                          },
+                          {
+                            "height": "22px"
+                          }
+                        ]
+                      },
+                      "state": [
+                        {
+                          "value": "on",
+                          "icon": "mdi:checkbox-marked-circle",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--primary-color)"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "value": "off",
+                          "icon": "mdi:checkbox-blank-circle-outline",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--disabled-text-color)"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "name": "2",
+                      "show_icon": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "none"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "20px"
+                          },
+                          {
+                            "min-width": "20px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "font-size": "14px"
+                          },
+                          {
+                            "font-weight": "bold"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_datetime.ev9_schedule_2_time",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "70px"
+                          },
+                          {
+                            "min-width": "70px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_number.ev9_schedule_2_temperature",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "50px"
+                          },
+                          {
+                            "min-width": "50px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "12px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      },
+                      "state_display": "[[[ return entity.state + '\u00b0F' ]]]"
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_2_mon",
+                          "name": "M",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_2_tue",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_2_wed",
+                          "name": "W",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_2_thu",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_2_fri",
+                          "name": "F",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_2_sat",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_2_sun",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:stack-in-card",
+                  "mode": "horizontal",
+                  "card_mod": {
+                    "style": "\n                ha-card {\n                    padding: 8px 12px;\n                    display: flex;\n                    align-items: center;\n                }\n            "
+                  },
+                  "cards": [
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_boolean.ev9_schedule_3_enabled",
+                      "show_name": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "toggle"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "36px"
+                          },
+                          {
+                            "min-width": "36px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "width": "22px"
+                          },
+                          {
+                            "height": "22px"
+                          }
+                        ]
+                      },
+                      "state": [
+                        {
+                          "value": "on",
+                          "icon": "mdi:checkbox-marked-circle",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--primary-color)"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "value": "off",
+                          "icon": "mdi:checkbox-blank-circle-outline",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--disabled-text-color)"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "name": "3",
+                      "show_icon": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "none"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "20px"
+                          },
+                          {
+                            "min-width": "20px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "font-size": "14px"
+                          },
+                          {
+                            "font-weight": "bold"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_datetime.ev9_schedule_3_time",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "70px"
+                          },
+                          {
+                            "min-width": "70px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_number.ev9_schedule_3_temperature",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "50px"
+                          },
+                          {
+                            "min-width": "50px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "12px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      },
+                      "state_display": "[[[ return entity.state + '\u00b0F' ]]]"
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_3_mon",
+                          "name": "M",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_3_tue",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_3_wed",
+                          "name": "W",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_3_thu",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_3_fri",
+                          "name": "F",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_3_sat",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_3_sun",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:stack-in-card",
+                  "mode": "horizontal",
+                  "card_mod": {
+                    "style": "\n                ha-card {\n                    padding: 8px 12px;\n                    display: flex;\n                    align-items: center;\n                }\n            "
+                  },
+                  "cards": [
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_boolean.ev9_schedule_4_enabled",
+                      "show_name": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "toggle"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "36px"
+                          },
+                          {
+                            "min-width": "36px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "width": "22px"
+                          },
+                          {
+                            "height": "22px"
+                          }
+                        ]
+                      },
+                      "state": [
+                        {
+                          "value": "on",
+                          "icon": "mdi:checkbox-marked-circle",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--primary-color)"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "value": "off",
+                          "icon": "mdi:checkbox-blank-circle-outline",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--disabled-text-color)"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "name": "4",
+                      "show_icon": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "none"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "20px"
+                          },
+                          {
+                            "min-width": "20px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "font-size": "14px"
+                          },
+                          {
+                            "font-weight": "bold"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_datetime.ev9_schedule_4_time",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "70px"
+                          },
+                          {
+                            "min-width": "70px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_number.ev9_schedule_4_temperature",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "50px"
+                          },
+                          {
+                            "min-width": "50px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "12px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      },
+                      "state_display": "[[[ return entity.state + '\u00b0F' ]]]"
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_4_mon",
+                          "name": "M",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_4_tue",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_4_wed",
+                          "name": "W",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_4_thu",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_4_fri",
+                          "name": "F",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_4_sat",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_4_sun",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:stack-in-card",
+                  "mode": "horizontal",
+                  "card_mod": {
+                    "style": "\n                ha-card {\n                    padding: 8px 12px;\n                    display: flex;\n                    align-items: center;\n                }\n            "
+                  },
+                  "cards": [
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_boolean.ev9_schedule_5_enabled",
+                      "show_name": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "toggle"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "36px"
+                          },
+                          {
+                            "min-width": "36px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "icon": [
+                          {
+                            "width": "22px"
+                          },
+                          {
+                            "height": "22px"
+                          }
+                        ]
+                      },
+                      "state": [
+                        {
+                          "value": "on",
+                          "icon": "mdi:checkbox-marked-circle",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--primary-color)"
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "value": "off",
+                          "icon": "mdi:checkbox-blank-circle-outline",
+                          "styles": {
+                            "icon": [
+                              {
+                                "color": "var(--disabled-text-color)"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "name": "5",
+                      "show_icon": false,
+                      "show_state": false,
+                      "tap_action": {
+                        "action": "none"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "20px"
+                          },
+                          {
+                            "min-width": "20px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "transparent"
+                          },
+                          {
+                            "box-shadow": "none"
+                          }
+                        ],
+                        "name": [
+                          {
+                            "font-size": "14px"
+                          },
+                          {
+                            "font-weight": "bold"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_datetime.ev9_schedule_5_time",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "70px"
+                          },
+                          {
+                            "min-width": "70px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "8px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "type": "custom:button-card",
+                      "entity": "input_number.ev9_schedule_5_temperature",
+                      "show_icon": false,
+                      "show_name": false,
+                      "show_state": true,
+                      "tap_action": {
+                        "action": "more-info"
+                      },
+                      "styles": {
+                        "card": [
+                          {
+                            "width": "50px"
+                          },
+                          {
+                            "min-width": "50px"
+                          },
+                          {
+                            "height": "36px"
+                          },
+                          {
+                            "padding": "0 4px"
+                          },
+                          {
+                            "margin-right": "12px"
+                          },
+                          {
+                            "background": "var(--secondary-background-color)"
+                          },
+                          {
+                            "border-radius": "4px"
+                          }
+                        ],
+                        "state": [
+                          {
+                            "font-size": "13px"
+                          },
+                          {
+                            "font-weight": "500"
+                          }
+                        ]
+                      },
+                      "state_display": "[[[ return entity.state + '\u00b0F' ]]]"
+                    },
+                    {
+                      "type": "horizontal-stack",
+                      "cards": [
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_5_mon",
+                          "name": "M",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_5_tue",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_5_wed",
+                          "name": "W",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_5_thu",
+                          "name": "T",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_5_fri",
+                          "name": "F",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_5_sat",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        },
+                        {
+                          "type": "custom:button-card",
+                          "entity": "input_boolean.ev9_schedule_5_sun",
+                          "name": "S",
+                          "show_state": false,
+                          "show_icon": false,
+                          "tap_action": {
+                            "action": "toggle"
+                          },
+                          "styles": {
+                            "card": [
+                              {
+                                "width": "36px"
+                              },
+                              {
+                                "min-width": "36px"
+                              },
+                              {
+                                "height": "36px"
+                              },
+                              {
+                                "padding": "0"
+                              },
+                              {
+                                "margin": "0 2px"
+                              },
+                              {
+                                "border-radius": "4px"
+                              },
+                              {
+                                "font-size": "12px"
+                              },
+                              {
+                                "font-weight": "bold"
+                              }
+                            ],
+                            "name": [
+                              {
+                                "font-size": "12px"
+                              }
+                            ]
+                          },
+                          "state": [
+                            {
+                              "value": "on",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--primary-color)"
+                                  },
+                                  {
+                                    "color": "var(--text-primary-color)"
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "value": "off",
+                              "styles": {
+                                "card": [
+                                  {
+                                    "background": "var(--card-background-color)"
+                                  },
+                                  {
+                                    "border": "1px solid var(--divider-color)"
+                                  }
+                                ]
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_number.ev9_precondition_lead_time",
+                      "name": "Lead Time (min)"
+                    },
+                    {
+                      "entity": "input_boolean.ev9_smart_precondition",
+                      "name": "Smart Mode (Weather-Based)"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Notifications",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_notify_charging_complete",
+                  "name": "Charging Complete"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_low_battery",
+                  "name": "Low Battery Alert"
+                },
+                {
+                  "entity": "input_number.ev9_low_battery_threshold",
+                  "name": "Low Battery Threshold"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_unlocked_at_home",
+                  "name": "Unlocked at Home Alert"
+                },
+                {
+                  "entity": "input_number.ev9_unlocked_alert_delay",
+                  "name": "Unlocked Alert Delay"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Help",
+          "path": "help",
+          "icon": "mdi:help-circle",
+          "cards": [
+            {
+              "type": "markdown",
+              "title": "EV9 Integration Guide",
+              "content": "This dashboard integrates your **2024 Kia EV9** with Home Assistant via the kia_uvo integration.\n\nAll data comes from **Kia Connect** (same as your mobile app). Commands go through Kia's cloud servers.\n\n**Rate Limits**: Kia limits API calls. Data refreshes ~30 min. Use Refresh sparingly."
+            },
+            {
+              "type": "markdown",
+              "title": "Metrics Explained",
+              "content": "### Battery & Range\n\n| Metric | Description |\n|--------|-------------|\n| **Battery %** | High-voltage traction battery charge |\n| **EV Range** | Estimated miles based on charge & driving |\n| **12V Battery** | Auxiliary battery (powers electronics) |\n\n### Charging Metrics\n\n| Metric | Description |\n|--------|-------------|\n| **Charging Power** | Current kW. L1=1.2-1.4kW, L2=up to 11kW |\n| **Expected Power** | Your configured expected rate |\n| **AC/DC Limit** | Max charge %. Set 80% daily to preserve battery |\n\n### Why Charging Varies\n- Temperature (hot/cold reduces rate)\n- Near full (tapers above 80%)\n- EVSE limitation\n- 12V battery health\n- Vehicle software limits"
+            },
+            {
+              "type": "markdown",
+              "title": "Walk-Away Lock",
+              "content": "### How It Works\n\nUses **GPS location only** (NOT phone Bluetooth or key fob).\n\nWhen  leaves your Home zone:\n1. Waits configured delay (default 2 min)\n2. Re-checks car is still unlocked AND outside home\n3. Locks automatically\n4. Sends notification\n\n**Note**: This is location-based, not proximity-based. Different from the car's built-in walk-away lock."
+            },
+            {
+              "type": "markdown",
+              "title": "Charging Alerts",
+              "content": "### Charging Interrupted Alert\n\nTriggers when:\n- Charging stops while plugged in\n- Battery below 95%\n- Between 8PM-7AM\n- Persists for configured delay\n\n**Common causes**: Breaker trip, GFCI trip, EVSE fault, temperature\n\n### Low Charging Power Alert\n\nTriggers when:\n- Power below your threshold\n- Stays low 5+ minutes\n- Battery below 80%\n\nSet your expected power based on your charger:\n- L1 120V/12A: ~1.3kW\n- L1 120V/16A: ~1.6kW\n- L2 240V: 7-11kW"
+            },
+            {
+              "type": "markdown",
+              "title": "Pre-conditioning Schedules",
+              "content": "### How the New Schedule System Works\n\nYou have **5 independent schedules** instead of fixed per-day times:\n\n**Example:**\n- **Schedule 1**: Mon-Fri at 7:30 AM (workday commute)\n- **Schedule 2**: Sat-Sun at 10:00 AM (weekend)\n- **Schedule 3**: Wed at 6:00 PM (weekly activity)\n\n### How It Works\n\n1. Automation checks every minute\n2. Loops through schedules 1-5 (priority order)\n3. For each: checks enabled + day selected + time match\n4. **First matching schedule wins**\n\n### Smart Mode\n\nWhen enabled, adds extra lead time based on weather:\n- Calculates temp difference from target\n- Adds ~1 min per 3\u00b0F difference\n- Maximum +20 minutes extra"
+            },
+            {
+              "type": "markdown",
+              "title": "Troubleshooting",
+              "content": "### Commands Not Working?\n1. Check Kia Connect app - can you control from there?\n2. Press Refresh and wait 2-3 min\n3. Check HA logs (filter 'kia_uvo')\n4. Wait 30+ min if you sent many commands\n\n### Data Not Updating?\n- Normal refresh is every 30 min\n- Use Force Update sparingly\n- Check Kia Connect subscription\n\n### Walk-Away Lock Not Triggering?\n- Verify device_tracker is updating\n- Check car actually left Home zone\n- Verify delay isn't too long\n- Check car was unlocked when leaving"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

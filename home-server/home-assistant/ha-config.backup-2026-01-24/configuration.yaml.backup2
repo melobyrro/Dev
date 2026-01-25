@@ -1,0 +1,2340 @@
+homeassistant:
+  name: Home
+  external_url: https://home.byrroserver.com
+  internal_url: http://192.168.1.11:8123
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# HTTP settings for reverse proxy
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+    - 192.168.1.0/24
+    - 172.16.0.0/12
+    - 172.18.0.0/16
+    - 10.0.0.0/8
+
+
+# Logger - Debug Google Assistant commands
+logger:
+  default: warning
+  logs:
+    homeassistant.components.google_assistant: debug
+    homeassistant.components.google_assistant.http: debug
+    homeassistant.components.google_assistant.trait: info
+    custom_components.prometheus_sensor: debug
+
+# Google Assistant Integration
+
+google_assistant:
+  project_id: ha-byrro
+  service_account: !include SERVICE_ACCOUNT.json
+  report_state: true
+  expose_by_default: false
+  exposed_domains:
+    - light
+    - switch
+    - fan
+    - climate
+    - lock
+    - vacuum
+    - script
+    - scene
+  entity_config:
+    # Living Room
+    light.living_room_light_2:
+      name: "Living Room Light"
+      expose: true
+      room: "Living Room"
+    fan.living_room_light:
+      name: "Living Room Fan"
+      expose: true
+      room: "Living Room"
+    switch.cinema_light:
+      name: "Cinema Light"
+      expose: true
+      room: "Living Room"
+
+    # Master Bedroom
+    light.master_light:
+      name: "Bedroom Light"
+      expose: true
+      room: "Master Bedroom"
+    light.master_fan:
+      name: "Bedroom Fan"
+      expose: true
+      room: "Master Bedroom"
+
+    # Office
+    light.office_light:
+      name: "Office Light"
+      expose: true
+      room: "Office"
+
+    # Climate
+    climate.150633095083490_climate:
+      name: "Patio AC"
+      expose: true
+      room: "Patio"
+
+    # Security
+    lock.front_door:
+      name: "Front Door Lock"
+      expose: true
+      room: "Entryway"
+
+    # Vacuum
+    vacuum.jose:
+      name: "Jose"
+      expose: true
+
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# ===========================================================================
+# Patio AC Automation Helpers (State Machine Redesign)
+# Updated: 2025-12-27 for energy-efficient state-machine-based automation
+# ===========================================================================
+
+# State Machine
+input_select:
+  patio_ac_reason:
+    name: "Patio AC Active Reason"
+    options:
+      - idle
+      - heat_guard
+      - humidity_night
+      - humidity_day
+      - humidity_emergency
+      - manual
+      - safety_lock
+    initial: idle
+    icon: mdi:state-machine
+
+
+  falco_event_filter:
+    name: "Falco Event Filter"
+    options:
+      - All
+      - Emergency
+      - Alert
+      - Critical
+      - Error
+      - Warning
+      - Notice
+      - Info
+      - Debug
+    initial: All
+    icon: mdi:filter-variant
+
+# Boolean Helpers
+input_boolean:
+  patio_ac_manual_override:
+    name: "Patio AC Manual Override"
+    icon: mdi:hand-back-right
+    initial: off
+
+  patio_ac_compressor_cooldown:
+    name: "Patio AC Compressor Cooldown Active"
+    initial: off
+    icon: mdi:snowflake-alert
+
+  patio_ac_humidity_emergency_only:
+    name: "Patio AC Emergency-Only Mode"
+    initial: off
+    icon: mdi:water-alert
+
+  patio_ac_show_guide_heat:
+    name: Show Heat Guide
+    initial: off
+    icon: mdi:help-circle
+
+  patio_ac_show_guide_day:
+    name: Show Day Guide
+    initial: off
+    icon: mdi:help-circle
+
+  patio_ac_show_guide_night:
+    name: Show Night Guide
+    initial: off
+    icon: mdi:help-circle
+
+  patio_ac_show_guide_safety:
+    name: Show Safety Guide
+    initial: off
+    icon: mdi:help-circle
+
+
+  trivy_upgrade_only:
+    name: "Trivy Upgrade-Fixable Only"
+    icon: mdi:checkbox-marked-circle-outline
+    initial: off
+
+# Tracker Monitor Input Helpers
+  dawarich_on_trip:
+    name: "Dawarich Trip Active"
+    icon: mdi:map-marker-path
+    initial: off
+input_text:
+  last_tracker_signup:
+    name: "Last Tracker Signup"
+    max: 255
+    initial: "No signups yet"
+    icon: mdi:rss
+
+  last_uptime_alert:
+    name: "Last Uptime Kuma Alert"
+    max: 255
+    initial: "No alerts yet"
+    icon: mdi:heart-pulse
+
+# Datetime Helpers (for protection and runtime tracking)
+  jose_error_log_1:
+    name: "Jose Error Log 1"
+    max: 255
+    initial: "No errors yet"
+    icon: mdi:alert-circle
+  jose_error_log_2:
+    name: "Jose Error Log 2"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_3:
+    name: "Jose Error Log 3"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_4:
+    name: "Jose Error Log 4"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_5:
+    name: "Jose Error Log 5"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_6:
+    name: "Jose Error Log 6"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_7:
+    name: "Jose Error Log 7"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_8:
+    name: "Jose Error Log 8"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_9:
+    name: "Jose Error Log 9"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+  jose_error_log_10:
+    name: "Jose Error Log 10"
+    max: 255
+    initial: "-"
+    icon: mdi:alert-circle
+
+  dawarich_current_trip_id:
+    name: "Dawarich Current Trip ID"
+    max: 255
+    initial: ""
+    icon: mdi:identifier
+  dawarich_current_trip_key:
+    name: "Dawarich Current Trip Key"
+    max: 255
+    initial: ""
+    icon: mdi:key
+  dawarich_current_trip_id_yearly:
+    name: "Dawarich Current Trip ID (Yearly)"
+    max: 255
+    initial: ""
+    icon: mdi:calendar
+  dawarich_current_trip_key_yearly:
+    name: "Dawarich Current Trip Key (Yearly)"
+    max: 255
+    initial: ""
+    icon: mdi:calendar-text
+  dawarich_current_trip_id_distance:
+    name: "Dawarich Distance Trip ID"
+    max: 255
+    initial: ""
+    icon: mdi:map-marker-distance
+  dawarich_current_trip_key_distance:
+    name: "Dawarich Distance Trip Key"
+    max: 255
+    initial: ""
+    icon: mdi:map-marker-distance
+  dawarich_current_trip_id_distance_yearly:
+    name: "Dawarich Distance Trip ID (Yearly)"
+    max: 255
+    initial: ""
+    icon: mdi:map-marker-distance
+  dawarich_current_trip_key_distance_yearly:
+    name: "Dawarich Distance Trip Key (Yearly)"
+    max: 255
+    initial: ""
+    icon: mdi:map-marker-distance
+  dawarich_current_trip_id_daytype:
+    name: "Dawarich Daytype Trip ID"
+    max: 255
+    initial: ""
+    icon: mdi:calendar-week
+  dawarich_current_trip_key_daytype:
+    name: "Dawarich Daytype Trip Key"
+    max: 255
+    initial: ""
+    icon: mdi:calendar-week
+  dawarich_current_trip_id_daytype_yearly:
+    name: "Dawarich Daytype Trip ID (Yearly)"
+    max: 255
+    initial: ""
+    icon: mdi:calendar-week
+  dawarich_current_trip_key_daytype_yearly:
+    name: "Dawarich Daytype Trip Key (Yearly)"
+    max: 255
+    initial: ""
+    icon: mdi:calendar-week
+  dawarich_last_error:
+    name: "Dawarich Trip Last Error"
+    max: 255
+    initial: ""
+    icon: mdi:alert-circle
+input_datetime:
+  patio_ac_last_command:
+    name: "Patio AC Last Command Time"
+    has_date: true
+    has_time: true
+
+  patio_ac_last_off:
+    name: "Patio AC Last OFF Time"
+    has_date: true
+    has_time: true
+
+  patio_ac_runtime_start:
+    name: "Patio AC Runtime Start"
+    has_date: true
+    has_time: true
+
+
+  # Tracker Monitor
+  last_tracker_signup_time:
+    name: "Last Tracker Signup Time"
+    has_date: true
+    has_time: true
+    icon: mdi:clock-outline
+
+  dawarich_trip_start:
+    name: "Dawarich Trip Start"
+    has_date: true
+    has_time: true
+  dawarich_trip_last_update:
+    name: "Dawarich Trip Last Update"
+    has_date: true
+    has_time: true
+  dawarich_last_error:
+    name: "Dawarich Trip Last Error Time"
+    has_date: true
+    has_time: true
+# Timer Helpers
+timer:
+  patio_ac_heat_spike:
+    name: "Patio AC Heat Spike Timer"
+    restore: true
+
+  patio_ac_manual_override:
+    name: "Patio AC Manual Override Timer"
+    restore: true
+
+  patio_ac_compressor_protection:
+    name: "Patio AC Compressor Protection Timer"
+    duration: "00:10:00"
+    restore: true
+
+  patio_ac_command_throttle:
+    name: "Patio AC Command Throttle Timer"
+    duration: "00:03:00"
+    restore: true
+
+  patio_ac_manual_safety:
+    name: "Patio AC Manual Safety Timer"
+    duration: "08:00:00"
+    restore: true
+
+  patio_ac_humidity_min_on:
+    name: "Patio AC Humidity Min ON"
+    duration: "00:35:00"
+    restore: true
+
+  patio_ac_humidity_min_off:
+    name: "Patio AC Humidity Min OFF"
+    duration: "00:45:00"
+    restore: true
+# Number Helpers
+input_number:
+  # Runtime Tracking
+  patio_ac_daily_runtime:
+    name: "Patio AC Daily Runtime (minutes)"
+    min: 0
+    max: 1440
+    step: 1
+    unit_of_measurement: "min"
+    mode: box
+    icon: mdi:timer-sand
+
+  patio_ac_daily_limit:
+    name: "Patio AC Heat Runtime Limit (minutes)"
+    min: 0
+    max: 480
+    step: 15
+    initial: 240
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-lock
+
+  patio_ac_humidity_runtime:
+    name: "Patio AC Humidity Runtime (minutes)"
+    min: 0
+    max: 1440
+    step: 1
+    unit_of_measurement: "min"
+    mode: box
+    icon: mdi:timer-sand
+
+  patio_ac_humidity_soft_cap:
+    name: "Patio AC Humidity Soft Cap (minutes)"
+    min: 0
+    max: 600
+    step: 15
+    initial: 240
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-sand-complete
+
+  # Tunable Parameters
+  patio_ac_heat_threshold:
+    name: "Heat Guard Threshold"
+    min: 85
+    max: 100
+    step: 1
+    initial: 95
+    unit_of_measurement: "°F"
+    mode: slider
+    icon: mdi:thermometer-alert
+
+  patio_ac_heat_target:
+    name: "Heat Guard Target Temp"
+    min: 75
+    max: 85
+    step: 1
+    initial: 83
+    unit_of_measurement: "°F"
+    mode: slider
+    icon: mdi:thermometer-check
+
+  patio_ac_heat_duration:
+    name: "Heat Guard Max Duration"
+    min: 30
+    max: 120
+    step: 15
+    initial: 60
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer
+
+  patio_ac_dewpoint_start:
+    name: "Dew Point Start Threshold"
+    min: 55
+    max: 75
+    step: 1
+    initial: 65
+    unit_of_measurement: "°F"
+    mode: slider
+    icon: mdi:water-thermometer
+
+  patio_ac_dewpoint_night_start:
+    name: "Night Dew Point Start"
+    min: 55
+    max: 75
+    step: 1
+    initial: 65
+    unit_of_measurement: "°F"
+    mode: slider
+    icon: mdi:water-thermometer
+
+  patio_ac_dewpoint_stop:
+    name: "Dew Point Stop Threshold"
+    min: 55
+    max: 70
+    step: 1
+    initial: 61
+    unit_of_measurement: "°F"
+    mode: slider
+    icon: mdi:water-check
+
+  patio_ac_rh_night_start:
+    name: "Night RH Start Threshold"
+    min: 60
+    max: 80
+    step: 1
+    initial: 65
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:water-percent
+
+  patio_ac_rh_night_stop:
+    name: "Night RH Stop Threshold"
+    min: 55
+    max: 70
+    step: 1
+    initial: 60
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:water-check
+
+  patio_ac_rh_day_start:
+    name: "Day RH Start Threshold"
+    min: 65
+    max: 85
+    step: 1
+    initial: 70
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:weather-sunny
+
+  patio_ac_rh_day_stop:
+    name: "Day RH Stop Threshold"
+    min: 55
+    max: 70
+    step: 1
+    initial: 62
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:weather-sunny-alert
+
+  patio_ac_rh_emergency:
+    name: "RH Emergency Ceiling"
+    min: 70
+    max: 90
+    step: 1
+    initial: 75
+    unit_of_measurement: "%"
+    mode: slider
+    icon: mdi:alarm-light
+
+  patio_ac_humidity_min_on:
+    name: "Humidity Min ON (minutes)"
+    min: 15
+    max: 90
+    step: 5
+    initial: 35
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-outline
+
+  patio_ac_humidity_min_off:
+    name: "Humidity Min OFF (minutes)"
+    min: 15
+    max: 120
+    step: 5
+    initial: 45
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-lock-open
+
+  patio_ac_manual_timeout:
+    name: "Manual Override Timeout"
+    min: 30
+    max: 360
+    step: 30
+    initial: 120
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-off  # v1.4 Configuration Items
+  patio_ac_min_meaningful_run_minutes:
+    name: Minimum Meaningful Run Time
+    min: 5
+    max: 30
+    step: 5
+    initial: 15
+    unit_of_measurement: min
+    mode: slider
+    icon: mdi:timer-cog
+
+  patio_ac_poll_settle_seconds:
+    name: Poll Settle Time
+    min: 2
+    max: 10
+    step: 1
+    initial: 5
+    unit_of_measurement: s
+    mode: slider
+    icon: mdi:timer-sync
+
+  patio_ac_expected_signature:
+    name: Expected Command Signature
+    min: 0
+    max: 65535
+    step: 1
+    initial: 12345
+    mode: box
+    icon: mdi:signature
+
+  patio_ac_allow_seamless_handoff:
+    name: Allow Seamless Handoff
+    min: 0
+    max: 1
+    step: 1
+    initial: 1
+    mode: slider
+    icon: mdi:handshake
+
+
+
+  # Master Bedroom Controls
+  master_fan_brightness:
+    name: Master Fan Brightness
+    min: 0
+    max: 100
+    step: 1
+    mode: slider
+    unit_of_measurement: '%'
+    icon: mdi:brightness-7
+
+  master_light_brightness:
+    name: Master Light Brightness
+    min: 0
+    max: 100
+    step: 1
+    mode: slider
+    unit_of_measurement: '%'
+    icon: mdi:brightness-7
+
+  # Tracker Monitor
+  tracker_signup_count_24h:
+    name: "Tracker Signup Count (24h)"
+    min: 0
+    max: 100
+    step: 1
+    initial: 0
+    mode: box
+    icon: mdi:counter
+  dawarich_debounce_minutes:
+    name: "Dawarich Trip Debounce (minutes)"
+    min: 1
+    max: 10
+    step: 1
+    initial: 3
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-lock
+  dawarich_extend_minutes:
+    name: "Dawarich Trip Extend Interval (minutes)"
+    min: 5
+    max: 60
+    step: 5
+    initial: 10
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-outline
+# ===========================================================================
+# Prometheus Sensors for Home Assistant
+# Pulls metrics from Prometheus at 192.168.1.11:9090
+# ===========================================================================
+
+sensor:
+  - platform: prometheus_sensor
+    url: http://192.168.1.11:9090
+    queries:
+      # === VM LEVEL METRICS ===
+      - name: "VM CPU Usage"
+        expr: round(100 - (avg(irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100), 0.01)
+        unit_of_measurement: "%"
+
+      - name: "VM Memory Usage"
+        expr: round((1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "VM Memory Used GB"
+        expr: round((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "VM Memory Total GB"
+        expr: round(node_memory_MemTotal_bytes / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "VM Root FS Usage"
+        expr: round(100 - ((node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100), 0.01)
+        unit_of_measurement: "%"
+
+      - name: "VM Disk Read MB/s"
+        expr: round(sum(rate(node_disk_read_bytes_total[1m])) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "VM Disk Write MB/s"
+        expr: round(sum(rate(node_disk_written_bytes_total[1m])) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "VM Network RX MB/s"
+        expr: round(sum(rate(node_network_receive_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[1m])) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "VM Network TX MB/s"
+        expr: round(sum(rate(node_network_transmit_bytes_total{device!~"lo|docker.*|veth.*|br-.*"}[1m])) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "VM Uptime Days"
+        expr: round((node_time_seconds - node_boot_time_seconds) / 86400, 0.01)
+        unit_of_measurement: "days"
+
+      # === INTEL GPU METRICS ===
+      - name: "Intel GPU Render %"
+        expr: round(igpu_engines_render_3d_0_busy, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Intel GPU Video %"
+        expr: round(igpu_engines_video_0_busy, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Intel GPU Frequency MHz"
+        expr: round(igpu_frequency_actual, 0.01)
+        unit_of_measurement: "MHz"
+
+      - name: "Intel GPU Power W"
+        expr: round(igpu_power_gpu, 0.01)
+        unit_of_measurement: "W"
+
+      # === STORAGE METRICS (NAS Mount) ===
+      - name: "ByrroServer Usage %"
+        expr: round(100 - ((node_filesystem_avail_bytes{mountpoint="/mnt/ByrroServer"} / node_filesystem_size_bytes{mountpoint="/mnt/ByrroServer"}) * 100), 0.01)
+        unit_of_measurement: "%"
+
+      - name: "ByrroServer Free TB"
+        expr: round(node_filesystem_avail_bytes{mountpoint="/mnt/ByrroServer"} / 1099511627776, 0.01)
+        unit_of_measurement: "TB"
+
+      # === CONTAINER METRICS ===
+      - name: "Running Containers"
+        expr: count(container_last_seen{name!=""})
+        unit_of_measurement: "containers"
+      - name: Containers CPU Usage %
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name!=""}[5m])) / count(count(node_cpu_seconds_total{mode="idle"}) by (cpu)) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: Containers CPU Cores
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name!=""}[5m])), 0.01)
+        unit_of_measurement: "cores"
+
+
+      # Immich
+      - name: "Immich Server CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="immich-server"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Immich Server Memory MB"
+        expr: round(container_memory_usage_bytes{name="immich-server"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Immich ML CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="immich-machine-learning"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Immich ML Memory MB"
+        expr: round(container_memory_usage_bytes{name="immich-machine-learning"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      # Plex
+      - name: "Plex CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="plex"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Plex Memory MB"
+        expr: round(container_memory_usage_bytes{name="plex"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      # Home Assistant
+      - name: "HA Container CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="homeassistant"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "HA Container Memory MB"
+        expr: round(container_memory_usage_bytes{name="homeassistant"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      # CultoTranscript
+      - name: "Culto Worker CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="culto_worker"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Culto Worker Memory MB"
+        expr: round(container_memory_usage_bytes{name="culto_worker"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      # Prometheus
+      - name: "Prometheus CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="prometheus"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Prometheus Memory MB"
+        expr: round(container_memory_usage_bytes{name="prometheus"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      # Additional Containers
+      - name: "Tracker Monitor CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="tracker-monitor"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Tracker Monitor Memory MB"
+        expr: round(container_memory_usage_bytes{name="tracker-monitor"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Falco Ha Bridge CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="falco-ha-bridge"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Falco Ha Bridge Memory MB"
+        expr: round(container_memory_usage_bytes{name="falco-ha-bridge"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Pve Exporter CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="pve-exporter"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Pve Exporter Memory MB"
+        expr: round(container_memory_usage_bytes{name="pve-exporter"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Authelia CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="authelia"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Authelia Memory MB"
+        expr: round(container_memory_usage_bytes{name="authelia"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Authelia Redis CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="authelia-redis"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Authelia Redis Memory MB"
+        expr: round(container_memory_usage_bytes{name="authelia-redis"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Paperless Gotenberg CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="paperless-gotenberg"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Paperless Gotenberg Memory MB"
+        expr: round(container_memory_usage_bytes{name="paperless-gotenberg"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Qb Port Sync CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="qb-port-sync"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Qb Port Sync Memory MB"
+        expr: round(container_memory_usage_bytes{name="qb-port-sync"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Trivy Api CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="trivy-api"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Trivy Api Memory MB"
+        expr: round(container_memory_usage_bytes{name="trivy-api"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Qbit Safety Cleaner CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="qbit-safety-cleaner"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Qbit Safety Cleaner Memory MB"
+        expr: round(container_memory_usage_bytes{name="qbit-safety-cleaner"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Culto Caddy CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="culto_caddy"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Culto Caddy Memory MB"
+        expr: round(container_memory_usage_bytes{name="culto_caddy"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Culto Web CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="culto_web"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Culto Web Memory MB"
+        expr: round(container_memory_usage_bytes{name="culto_web"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Culto Scheduler CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="culto_scheduler"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Culto Scheduler Memory MB"
+        expr: round(container_memory_usage_bytes{name="culto_scheduler"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Culto Db CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="culto_db"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Culto Db Memory MB"
+        expr: round(container_memory_usage_bytes{name="culto_db"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Culto Redis CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="culto_redis"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Culto Redis Memory MB"
+        expr: round(container_memory_usage_bytes{name="culto_redis"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Qbittorrent CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="qbittorrent"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Qbittorrent Memory MB"
+        expr: round(container_memory_usage_bytes{name="qbittorrent"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Flaresolverr CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="flaresolverr"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Flaresolverr Memory MB"
+        expr: round(container_memory_usage_bytes{name="flaresolverr"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Gluetun CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="gluetun"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Gluetun Memory MB"
+        expr: round(container_memory_usage_bytes{name="gluetun"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Unpackerr CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="unpackerr"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Unpackerr Memory MB"
+        expr: round(container_memory_usage_bytes{name="unpackerr"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Dawarich Redis CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="dawarich-redis"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Dawarich Redis Memory MB"
+        expr: round(container_memory_usage_bytes{name="dawarich-redis"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Promtail CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="promtail"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Promtail Memory MB"
+        expr: round(container_memory_usage_bytes{name="promtail"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Loki CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="loki"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Loki Memory MB"
+        expr: round(container_memory_usage_bytes{name="loki"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Cadvisor CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="cadvisor"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Cadvisor Memory MB"
+        expr: round(container_memory_usage_bytes{name="cadvisor"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Caddy CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="caddy"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Caddy Memory MB"
+        expr: round(container_memory_usage_bytes{name="caddy"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Paperless CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="paperless"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Paperless Memory MB"
+        expr: round(container_memory_usage_bytes{name="paperless"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Paperless Db CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="paperless-db"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Paperless Db Memory MB"
+        expr: round(container_memory_usage_bytes{name="paperless-db"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Dawarich Sidekiq CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="dawarich-sidekiq"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Dawarich Sidekiq Memory MB"
+        expr: round(container_memory_usage_bytes{name="dawarich-sidekiq"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Dawarich App CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="dawarich-app"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Dawarich App Memory MB"
+        expr: round(container_memory_usage_bytes{name="dawarich-app"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Dawarich Db CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="dawarich-db"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Dawarich Db Memory MB"
+        expr: round(container_memory_usage_bytes{name="dawarich-db"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Immich Postgres CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="immich-postgres"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Immich Postgres Memory MB"
+        expr: round(container_memory_usage_bytes{name="immich-postgres"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Falcosidekick CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="falcosidekick"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Falcosidekick Memory MB"
+        expr: round(container_memory_usage_bytes{name="falcosidekick"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Trivy Runner CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="trivy-runner"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Trivy Runner Memory MB"
+        expr: round(container_memory_usage_bytes{name="trivy-runner"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Prowlarr CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="prowlarr"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Prowlarr Memory MB"
+        expr: round(container_memory_usage_bytes{name="prowlarr"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Node Exporter CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="node-exporter"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Node Exporter Memory MB"
+        expr: round(container_memory_usage_bytes{name="node-exporter"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Blackbox Exporter CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="blackbox-exporter"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Blackbox Exporter Memory MB"
+        expr: round(container_memory_usage_bytes{name="blackbox-exporter"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Cross Seed CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="cross-seed"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Cross Seed Memory MB"
+        expr: round(container_memory_usage_bytes{name="cross-seed"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Adguardhome CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="adguardhome"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Adguardhome Memory MB"
+        expr: round(container_memory_usage_bytes{name="adguardhome"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Radarr CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="radarr"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Radarr Memory MB"
+        expr: round(container_memory_usage_bytes{name="radarr"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Sonarr CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="sonarr"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Sonarr Memory MB"
+        expr: round(container_memory_usage_bytes{name="sonarr"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Actualbudget CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="actualbudget"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Actualbudget Memory MB"
+        expr: round(container_memory_usage_bytes{name="actualbudget"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Wireguard CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="wireguard"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Wireguard Memory MB"
+        expr: round(container_memory_usage_bytes{name="wireguard"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Portainer CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="portainer"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Portainer Memory MB"
+        expr: round(container_memory_usage_bytes{name="portainer"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Immich Redis CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="immich-redis"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Immich Redis Memory MB"
+        expr: round(container_memory_usage_bytes{name="immich-redis"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Immich Typesense CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="immich-typesense"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Immich Typesense Memory MB"
+        expr: round(container_memory_usage_bytes{name="immich-typesense"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Snmp Exporter CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="snmp-exporter"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Snmp Exporter Memory MB"
+        expr: round(container_memory_usage_bytes{name="snmp-exporter"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Pushgateway CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="pushgateway"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Pushgateway Memory MB"
+        expr: round(container_memory_usage_bytes{name="pushgateway"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Falco CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="falco"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Falco Memory MB"
+        expr: round(container_memory_usage_bytes{name="falco"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Telemetrygen CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="telemetrygen"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Telemetrygen Memory MB"
+        expr: round(container_memory_usage_bytes{name="telemetrygen"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Tempo CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="tempo"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Tempo Memory MB"
+        expr: round(container_memory_usage_bytes{name="tempo"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Uptime Kuma CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="uptime-kuma"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Uptime Kuma Memory MB"
+        expr: round(container_memory_usage_bytes{name="uptime-kuma"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Paperless Tika CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="paperless-tika"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Paperless Tika Memory MB"
+        expr: round(container_memory_usage_bytes{name="paperless-tika"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Paperless Redis CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="paperless-redis"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Paperless Redis Memory MB"
+        expr: round(container_memory_usage_bytes{name="paperless-redis"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Tautulli CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="tautulli"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Tautulli Memory MB"
+        expr: round(container_memory_usage_bytes{name="tautulli"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Vaultwarden CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="vaultwarden"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Vaultwarden Memory MB"
+        expr: round(container_memory_usage_bytes{name="vaultwarden"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Jellyseerr CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="jellyseerr"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Jellyseerr Memory MB"
+        expr: round(container_memory_usage_bytes{name="jellyseerr"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Intel Gpu Exporter CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="intel-gpu-exporter"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Intel Gpu Exporter Memory MB"
+        expr: round(container_memory_usage_bytes{name="intel-gpu-exporter"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Process Exporter CPU %"
+        expr: round(sum(rate(container_cpu_usage_seconds_total{name="process-exporter"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Process Exporter Memory MB"
+        expr: round(container_memory_usage_bytes{name="process-exporter"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+
+      # Process Exporter (per-process)
+      - name: "Plex Proc CPU %"
+        expr: round(sum(rate(namedprocess_namegroup_cpu_seconds_total{groupname="plex"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Plex Proc Memory MB"
+        expr: round(namedprocess_namegroup_memory_bytes{groupname="plex", memtype="resident"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Plex Proc Count"
+        expr: namedprocess_namegroup_num_procs{groupname="plex"}
+        unit_of_measurement: "procs"
+
+      - name: "Plex Transcoder Proc CPU %"
+        expr: round(sum(rate(namedprocess_namegroup_cpu_seconds_total{groupname="plex-transcoder"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Plex Transcoder Proc Memory MB"
+        expr: round(namedprocess_namegroup_memory_bytes{groupname="plex-transcoder", memtype="resident"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Plex Transcoder Proc Count"
+        expr: namedprocess_namegroup_num_procs{groupname="plex-transcoder"}
+        unit_of_measurement: "procs"
+
+      - name: "Immich Server Proc CPU %"
+        expr: round(sum(rate(namedprocess_namegroup_cpu_seconds_total{groupname="immich-server"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Immich Server Proc Memory MB"
+        expr: round(namedprocess_namegroup_memory_bytes{groupname="immich-server", memtype="resident"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Immich Server Proc Count"
+        expr: namedprocess_namegroup_num_procs{groupname="immich-server"}
+        unit_of_measurement: "procs"
+
+      - name: "Immich ML Proc CPU %"
+        expr: round(sum(rate(namedprocess_namegroup_cpu_seconds_total{groupname="immich-ml"}[5m])) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Immich ML Proc Memory MB"
+        expr: round(namedprocess_namegroup_memory_bytes{groupname="immich-ml", memtype="resident"} / 1048576, 0.01)
+        unit_of_measurement: "MB"
+
+      - name: "Immich ML Proc Count"
+        expr: namedprocess_namegroup_num_procs{groupname="immich-ml"}
+        unit_of_measurement: "procs"
+
+      # Blackbox HTTP Probes
+      - name: "Grafana Probe Success"
+        expr: probe_success{job="blackbox-http", instance="http://192.168.1.11:3030"}
+
+      - name: "Grafana Probe Status"
+        expr: probe_http_status_code{job="blackbox-http", instance="http://192.168.1.11:3030"}
+
+      - name: "Grafana Probe Duration ms"
+        expr: round(probe_duration_seconds{job="blackbox-http", instance="http://192.168.1.11:3030"} * 1000, 0.01)
+        unit_of_measurement: "ms"
+
+      - name: "Prometheus Probe Success"
+        expr: probe_success{job="blackbox-http", instance="http://192.168.1.11:9090"}
+
+      - name: "Prometheus Probe Status"
+        expr: probe_http_status_code{job="blackbox-http", instance="http://192.168.1.11:9090"}
+
+      - name: "Prometheus Probe Duration ms"
+        expr: round(probe_duration_seconds{job="blackbox-http", instance="http://192.168.1.11:9090"} * 1000, 0.01)
+        unit_of_measurement: "ms"
+
+      # Pushgateway Metrics
+      - name: "Tracker Checks Total"
+        expr: sum(tracker_check_count_total)
+        unit_of_measurement: "checks"
+
+      - name: "Tracker Check Errors Total"
+        expr: sum(tracker_check_errors_total)
+        unit_of_measurement: "errors"
+
+      - name: "Tracker Last Check Age Hours"
+        expr: round((max(time() - tracker_last_check_timestamp) / 3600), 0.01)
+        unit_of_measurement: "hours"
+
+      - name: "Tracker Bibliotik Status"
+        expr: tracker_enrollment_status{tracker="Bibliotik"}
+
+      - name: "Tracker BroadcastTheNet Status"
+        expr: tracker_enrollment_status{tracker="BroadcastTheNet"}
+
+      - name: "Tracker Orpheus Status"
+        expr: tracker_enrollment_status{tracker="Orpheus"}
+
+      - name: "Tracker PassThePopcorn Status"
+        expr: tracker_enrollment_status{tracker="PassThePopcorn"}
+
+      - name: "Tracker Redacted Status"
+        expr: tracker_enrollment_status{tracker="Redacted"}
+
+      - name: "Trivy Images Scanned"
+        expr: trivy_images_scanned
+        unit_of_measurement: "images"
+
+      - name: "Trivy High Vulnerabilities"
+        expr: trivy_high_vulnerabilities
+        unit_of_measurement: "vulns"
+
+      - name: "Trivy Critical Vulnerabilities"
+        expr: trivy_critical_vulnerabilities
+        unit_of_measurement: "vulns"
+
+      - name: "Trivy Last Scan Age Hours"
+        expr: round((time() - trivy_last_scan_timestamp_seconds) / 3600, 0.01)
+        unit_of_measurement: "hours"
+
+      - name: "Router SNMP Up"
+        expr: up{job="snmp-router"}
+
+      # Container Storage & I/O
+      - name: "Tracker Monitor Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="tracker-monitor"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Tracker Monitor Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="tracker-monitor"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="tracker-monitor"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Falco HA Bridge Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="falco-ha-bridge"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Falco HA Bridge Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="falco-ha-bridge"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="falco-ha-bridge"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "PVE Exporter Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="pve-exporter"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "PVE Exporter Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="pve-exporter"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="pve-exporter"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Authelia Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="authelia"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Authelia Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="authelia"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="authelia"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Authelia Redis Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="authelia-redis"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Authelia Redis Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="authelia-redis"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="authelia-redis"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Paperless Gotenberg Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="paperless-gotenberg"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Paperless Gotenberg Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="paperless-gotenberg"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="paperless-gotenberg"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "QB Port Sync Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="qb-port-sync"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "QB Port Sync Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="qb-port-sync"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="qb-port-sync"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Trivy API Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="trivy-api"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Trivy API Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="trivy-api"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="trivy-api"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "QBit Safety Cleaner Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="qbit-safety-cleaner"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "QBit Safety Cleaner Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="qbit-safety-cleaner"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="qbit-safety-cleaner"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Culto Caddy Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="culto_caddy"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Culto Caddy Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="culto_caddy"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="culto_caddy"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Culto Worker Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="culto_worker"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Culto Worker Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="culto_worker"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="culto_worker"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Culto Web Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="culto_web"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Culto Web Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="culto_web"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="culto_web"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Culto Scheduler Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="culto_scheduler"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Culto Scheduler Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="culto_scheduler"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="culto_scheduler"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Culto DB Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="culto_db"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Culto DB Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="culto_db"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="culto_db"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Culto Redis Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="culto_redis"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Culto Redis Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="culto_redis"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="culto_redis"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "QBittorrent Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="qbittorrent"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "QBittorrent Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="qbittorrent"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="qbittorrent"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Flaresolverr Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="flaresolverr"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Flaresolverr Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="flaresolverr"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="flaresolverr"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Gluetun Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="gluetun"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Gluetun Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="gluetun"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="gluetun"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Unpackerr Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="unpackerr"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Unpackerr Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="unpackerr"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="unpackerr"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Dawarich Redis Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="dawarich-redis"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Dawarich Redis Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="dawarich-redis"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="dawarich-redis"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Promtail Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="promtail"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Promtail Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="promtail"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="promtail"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Loki Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="loki"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Loki Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="loki"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="loki"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Cadvisor Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="cadvisor"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Cadvisor Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="cadvisor"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="cadvisor"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Caddy Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="caddy"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Caddy Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="caddy"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="caddy"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "HA Container Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="homeassistant"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "HA Container Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="homeassistant"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="homeassistant"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Paperless Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="paperless"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Paperless Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="paperless"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="paperless"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Paperless DB Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="paperless-db"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Paperless DB Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="paperless-db"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="paperless-db"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Dawarich Sidekiq Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="dawarich-sidekiq"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Dawarich Sidekiq Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="dawarich-sidekiq"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="dawarich-sidekiq"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Dawarich App Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="dawarich-app"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Dawarich App Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="dawarich-app"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="dawarich-app"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Dawarich DB Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="dawarich-db"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Dawarich DB Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="dawarich-db"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="dawarich-db"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Immich Server Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="immich-server"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Immich Server Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="immich-server"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="immich-server"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Immich ML Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="immich-machine-learning"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Immich ML Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="immich-machine-learning"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="immich-machine-learning"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Immich Postgres Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="immich-postgres"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Immich Postgres Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="immich-postgres"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="immich-postgres"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Falcosidekick Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="falcosidekick"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Falcosidekick Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="falcosidekick"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="falcosidekick"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Trivy Runner Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="trivy-runner"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Trivy Runner Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="trivy-runner"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="trivy-runner"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Prowlarr Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="prowlarr"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Prowlarr Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="prowlarr"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="prowlarr"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Node Exporter Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="node-exporter"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Node Exporter Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="node-exporter"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="node-exporter"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Blackbox Exporter Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="blackbox-exporter"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Blackbox Exporter Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="blackbox-exporter"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="blackbox-exporter"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Cross Seed Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="cross-seed"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Cross Seed Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="cross-seed"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="cross-seed"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Adguardhome Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="adguardhome"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Adguardhome Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="adguardhome"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="adguardhome"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Radarr Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="radarr"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Radarr Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="radarr"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="radarr"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Sonarr Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="sonarr"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Sonarr Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="sonarr"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="sonarr"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Actualbudget Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="actualbudget"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Actualbudget Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="actualbudget"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="actualbudget"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Wireguard Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="wireguard"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Wireguard Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="wireguard"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="wireguard"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Prometheus Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="prometheus"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Prometheus Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="prometheus"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="prometheus"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Portainer Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="portainer"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Portainer Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="portainer"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="portainer"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Plex Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="plex"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Plex Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="plex"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="plex"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Immich Redis Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="immich-redis"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Immich Redis Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="immich-redis"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="immich-redis"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Immich Typesense Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="immich-typesense"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Immich Typesense Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="immich-typesense"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="immich-typesense"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "SNMP Exporter Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="snmp-exporter"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "SNMP Exporter Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="snmp-exporter"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="snmp-exporter"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Pushgateway Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="pushgateway"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Pushgateway Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="pushgateway"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="pushgateway"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Falco Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="falco"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Falco Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="falco"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="falco"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Telemetrygen Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="telemetrygen"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Telemetrygen Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="telemetrygen"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="telemetrygen"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Tempo Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="tempo"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Tempo Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="tempo"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="tempo"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Uptime Kuma Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="uptime-kuma"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Uptime Kuma Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="uptime-kuma"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="uptime-kuma"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Paperless Tika Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="paperless-tika"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Paperless Tika Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="paperless-tika"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="paperless-tika"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Paperless Redis Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="paperless-redis"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Paperless Redis Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="paperless-redis"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="paperless-redis"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Tautulli Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="tautulli"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Tautulli Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="tautulli"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="tautulli"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Vaultwarden Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="vaultwarden"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Vaultwarden Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="vaultwarden"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="vaultwarden"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Jellyseerr Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="jellyseerr"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Jellyseerr Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="jellyseerr"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="jellyseerr"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Intel GPU Exporter Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="intel-gpu-exporter"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Intel GPU Exporter Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="intel-gpu-exporter"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="intel-gpu-exporter"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Process Exporter Storage GB"
+        expr: round(sum(container_fs_usage_bytes{name="process-exporter"}) / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Process Exporter Storage IO MB/s"
+        expr: round((sum(rate(container_fs_reads_bytes_total{name="process-exporter"}[1m])) + sum(rate(container_fs_writes_bytes_total{name="process-exporter"}[1m]))) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      # === PROXMOX LEVEL METRICS ===
+      - name: "Proxmox CPU Usage"
+        expr: round(pve_cpu_usage_ratio{id="node/pve"} * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Proxmox Memory Usage"
+        expr: round((pve_memory_usage_bytes{id="node/pve"} / pve_memory_size_bytes{id="node/pve"}) * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "Proxmox Memory Used GB"
+        expr: round(pve_memory_usage_bytes{id="node/pve"} / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+      - name: "Proxmox Uptime Days"
+        expr: round(pve_uptime_seconds{id="node/pve"} / 86400, 0.01)
+        unit_of_measurement: "days"
+
+      - name: "Proxmox Disk Read MB/s"
+        expr: round(rate(pve_disk_read_bytes_total{id="node/pve"}[1m]) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "Proxmox Disk Write MB/s"
+        expr: round(rate(pve_disk_written_bytes_total{id="node/pve"}[1m]) / 1048576, 0.01)
+        unit_of_measurement: "MB/s"
+
+      - name: "VM CPU from Proxmox"
+        expr: round(pve_cpu_usage_ratio{id="qemu/100"} * 100, 0.01)
+        unit_of_measurement: "%"
+
+      - name: "VM Memory from Proxmox GB"
+        expr: round(pve_memory_usage_bytes{id="qemu/100"} / 1073741824, 0.01)
+        unit_of_measurement: "GB"
+
+
+
+  - platform: history_stats
+    name: "Patio RH 65+ Today"
+    entity_id: binary_sensor.patio_rh_65
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Patio RH 70+ Today"
+    entity_id: binary_sensor.patio_rh_70
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Patio RH 75+ Today"
+    entity_id: binary_sensor.patio_rh_75
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0) }}"
+    end: "{{ now() }}"
+
+template:
+  - sensor:
+      - name: "Proxmox Uptime"
+        icon: mdi:clock-outline
+        state: >-
+          {% set raw = states('sensor.proxmox_uptime_days') %}
+          {% if raw in ['unknown', 'unavailable', 'none'] %}
+            unknown
+          {% else %}
+            {% set total = (raw | float(0) * 86400) | int %}
+            {% set d = total // 86400 %}
+            {% set h = (total % 86400) // 3600 %}
+            {% set m = (total % 3600) // 60 %}
+            {{ d }}d {{ h }}h {{ m }}m
+          {% endif %}
+      - name: "VM Uptime"
+        icon: mdi:clock-outline
+        state: >-
+          {% set raw = states('sensor.vm_uptime_days') %}
+          {% if raw in ['unknown', 'unavailable', 'none'] %}
+            unknown
+          {% else %}
+            {% set total = (raw | float(0) * 86400) | int %}
+            {% set d = total // 86400 %}
+            {% set h = (total % 86400) // 3600 %}
+            {% set m = (total % 3600) // 60 %}
+            {{ d }}d {{ h }}h {{ m }}m
+          {% endif %}
+
+  - sensor:
+      - name: "Immich Videos Album Next Run"
+        icon: mdi:calendar-clock
+        state: >-
+          {% set entry = (state_attr('sensor.schedule_summary', 'user_cron') or []) | selectattr('command', 'search', 'update_videos_album.py') | list | first %}
+          {% if entry and entry.schedule %}
+            {% set parts = entry.schedule.split(' ') %}
+            {% if parts | length >= 2 %}
+              {% set minute = parts[0] | int(0) %}
+              {% set hour = parts[1] | int(0) %}
+              {% set candidate = today_at('%02d:%02d' | format(hour, minute)) %}
+              {% if now() >= candidate %}
+                {{ (candidate + timedelta(days=1)).strftime('%Y-%m-%d %H:%M %Z') }}
+              {% else %}
+                {{ candidate.strftime('%Y-%m-%d %H:%M %Z') }}
+              {% endif %}
+            {% else %}
+              unknown
+            {% endif %}
+          {% else %}
+            unknown
+          {% endif %}
+      - name: "Immich Selfies Album Next Run"
+        icon: mdi:calendar-clock
+        state: >-
+          {% set entry = (state_attr('sensor.schedule_summary', 'user_cron') or []) | selectattr('command', 'search', 'update_selfies_album.py') | list | first %}
+          {% if entry and entry.schedule %}
+            {% set parts = entry.schedule.split(' ') %}
+            {% if parts | length >= 2 %}
+              {% set minute = parts[0] | int(0) %}
+              {% set hour = parts[1] | int(0) %}
+              {% set candidate = today_at('%02d:%02d' | format(hour, minute)) %}
+              {% if now() >= candidate %}
+                {{ (candidate + timedelta(days=1)).strftime('%Y-%m-%d %H:%M %Z') }}
+              {% else %}
+                {{ candidate.strftime('%Y-%m-%d %H:%M %Z') }}
+              {% endif %}
+            {% else %}
+              unknown
+            {% endif %}
+          {% else %}
+            unknown
+          {% endif %}
+      - name: "Immich Portrait Album Next Run"
+        icon: mdi:calendar-clock
+        state: >-
+          {% set entry = (state_attr('sensor.schedule_summary', 'user_cron') or []) | selectattr('command', 'search', 'update_portrait_album.py') | list | first %}
+          {% if entry and entry.schedule %}
+            {% set parts = entry.schedule.split(' ') %}
+            {% if parts | length >= 2 %}
+              {% set minute = parts[0] | int(0) %}
+              {% set hour = parts[1] | int(0) %}
+              {% set candidate = today_at('%02d:%02d' | format(hour, minute)) %}
+              {% if now() >= candidate %}
+                {{ (candidate + timedelta(days=1)).strftime('%Y-%m-%d %H:%M %Z') }}
+              {% else %}
+                {{ candidate.strftime('%Y-%m-%d %H:%M %Z') }}
+              {% endif %}
+            {% else %}
+              unknown
+            {% endif %}
+          {% else %}
+            unknown
+          {% endif %}
+
+
+  - trigger:
+      - platform: state
+        entity_id:
+          - sensor.patio_temp_sensor_temperature
+          - sensor.patio_temp_sensor_humidity
+      - platform: time_pattern
+        minutes: "/5"
+      - platform: homeassistant
+        event: start
+    sensor:
+      - name: "Patio Dew Point"
+        unique_id: patio_dew_point
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state: >-
+          {% set t_raw = states('sensor.patio_temp_sensor_temperature') %}
+          {% set rh_raw = states('sensor.patio_temp_sensor_humidity') %}
+          {% if t_raw in ['unknown','unavailable','none',''] or rh_raw in ['unknown','unavailable','none',''] %}
+            unavailable
+          {% else %}
+            {% set t = t_raw | float(0) %}
+            {% set rh = rh_raw | float(0) %}
+            {% if rh <= 0 or rh > 100 %}
+              unavailable
+            {% else %}
+              {% set unit = (state_attr('sensor.patio_temp_sensor_temperature', 'unit_of_measurement') or '°F') %}
+              {% set unit_l = unit | string | lower %}
+              {% set t_c = ((t - 32) * 5 / 9) if 'f' in unit_l else t %}
+              {% set dp_c = t_c - ((100 - rh) / 5) %}
+              {% set dp_f = (dp_c * 9 / 5) + 32 %}
+              {{ dp_f | round(1) }}
+            {% endif %}
+          {% endif %}
+        attributes:
+          source_temperature: "{{ states('sensor.patio_temp_sensor_temperature') }}"
+          source_humidity: "{{ states('sensor.patio_temp_sensor_humidity') }}"
+          input_temp_unit: "{{ state_attr('sensor.patio_temp_sensor_temperature', 'unit_of_measurement') }}"
+          input_humidity_unit: "{{ state_attr('sensor.patio_temp_sensor_humidity', 'unit_of_measurement') }}"
+          unavailable_reason: >-
+            {% set t = states('sensor.patio_temp_sensor_temperature') %}
+            {% set rh = states('sensor.patio_temp_sensor_humidity') %}
+            {% if t in ['unknown','unavailable','none',''] %}
+              temperature_missing
+            {% elif rh in ['unknown','unavailable','none',''] %}
+              humidity_missing
+            {% elif (rh | float(default=-1)) <= 0 or (rh | float(default=-1)) > 100 %}
+              humidity_out_of_range
+            {% else %}
+              ok
+            {% endif %}
+          debug_inputs: "temp={{ states('sensor.patio_temp_sensor_temperature') }} rh={{ states('sensor.patio_temp_sensor_humidity') }}"
+
+  - binary_sensor:
+      - name: "Patio RH 65+"
+        unique_id: patio_rh_65
+        state: "{{ states('sensor.patio_temp_sensor_humidity') | float(0) >= 65 }}"
+      - name: "Patio RH 70+"
+        unique_id: patio_rh_70
+        state: "{{ states('sensor.patio_temp_sensor_humidity') | float(0) >= 70 }}"
+      - name: "Patio RH 75+"
+        unique_id: patio_rh_75
+        state: "{{ states('sensor.patio_temp_sensor_humidity') | float(0) >= 75 }}"
+      - name: "Patio Dew Point 65+"
+        unique_id: patio_dew_point_65
+        state: "{{ states('sensor.patio_dew_point') | float(0) >= 65 }}"
+
+  - sensor:
+      - name: "Patio Minutes RH 65+ Today"
+        unique_id: patio_rh_65_minutes_today
+        unit_of_measurement: "min"
+        state: "{{ (states('sensor.patio_rh_65_today') | float(0) * 60) | round(0) }}"
+      - name: "Patio Minutes RH 70+ Today"
+        unique_id: patio_rh_70_minutes_today
+        unit_of_measurement: "min"
+        state: "{{ (states('sensor.patio_rh_70_today') | float(0) * 60) | round(0) }}"
+      - name: "Patio Minutes RH 75+ Today"
+        unique_id: patio_rh_75_minutes_today
+        unit_of_measurement: "min"
+        state: "{{ (states('sensor.patio_rh_75_today') | float(0) * 60) | round(0) }}"
+
+# Tracker Monitor REST Sensors
+rest:
+  - resource: http://192.168.1.11:5050/api/status
+    scan_interval: 60
+    sensor:
+      - name: "Tracker Monitor Last Run"
+        value_template: >
+          {% if value_json.last_run %}
+            {{ value_json.last_run[:19] }}
+          {% else %}
+            Never
+          {% endif %}
+        icon: mdi:clock-check
+      - name: "Tracker Monitor Next Run"
+        value_template: >
+          {% if value_json.next_run %}
+            {{ value_json.next_run[:19] }}
+          {% else %}
+            Unknown
+          {% endif %}
+        icon: mdi:clock-fast
+      - name: "Tracker Monitor Events 24h"
+        value_template: "{{ value_json.events_24h | default(0) }}"
+        icon: mdi:counter
+      - name: "Tracker Monitor Total Events"
+        value_template: "{{ value_json.total_events | default(0) }}"
+        icon: mdi:database
+      - name: "Tracker Monitor Last Matches Count"
+        value_template: "{{ value_json.last_run_matches | length }}"
+        icon: mdi:magnify
+      - name: "Tracker Monitor Last Matches"
+        value_template: "{{ value_json.last_run_matches | length }} matches"
+        json_attributes:
+          - last_run_matches
+        icon: mdi:format-list-bulleted
+
+  - resource: http://192.168.1.11:5050/api/events
+    scan_interval: 60
+    sensor:
+      - name: "Tracker Monitor Events"
+        value_template: "{{ value_json.events | length }} events"
+        json_attributes:
+          - events
+        icon: mdi:history
+
+  - resource: http://192.168.1.11:5050/api/open
+    scan_interval: 60
+    sensor:
+      - name: "Tracker Monitor Open Signups"
+        value_template: "{{ value_json.open_signups | length }} open"
+        json_attributes:
+          - open_signups
+        icon: mdi:door-open
+
+  - resource: http://192.168.1.11:5050/api/ha/open
+    scan_interval: 900
+    sensor:
+      - name: "Tracker Monitor Open Hash"
+        unique_id: tracker_monitor_open_hash
+        value_template: "{{ value_json.hash }}"
+        json_attributes:
+          - open
+          - generated_at
+        icon: mdi:door-open
+
+  - resource: http://192.168.1.11:5050/api/ha/history?limit=50
+    scan_interval: 900
+    sensor:
+      - name: "Tracker Monitor History Hash"
+        unique_id: tracker_monitor_history_hash
+        value_template: "{{ value_json.hash }}"
+        json_attributes:
+          - history
+          - generated_at
+        icon: mdi:history
+
+
+  - resource: http://192.168.1.11:8083/api/schedules
+    scan_interval: 300
+    sensor:
+      - name: "Schedule Summary"
+        unique_id: schedule_summary
+        value_template: >
+          {% if value_json.generated_at_local %}
+            {{ value_json.generated_at_local }}
+          {% elif value_json.generated_at %}
+            {{ value_json.generated_at }}
+          {% else %}
+            Unknown
+          {% endif %}
+        json_attributes:
+          - generated_at
+          - generated_at_local
+          - user_cron
+        icon: mdi:calendar-clock
+
+  - resource: http://192.168.1.11:8083/api/summary
+    scan_interval: 900
+    sensor:
+      - name: "Trivy API Summary"
+        unique_id: trivy_api_summary
+        value_template: "{{ value_json.scan_timestamp | default('unknown') }}"
+        json_attributes:
+          - scan_timestamp
+          - severity_counts
+          - container_vulnerabilities
+          - container_summary
+        icon: mdi:shield-search
+
+  - resource: http://192.168.1.11:8083/api/vulnerabilities
+    scan_interval: 900
+    sensor:
+      - name: "Trivy API Vulnerabilities"
+        unique_id: trivy_api_vulnerabilities
+        value_template: "{{ value_json.total_vulnerabilities | default(0) }}"
+        json_attributes:
+          - scan_timestamp
+          - total_images
+          - total_containers
+          - total_vulnerabilities
+          - vulnerabilities
+        icon: mdi:shield-bug
+
+  - resource: http://192.168.1.11:8083/api/falco?include_suppressed=1
+    scan_interval: 300
+    sensor:
+      - name: "Falco API Events"
+        unique_id: falco_api_events
+        value_template: "{{ value_json.events | length }}"
+        json_attributes:
+          - note
+          - events
+        icon: mdi:shield-alert
+  - sensor:
+      - name: "Patio AC Active Reason Friendly"
+        icon: mdi:state-machine
+        state: >-
+          {% set reason = states("input_select.patio_ac_reason") %}
+          {% if reason == "idle" %}
+            Idle: No active automation
+          {% elif reason == "heat_guard" %}
+            Heat Guard: Cooling to {{ states("input_number.patio_ac_heat_target") }}°F
+          {% elif reason == "humidity_day" %}
+            Day Humidity: Dry mode at 83°F
+          {% elif reason == "humidity_night" %}
+            Night Humidity: Dry mode for mold prevention
+          {% elif reason == "humidity_emergency" %}
+            Emergency: High humidity safety mode
+          {% elif reason == "manual" %}
+            Manual Control: User override
+          {% elif reason == "safety_lock" %}
+            Safety Lock: Daily runtime limit reached
+          {% else %}
+            {{ reason }}
+          {% endif %}
+
+rest_command:
+  dawarich_create_trip:
+    url: "https://dawarich.byrroserver.com/api/v1/visits"
+    method: POST
+    headers:
+      Authorization: !secret dawarich_api_bearer
+      Content-Type: application/json
+    payload: >
+      {"visit":{"name":"{{ name }}","latitude":{{ latitude }},"longitude":{{ longitude }},"started_at":"{{ started_at }}","ended_at":"{{ ended_at }}"}}
+  dawarich_update_trip:
+    url: "https://dawarich.byrroserver.com/api/v1/visits/{{ trip_id }}"
+    method: PATCH
+    headers:
+      Authorization: !secret dawarich_api_bearer
+      Content-Type: application/json
+    payload: >
+      {"visit":{"ended_at":"{{ ended_at }}"}}
+
+shell_command:
+  hardlink_other_trigger: "/bin/sh -c \"date +%s > /config/hardlink_other_trigger\""
+  filebot_other_trigger: "/bin/sh -c \"date +%s > /config/filebot_other_trigger\""
+  dawarich_trip_create: '/usr/local/bin/python3 /dawarich-trips/dawarich_trip.py create'
+  dawarich_trip_extend: '/usr/local/bin/python3 /dawarich-trips/dawarich_trip.py extend'
+  dawarich_trip_finalize: '/usr/local/bin/python3 /dawarich-trips/dawarich_trip.py finalize'
+
+input_button:
+  hardlink_other_run:
+    name: "Hardlink Other - Run Now"
+    icon: mdi:link-variant
+  filebot_other_run:
+    name: "Filebot Other - Run Now"
+    icon: mdi:play-circle
+
+command_line:
+  - sensor:
+      name: hardlink_other_status
+      command: "cat /config/hardlink_other_status.json"
+      value_template: "{{ value_json.last_run if value_json.last_run else \"never\" }}"
+      json_attributes:
+        - schedule_human
+        - next_run
+        - linked_count
+        - skipped_count
+        - recent_log
+  - sensor:
+      name: filebot_other_status
+      command: "cat /config/filebot_other_status.json"
+      value_template: "{{ value_json.last_run if value_json.last_run else \"never\" }}"
+      json_attributes:
+        - schedule
+        - schedule_human
+        - next_run
+        - processed_count
+        - errors_recent
+        - last_status
+        - recent_log
+        - timezone
+
+  - sensor:
+      - name: "Patio AC Reason (Friendly)"
+        icon: mdi:information-outline
+        state: >-
+          {% set reason = states('input_select.patio_ac_reason') %}
+          {% set ac_mode = states('climate.150633095083490_climate') %}
+          {% set temp = states('sensor.patio_temp_sensor_temperature') | float(default=0) %}
+          {% set rh = states('sensor.patio_temp_sensor_humidity') | float(default=0) %}
+          {% set dp = states('sensor.patio_dew_point') | float(default=0) %}
+          {% set heat_target = states('input_number.patio_ac_heat_target') | float(default=0) %}
+          {% set rh_emergency = states('input_number.patio_ac_rh_emergency') | float(default=0) %}
+          {% set daily_runtime = states('input_number.patio_ac_daily_runtime') | float(default=0) %}
+          {% set daily_limit = states('input_number.patio_ac_daily_limit') | float(default=0) %}
+          
+          {% if reason == 'idle' %}
+            Idle - No active automation
+          {% elif reason == 'manual' %}
+            Manual control - User set to {{ ac_mode }} mode
+          {% elif reason == 'heat_guard' %}
+            Heat guard - Cooling to {{ heat_target }}°F (current: {{ temp }}°F)
+          {% elif reason == 'humidity_night' %}
+            Night humidity - Dew point {{ dp }}°F or RH {{ rh }}% above night thresholds
+          {% elif reason == 'humidity_day' %}
+            Day humidity - Dew point {{ dp }}°F or RH {{ rh }}% above day thresholds
+          {% elif reason == 'humidity_emergency' %}
+            Emergency humidity - RH {{ rh }}% > emergency ceiling {{ rh_emergency }}%
+          {% elif reason == 'safety_lock' %}
+            Safety lock - Daily limit reached ({{ daily_runtime }}/{{ daily_limit }} minutes)
+          {% elif reason == 'manual_override' %}
+            Manual override - User override active
+          {% elif reason == 'control' %}
+            Control - System managing {{ ac_mode }} mode
+          {% else %}
+            {{ reason }}
+          {% endif %}

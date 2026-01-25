@@ -1,0 +1,93 @@
+# Daikin Fit Enhanced Monitoring - History Stats & Runtime Tracking
+# Add to configuration.yaml: sensor: !include daikin_history_stats.yaml
+
+# History Stats for Runtime Tracking
+- platform: history_stats
+  name: Daikin Cooling Today
+  entity_id: binary_sensor.daikin_cooling
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00') }}"
+  end: "{{ now() }}"
+
+- platform: history_stats
+  name: Daikin Heating Today
+  entity_id: binary_sensor.daikin_heating
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00') }}"
+  end: "{{ now() }}"
+
+- platform: history_stats
+  name: Daikin Runtime Today
+  entity_id: binary_sensor.daikin_running
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00') }}"
+  end: "{{ now() }}"
+
+- platform: history_stats
+  name: Daikin Cooling Yesterday
+  entity_id: binary_sensor.daikin_cooling
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00') - timedelta(days=1) }}"
+  end: "{{ today_at('00:00') }}"
+
+- platform: history_stats
+  name: Daikin Runtime Yesterday
+  entity_id: binary_sensor.daikin_running
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00') - timedelta(days=1) }}"
+  end: "{{ today_at('00:00') }}"
+
+- platform: history_stats
+  name: Daikin Cooling This Week
+  entity_id: binary_sensor.daikin_cooling
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00') - timedelta(days=now().weekday()) }}"
+  end: "{{ now() }}"
+
+- platform: history_stats
+  name: Daikin Runtime This Week
+  entity_id: binary_sensor.daikin_running
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00') - timedelta(days=now().weekday()) }}"
+  end: "{{ now() }}"
+
+- platform: history_stats
+  name: Daikin Cooling This Month
+  entity_id: binary_sensor.daikin_cooling
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00').replace(day=1) }}"
+  end: "{{ now() }}"
+
+- platform: history_stats
+  name: Daikin Runtime This Month
+  entity_id: binary_sensor.daikin_running
+  state: "on"
+  type: time
+  start: "{{ today_at('00:00').replace(day=1) }}"
+  end: "{{ now() }}"
+
+# Runtime Percentage (how much of today was the system running)
+- platform: history_stats
+  name: Daikin Runtime Percentage Today
+  entity_id: binary_sensor.daikin_running
+  state: "on"
+  type: ratio
+  start: "{{ today_at('00:00') }}"
+  end: "{{ now() }}"
+
+# Integration sensor for energy calculation (Wh to kWh)
+- platform: integration
+  source: sensor.daikin_total_power
+  name: Daikin Energy
+  unique_id: daikin_energy
+  unit_prefix: k
+  round: 3
+  method: left

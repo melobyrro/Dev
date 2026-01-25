@@ -1,0 +1,925 @@
+# ===========================================================================
+# Patio AC Automations (State Machine - Dew Point + Min On/Off)
+# Updated: 2026-01-09
+# ===========================================================================
+
+- id: patio_ac_heat_guard_on
+  alias: "Patio AC - Heat Guard ON"
+  description: "Activate cooling when temperature exceeds threshold"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: climate.150633095083490_climate
+      attribute: current_temperature
+      above: input_number.patio_ac_heat_threshold
+      for:
+        minutes: 10
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "idle"
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float <
+           states('input_number.patio_ac_daily_limit')|float }}
+    - condition: time
+      after: "08:00:00"
+      before: "22:00:00"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "cool"
+        temperature: "{{ states('input_number.patio_ac_heat_target')|int }}"
+        reason: "heat_guard"
+        duration: "{{ states('input_number.patio_ac_heat_duration')|int }}"
+
+- id: patio_ac_heat_guard_off
+  alias: "Patio AC - Heat Guard OFF (Early Stop)"
+  description: "Stop cooling when temperature drops"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: climate.150633095083490_climate
+      attribute: current_temperature
+      below: 90
+      for:
+        minutes: 10
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "heat_guard"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "heat_guard"
+
+- id: patio_ac_humidity_night_on
+  alias: "Patio AC - Humidity Night ON"
+  description: "Start DRY at night based on dew point/RH with dwell and cooldown"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.patio_dew_point
+      above: input_number.patio_ac_dewpoint_night_start
+      for:
+        minutes: 20
+    - trigger: numeric_state
+      entity_id: sensor.patio_temp_sensor_humidity
+      above: input_number.patio_ac_rh_night_start
+      for:
+        minutes: 30
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "idle"
+    - condition: state
+      entity_id: timer.patio_ac_humidity_min_off
+      state: "idle"
+    - condition: state
+      entity_id: input_boolean.patio_ac_humidity_emergency_only
+      state: "off"
+    - condition: time
+      after: "22:00:00"
+      before: "08:00:00"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "dry"
+        temperature: 83
+        reason: "humidity_night"
+
+- id: patio_ac_humidity_day_on
+  alias: "Patio AC - Humidity Day ON"
+  description: "Start DRY during the day based on dew point/RH with dwell and cooldown"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.patio_dew_point
+      above: input_number.patio_ac_dewpoint_start
+      for:
+        minutes: 20
+    - trigger: numeric_state
+      entity_id: sensor.patio_temp_sensor_humidity
+      above: input_number.patio_ac_rh_day_start
+      for:
+        minutes: 20
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "idle"
+    - condition: state
+      entity_id: timer.patio_ac_humidity_min_off
+      state: "idle"
+    - condition: state
+      entity_id: input_boolean.patio_ac_humidity_emergency_only
+      state: "off"
+    - condition: time
+      after: "08:00:00"
+      before: "22:00:00"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "dry"
+        temperature: 83
+        reason: "humidity_day"
+
+- id: patio_ac_humidity_emergency_on
+  alias: "Patio AC - Emergency Humidity ON"
+  description: "Hard ceiling: run when RH is very high"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.patio_temp_sensor_humidity
+      above: input_number.patio_ac_rh_emergency
+      for:
+        minutes: 15
+  conditions:
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') not in ['manual', 'safety_lock'] }}"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "dry"
+        temperature: 83
+        reason: "humidity_emergency"
+
+- id: patio_ac_humidity_stop_dewpoint
+  alias: "Patio AC - Humidity Stop (Dew Point)"
+  description: "Stop humidity control when dew point drops and min-on satisfied"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.patio_dew_point
+      below: input_number.patio_ac_dewpoint_stop
+      for:
+        minutes: 20
+  conditions:
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') in ['humidity_night','humidity_day','humidity_emergency'] }}"
+    - condition: state
+      entity_id: timer.patio_ac_humidity_min_on
+      state: "idle"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "{{ states('input_select.patio_ac_reason') }}"
+
+- id: patio_ac_humidity_stop_rh
+  alias: "Patio AC - Humidity Stop (RH)"
+  description: "Stop humidity control when RH falls below stop thresholds and min-on satisfied"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      id: night
+      entity_id: sensor.patio_temp_sensor_humidity
+      below: input_number.patio_ac_rh_night_stop
+      for:
+        minutes: 20
+    - trigger: numeric_state
+      id: day
+      entity_id: sensor.patio_temp_sensor_humidity
+      below: input_number.patio_ac_rh_day_stop
+      for:
+        minutes: 20
+  conditions:
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') in ['humidity_night','humidity_day','humidity_emergency'] }}"
+    - condition: state
+      entity_id: timer.patio_ac_humidity_min_on
+      state: "idle"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "{{ states('input_select.patio_ac_reason') }}"
+
+- id: patio_ac_timer_expired
+  alias: "Patio AC - Timer Expiration Handler"
+  description: "Turn off AC when duration timer expires"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_heat_spike
+  conditions:
+    - condition: template
+      value_template: >
+        {{ trigger.event.data.entity_id == 'timer.patio_ac_heat_spike' and
+           states('input_select.patio_ac_reason') == 'heat_guard' }}
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "heat_guard"
+
+- id: patio_ac_manual_override_detect
+  alias: "Patio AC - Manual Override Detector"
+  description: "Detect manual state changes via TTL + Signature verification"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: climate.150633095083490_climate
+  conditions:
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') != 'safety_lock' }}"
+    - condition: template
+      value_template: >
+        {% set ttl_active = now().timestamp() <= as_timestamp(states('input_datetime.patio_ac_expecting_change_until'), 0) %}
+        {% if ttl_active %}
+          {% set sig = states('input_text.patio_ac_expected_signature').split('|') %}
+          {% set exp_mode = sig[0] %}
+          {% set exp_temp = sig[1] %}
+          {% set actual_mode = trigger.to_state.state %}
+          {% set actual_temp = trigger.to_state.attributes.temperature | int(0) %}
+          {% set match = (actual_mode == exp_mode) and (actual_temp == exp_temp|int if exp_temp != 'none' else true) %}
+          {{ not match }}
+        {% else %}
+          true
+        {% endif %}
+  actions:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.state == 'off' }}"
+          sequence:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.patio_ac_reason
+              data:
+                option: "idle"
+            - action: input_datetime.set_datetime
+              target:
+                entity_id:
+                  - input_datetime.patio_ac_manual_until
+                  - input_datetime.patio_ac_expecting_change_until
+              data:
+                timestamp: "{{ now().timestamp() }}"
+            - action: timer.cancel
+              target:
+                entity_id:
+                  - timer.patio_ac_manual_override
+                  - timer.patio_ac_manual_safety
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.state != 'off' }}"
+          sequence:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.patio_ac_reason
+              data:
+                option: "manual"
+            - action: timer.start
+              target:
+                entity_id: timer.patio_ac_manual_override
+              data:
+                duration: "{{ '00:%02d:00'|format(states('input_number.patio_ac_manual_timeout')|int) }}"
+            - action: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.patio_ac_manual_until
+              data:
+                timestamp: "{{ now().timestamp() + (states('input_number.patio_ac_manual_timeout')|int * 60) }}"
+            - action: timer.start
+              target:
+                entity_id: timer.patio_ac_manual_safety
+              target:
+                entity_id: timer.patio_ac_manual_safety
+
+- id: patio_ac_manual_override_reset
+  alias: "Patio AC - Manual Override Reset"
+  description: "Reset to idle after manual timeout expires"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_manual_override
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "manual"
+  actions:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "idle"
+
+- id: patio_ac_safety_monitor
+  alias: "Patio AC - Safety Monitor"
+  description: "Prevent dangerous configurations (HEAT mode, etc.)"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: climate.150633095083490_climate
+      attribute: hvac_mode
+      to: "heat"
+  actions:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "safety_lock"
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.150633095083490_climate
+      data:
+        hvac_mode: "off"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Safety Lock"
+        message: "AC was set to HEAT mode and has been disabled. Manual reset required."
+        notification_id: "patio_ac_safety_lock"
+
+- id: patio_ac_humidity_soft_cap
+  alias: "Patio AC - Humidity Soft Cap"
+  description: "Switch to emergency-only humidity after soft cap is reached"
+  mode: single
+  triggers:
+    - trigger: template
+      value_template: >
+        {{ states('input_number.patio_ac_humidity_runtime')|float >=
+           states('input_number.patio_ac_humidity_soft_cap')|float }}
+  conditions:
+    - condition: state
+      entity_id: input_boolean.patio_ac_humidity_emergency_only
+      state: "off"
+  actions:
+    - action: input_boolean.turn_on
+      target:
+        entity_id: input_boolean.patio_ac_humidity_emergency_only
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ states('input_select.patio_ac_reason') in ['humidity_night','humidity_day'] }}"
+          sequence:
+            - action: script.patio_ac_control
+              data:
+                action: "off"
+                reason: "{{ states('input_select.patio_ac_reason') }}"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Humidity Soft Cap"
+        message: >
+          Humidity runtime reached {{ states('input_number.patio_ac_humidity_soft_cap')|int }} minutes.
+          Switching to emergency-only humidity (≥ {{ states('input_number.patio_ac_rh_emergency')|int }}% RH) until midnight.
+        notification_id: "patio_ac_humidity_soft_cap"
+
+- id: patio_ac_daily_limit_enforcer
+  alias: "Patio AC - Heat Daily Limit Enforcer"
+  description: "Stop heat guard runs when daily runtime limit is reached"
+  mode: single
+  triggers:
+    - trigger: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float >=
+           states('input_number.patio_ac_daily_limit')|float }}
+  conditions:
+    - condition: template
+      value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') == 'heat_guard' }}"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "heat_guard"
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "safety_lock"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Heat Runtime Limit Reached"
+        message: >
+          Heat guard runtime limit of {{ states('input_number.patio_ac_daily_limit')|int }} minutes reached.
+          Automations disabled until midnight. Manual control still works.
+        notification_id: "patio_ac_daily_limit"
+
+- id: patio_ac_midnight_reset
+  alias: "Patio AC - Midnight Runtime Reset"
+  description: "Reset daily runtime counters at midnight"
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  actions:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_daily_runtime
+      data:
+        value: 0
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_humidity_runtime
+      data:
+        value: 0
+    - action: input_boolean.turn_off
+      target:
+        entity_id: input_boolean.patio_ac_humidity_emergency_only
+    - action: persistent_notification.dismiss
+      data:
+        notification_id: "patio_ac_humidity_soft_cap"
+    - if:
+        - condition: state
+          entity_id: input_select.patio_ac_reason
+          state: "safety_lock"
+      then:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: "idle"
+        - action: persistent_notification.dismiss
+          data:
+            notification_id: "patio_ac_daily_limit"
+
+- id: patio_ac_startup_recovery
+  alias: "Patio AC - Startup Recovery"
+  description: "Accumulate runtime and reconstruct visual timers from _until helpers"
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+  actions:
+    # 1. Accumulate runtime if active
+    - if:
+        - condition: template
+          value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+      then:
+        - variables:
+            elapsed: >
+              {% set start = states('input_datetime.patio_ac_runtime_start') %}
+              {% if start not in ['unknown', '', 'unavailable'] %}
+                {{ (now().timestamp() - as_timestamp(start)) / 60 }}
+              {% else %}
+                0
+              {% endif %}
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.patio_ac_daily_runtime
+          data:
+            value: "{{ (states('input_number.patio_ac_daily_runtime')|float + (elapsed|float))|round(1) }}"
+        - if:
+            - condition: template
+              value_template: "{{ states('input_select.patio_ac_reason') in ['humidity_night','humidity_day','humidity_emergency'] }}"
+          then:
+            - action: input_number.set_value
+              target:
+                entity_id: input_number.patio_ac_humidity_runtime
+              data:
+                value: "{{ (states('input_number.patio_ac_humidity_runtime')|float + (elapsed|float))|round(1) }}"
+
+    # 2. Reconstruct Visual Timers
+    - repeat:
+        for_each:
+          - timer: timer.patio_ac_manual_override
+            until: input_datetime.patio_ac_manual_until
+          - timer: timer.patio_ac_compressor_protection
+            until: input_datetime.patio_ac_compressor_protection_until
+          - timer: timer.patio_ac_humidity_min_on
+            until: input_datetime.patio_ac_humidity_min_on_until
+          - timer: timer.patio_ac_humidity_min_off
+            until: input_datetime.patio_ac_humidity_min_off_until
+          - timer: timer.patio_ac_heat_spike
+            until: input_datetime.patio_ac_heat_spike_until
+          - timer: timer.patio_ac_command_throttle
+            until: input_datetime.patio_ac_command_throttle_until
+        sequence:
+          - variables:
+              remaining: "{{ as_timestamp(states(repeat.item.until), 0) - now().timestamp() }}"
+          - if:
+              - condition: template
+                value_template: "{{ remaining > 0 }}"
+            then:
+              - action: timer.start
+                target:
+                  entity_id: "{{ repeat.item.timer }}"
+                data:
+                  duration: "{{ remaining | int }}"
+
+- id: patio_ac_manual_safety_timeout
+  alias: "Patio AC - Manual Safety Timeout (8 hours)"
+  description: "Auto-stop AC after 8 hours of continuous manual use (safety net)"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_manual_safety
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "manual"
+    - condition: template
+      value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+  actions:
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.150633095083490_climate
+      data:
+        hvac_mode: "off"
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "idle"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Manual Safety Stop"
+        message: >
+          AC has been running for 8 hours continuously in manual mode.
+          Auto-stopped as a safety measure. Turn it back on if still needed.
+        notification_id: "patio_ac_manual_safety"
+
+- id: master_bedroom_brightness_slider_to_lights
+  alias: Master Bedroom - Brightness sliders -> lights
+  mode: queued
+  trigger:
+  - platform: state
+    entity_id:
+    - input_number.master_fan_brightness
+    - input_number.master_light_brightness
+  action:
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.entity_id == "input_number.master_fan_brightness" }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) <= 0 }}'
+          sequence:
+          - service: light.turn_off
+            target:
+              entity_id: light.master_fan
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) > 0 }}'
+          sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.master_fan
+            data:
+              brightness_pct: '{{ trigger.to_state.state | int }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.entity_id == "input_number.master_light_brightness" }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) <= 0 }}'
+          sequence:
+          - service: light.turn_off
+            target:
+              entity_id: light.master_light
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) > 0 }}'
+          sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.master_light
+            data:
+              brightness_pct: '{{ trigger.to_state.state | int }}'
+- id: master_bedroom_lights_to_brightness_sliders
+  alias: Master Bedroom - lights -> brightness sliders
+  mode: queued
+  trigger:
+  - platform: state
+    entity_id:
+    - light.master_fan
+    - light.master_light
+  action:
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: |
+          {{ trigger.entity_id == 'light.master_fan'
+             and trigger.to_state is not none
+             and trigger.to_state.state == 'on'
+             and (trigger.to_state.attributes.brightness is defined) }}
+      sequence:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.master_fan_brightness
+        data:
+          value: |
+            {{ ((trigger.to_state.attributes.brightness | float) / 255 * 100) | round(0) }}
+    - conditions:
+      - condition: template
+        value_template: |
+          {{ trigger.entity_id == 'light.master_light'
+             and trigger.to_state is not none
+             and trigger.to_state.state == 'on'
+             and (trigger.to_state.attributes.brightness is defined) }}
+      sequence:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.master_light_brightness
+        data:
+          value: |
+            {{ ((trigger.to_state.attributes.brightness | float) / 255 * 100) | round(0) }}
+
+# ===========================================================================
+# Living Room Light/Fan Slider Automations
+# Added: 2025-12-28 to sync dashboard sliders with actual devices
+# ===========================================================================
+
+# ===========================================================================
+# Homelab Monitoring Automations - Added by Migration
+# Added: 2025-12-29
+# ===========================================================================
+
+- id: uptime_kuma_webhook_handler
+  alias: "Uptime Kuma Alert Handler"
+  description: "Handle Uptime Kuma status change webhooks"
+  mode: parallel
+  max: 10
+  triggers:
+    - trigger: webhook
+      webhook_id: uptime_kuma
+  actions:
+    - action: notify.mobile_app_andre_iphone
+      data:
+        title: "{{ trigger.json.monitor.name }}: {{ trigger.json.heartbeat.status_text | default(trigger.json.msg) }}"
+        message: "{{ trigger.json.msg | default(trigger.json.heartbeat.msg) }}"
+        data:
+          tag: "uptime-{{ trigger.json.monitor.name | slugify }}"
+          group: "uptime-kuma"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.last_uptime_alert
+      data:
+        value: "{{ trigger.json.monitor.name }}: {{ trigger.json.heartbeat.status_text | default(trigger.json.msg) }}"
+
+- id: high_cpu_alert
+  alias: "High CPU Alert"
+  description: "Alert when VM CPU is high for extended period"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.vm_cpu_usage
+      above: 80
+      for:
+        minutes: 5
+  actions:
+    - action: notify.mobile_app_andre_iphone
+      data:
+        title: "Performance Alert"
+        message: "VM CPU at {{ states(sensor.vm_cpu_usage) | round(1) }}% for 5 minutes"
+        data:
+          tag: "high-cpu"
+          group: "performance"
+
+- id: high_memory_alert
+  alias: "High Memory Alert"
+  description: "Alert when VM memory is critically high"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.vm_memory_usage
+      above: 90
+      for:
+        minutes: 5
+  actions:
+    - action: notify.mobile_app_andre_iphone
+      data:
+        title: "Memory Alert"
+        message: "VM Memory at {{ states(sensor.vm_memory_usage) | round(1) }}%"
+        data:
+          tag: "high-memory"
+          group: "performance"
+
+- id: disk_space_alert
+  alias: "Low Disk Space Alert"
+  description: "Alert when NAS is running low on space"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: sensor.byrroserver_usage
+      above: 85
+      for:
+        minutes: 30
+  actions:
+    - action: notify.mobile_app_andre_iphone
+      data:
+        title: "Disk Space Alert"
+        message: "NAS at {{ states(sensor.byrroserver_usage) | round(1) }}% - {{ states(sensor.byrroserver_free_tb) | round(2) }}TB free"
+        data:
+          tag: "low-disk"
+          group: "storage"
+
+- id: jose_vacuum_error_log
+  alias: "Jose Vacuum - Log Error Messages"
+  description: "Store last 10 Jose error messages with timestamps"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: sensor.jose_error
+  conditions:
+    - condition: template
+      value_template: >
+        {{ trigger.to_state is not none and
+           trigger.to_state.state not in ['unknown', 'unavailable', 'none', ''] }}
+  actions:
+    - variables:
+        raw: "{{ trigger.to_state.state | string }}"
+        cleaned: "{{ raw | replace('
+', ' ') }}"
+        trimmed: >
+          {{ cleaned[:160] ~ '...' if cleaned | length > 160 else cleaned }}
+        entry: "{{ now().strftime('%Y-%m-%d %H:%M') ~ ' - ' ~ trimmed }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_10
+      data:
+        value: "{{ states('input_text.jose_error_log_9') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_9
+      data:
+        value: "{{ states('input_text.jose_error_log_8') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_8
+      data:
+        value: "{{ states('input_text.jose_error_log_7') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_7
+      data:
+        value: "{{ states('input_text.jose_error_log_6') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_6
+      data:
+        value: "{{ states('input_text.jose_error_log_5') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_5
+      data:
+        value: "{{ states('input_text.jose_error_log_4') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_4
+      data:
+        value: "{{ states('input_text.jose_error_log_3') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_3
+      data:
+        value: "{{ states('input_text.jose_error_log_2') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_2
+      data:
+        value: "{{ states('input_text.jose_error_log_1') }}"
+    - action: input_text.set_value
+      target:
+        entity_id: input_text.jose_error_log_1
+      data:
+        value: "{{ entry }}"
+
+
+# ===========================================================================
+# Dawarich Dynamic Trips
+# ===========================================================================
+
+- id: dawarich_trip_start
+  alias: "Dawarich Trip - Start"
+  description: "Start or resume a Dawarich trip after leaving home."
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: person.andre_byrro
+      from: "home"
+      to: "not_home"
+  condition:
+    - condition: state
+      entity_id: input_boolean.dawarich_on_trip
+      state: "off"
+    - condition: template
+      value_template: "{{ states('input_text.dawarich_current_trip_id') in ['', 'unknown', 'unavailable'] }}"
+    - condition: template
+      value_template: >
+        {% set debounce = states('input_number.dawarich_debounce_minutes')|int(3) %}
+        {% set away_for = (as_timestamp(now()) - as_timestamp(states.person.andre_byrro.last_changed)) / 60 %}
+        {{ away_for >= debounce }}
+  action:
+    - service: shell_command.dawarich_trip_create
+
+- id: dawarich_trip_extend
+  alias: "Dawarich Trip - Extend"
+  description: "Extend end_at while away; switch trips by area/month."
+  mode: single
+  trigger:
+    - platform: time_pattern
+      minutes: "/10"
+  action:
+    - choose:
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.dawarich_on_trip
+              state: "on"
+            - condition: template
+              value_template: "{{ states('person.andre_byrro') != 'home' }}"
+          sequence:
+            - service: shell_command.dawarich_trip_extend
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.dawarich_on_trip
+              state: "on"
+            - condition: state
+              entity_id: person.andre_byrro
+              state: "home"
+          sequence:
+            - service: shell_command.dawarich_trip_finalize
+        - conditions:
+            - condition: state
+              entity_id: input_boolean.dawarich_on_trip
+              state: "off"
+            - condition: template
+              value_template: "{{ states('person.andre_byrro') != 'home' }}"
+            - condition: template
+              value_template: >
+                {% set debounce = states('input_number.dawarich_debounce_minutes')|int(3) %}
+                {% set away_for = (as_timestamp(now()) - as_timestamp(states.person.andre_byrro.last_changed)) / 60 %}
+                {{ away_for >= debounce }}
+          sequence:
+            - service: shell_command.dawarich_trip_create
+
+- id: dawarich_trip_finalize
+  alias: "Dawarich Trip - Finalize"
+  description: "Finalize trip on arriving home."
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: person.andre_byrro
+      to: "home"
+  condition:
+    - condition: state
+      entity_id: input_boolean.dawarich_on_trip
+      state: "on"
+  action:
+    - service: shell_command.dawarich_trip_finalize
+
+- id: filebot_other_run
+  alias: "Filebot Other - Run Now"
+  description: "Trigger on-demand Filebot run for Other library."
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_button.filebot_other_run
+  action:
+    - service: shell_command.filebot_other_trigger
+
+- id: hardlink_other_run
+  alias: "Hardlink Other - Run Now"
+  description: "Trigger on-demand hardlink sweep for Other library."
+  mode: single
+  trigger:
+    - platform: state
+      entity_id: input_button.hardlink_other_run
+  action:
+    - service: shell_command.hardlink_other_trigger
+
+# TEMPORARY: Fix current patio AC reason state
+
+- id: patio_ac_boundary_handoff
+  alias: "Patio AC - Boundary Handoff Monitor"
+  description: "Seamless transition between domains (Day/Night) when allowed"
+  mode: single
+  triggers:
+    - trigger: time
+      at: "08:00:00"
+    - trigger: time
+      at: "22:00:00"
+  conditions:
+    - condition: state
+      entity_id: input_boolean.patio_ac_allow_seamless_handoff
+      state: "on"
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') in ['humidity_day', 'humidity_night'] }}"
+  actions:
+    - variables:
+        current_reason: "{{ states('input_select.patio_ac_reason') }}"
+        new_reason: "{{ 'humidity_day' if now().hour >= 8 and now().hour < 22 else 'humidity_night' }}"
+    - if:
+        - condition: template
+          value_template: "{{ current_reason != new_reason }}"
+      then:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: "{{ new_reason }}"

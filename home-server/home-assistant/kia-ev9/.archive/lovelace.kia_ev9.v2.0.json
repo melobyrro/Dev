@@ -1,0 +1,994 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "lovelace.kia_ev9",
+  "data": {
+    "config": {
+      "title": "Kia EV9",
+      "views": [
+        {
+          "title": "Main",
+          "path": "main",
+          "icon": "mdi:car-electric",
+          "cards": [
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## Battery & Range"
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.ev9_ev_battery_level",
+                      "name": "Battery",
+                      "min": 0,
+                      "max": 100,
+                      "severity": {
+                        "green": 50,
+                        "yellow": 20,
+                        "red": 10
+                      },
+                      "needle": true
+                    },
+                    {
+                      "type": "vertical-stack",
+                      "cards": [
+                        {
+                          "type": "entity",
+                          "entity": "sensor.ev9_ev_range",
+                          "name": "EV Range",
+                          "icon": "mdi:road-variant"
+                        },
+                        {
+                          "type": "entity",
+                          "entity": "sensor.ev9_odometer",
+                          "name": "Odometer",
+                          "icon": "mdi:counter"
+                        },
+                        {
+                          "type": "entity",
+                          "entity": "sensor.ev9_car_battery_level",
+                          "name": "12V Battery",
+                          "icon": "mdi:car-battery"
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## Charging"
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.ev9_ev_battery_plug",
+                      "name": "Plug Status"
+                    },
+                    {
+                      "entity": "binary_sensor.ev9_ev_battery_charge",
+                      "name": "Charging Active"
+                    },
+                    {
+                      "entity": "sensor.ev9_ev_charging_power",
+                      "name": "Power"
+                    },
+                    {
+                      "entity": "sensor.ev9_estimated_charge_duration",
+                      "name": "Time Remaining"
+                    },
+                    {
+                      "entity": "number.ev9_ac_charging_limit",
+                      "name": "AC Charge Limit"
+                    },
+                    {
+                      "entity": "number.ev9_dc_charging_limit",
+                      "name": "DC Charge Limit"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "button",
+                      "name": "Start",
+                      "icon": "mdi:play-circle",
+                      "icon_height": "36px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "kia_uvo.start_charge",
+                        "data": {
+                          "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                        }
+                      }
+                    },
+                    {
+                      "type": "button",
+                      "name": "Stop",
+                      "icon": "mdi:stop-circle",
+                      "icon_height": "36px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "kia_uvo.stop_charge",
+                        "data": {
+                          "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                        },
+                        "confirmation": {
+                          "text": "Stop charging?"
+                        }
+                      }
+                    },
+                    {
+                      "type": "button",
+                      "name": "Refresh",
+                      "icon": "mdi:refresh",
+                      "icon_height": "36px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "kia_uvo.force_update",
+                        "data": {
+                          "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "custom:apexcharts-card",
+                  "header": {
+                    "show": true,
+                    "title": "Charging History (24h)",
+                    "show_states": false
+                  },
+                  "graph_span": "24h",
+                  "apex_config": {
+                    "chart": {
+                      "height": 200
+                    },
+                    "yaxis": [
+                      {
+                        "title": {
+                          "text": "Battery %"
+                        },
+                        "min": 0,
+                        "max": 100,
+                        "decimalsInFloat": 0
+                      },
+                      {
+                        "opposite": true,
+                        "title": {
+                          "text": "Power (kW)"
+                        },
+                        "min": 0,
+                        "max": 1.5,
+                        "decimalsInFloat": 1
+                      }
+                    ]
+                  },
+                  "series": [
+                    {
+                      "entity": "sensor.ev9_ev_battery_level",
+                      "name": "Battery %",
+                      "yaxis_id": "first",
+                      "stroke_width": 2,
+                      "color": "#4CAF50"
+                    },
+                    {
+                      "entity": "sensor.ev9_l2_charging_power",
+                      "name": "Power (kW)",
+                      "yaxis_id": "second",
+                      "stroke_width": 2,
+                      "color": "#2196F3",
+                      "type": "area",
+                      "opacity": 0.3
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## Climate Control"
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_number.ev9_target_temperature",
+                      "name": "Temperature"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_number.ev9_climate_duration",
+                      "name": "Duration"
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.ev9_air_conditioner",
+                      "name": "Climate Active"
+                    },
+                    {
+                      "entity": "timer.ev9_climate_timer",
+                      "name": "Timer"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "button",
+                      "name": "Start Climate",
+                      "icon": "mdi:air-conditioner",
+                      "icon_height": "36px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "script.ev9_start_climate_with_timer"
+                      }
+                    },
+                    {
+                      "type": "button",
+                      "name": "Stop Climate",
+                      "icon": "mdi:fan-off",
+                      "icon_height": "36px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "kia_uvo.stop_climate",
+                        "data": {
+                          "device_id": "7f6b71f10dc261408a02149c68aa3e23"
+                        },
+                        "confirmation": {
+                          "text": "Stop climate control?"
+                        }
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## Security"
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.ev9_locked",
+                      "name": "Lock Status"
+                    },
+                    {
+                      "entity": "sensor.ev9_phone_distance",
+                      "name": "Phone Distance"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "button",
+                      "name": "Lock",
+                      "icon": "mdi:lock",
+                      "icon_height": "40px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "lock.lock",
+                        "target": {
+                          "entity_id": "lock.ev9_door_lock"
+                        }
+                      }
+                    },
+                    {
+                      "type": "button",
+                      "name": "Unlock",
+                      "icon": "mdi:lock-open",
+                      "icon_height": "40px",
+                      "tap_action": {
+                        "action": "call-service",
+                        "service": "lock.unlock",
+                        "target": {
+                          "entity_id": "lock.ev9_door_lock"
+                        },
+                        "confirmation": {
+                          "text": "Unlock vehicle?"
+                        }
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "input_text.ev9_last_walkaway_result",
+                      "name": "Last Walk-Away"
+                    },
+                    {
+                      "entity": "input_text.ev9_last_timeout_lock_result",
+                      "name": "Last Timeout Lock"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## Vehicle Status"
+                },
+                {
+                  "type": "glance",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.ev9_front_left_door",
+                      "name": "FL"
+                    },
+                    {
+                      "entity": "binary_sensor.ev9_front_right_door",
+                      "name": "FR"
+                    },
+                    {
+                      "entity": "binary_sensor.ev9_back_left_door",
+                      "name": "BL"
+                    },
+                    {
+                      "entity": "binary_sensor.ev9_back_right_door",
+                      "name": "BR"
+                    },
+                    {
+                      "entity": "binary_sensor.ev9_trunk",
+                      "name": "Trunk"
+                    },
+                    {
+                      "entity": "binary_sensor.ev9_hood",
+                      "name": "Hood"
+                    }
+                  ],
+                  "columns": 6,
+                  "show_state": true
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "binary_sensor.ev9_engine",
+                      "name": "Engine"
+                    },
+                    {
+                      "entity": "binary_sensor.ev9_tire_pressure_all",
+                      "name": "Tire Pressure"
+                    },
+                    {
+                      "entity": "sensor.ev9_last_updated_at",
+                      "name": "Last Updated"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "map",
+              "entities": [
+                {
+                  "entity": "device_tracker.ev9_location"
+                }
+              ],
+              "default_zoom": 15,
+              "hours_to_show": 24,
+              "title": "Vehicle Location"
+            }
+          ]
+        },
+        {
+          "title": "Config",
+          "path": "config",
+          "icon": "mdi:cog",
+          "cards": [
+            {
+              "type": "entities",
+              "title": "Walk-Away Lock",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_walk_away_lock_enabled",
+                  "name": "Enable Walk-Away Lock"
+                },
+                {
+                  "entity": "input_number.ev9_walkaway_distance",
+                  "name": "Distance Threshold (m)"
+                },
+                {
+                  "entity": "sensor.ev9_phone_distance",
+                  "name": "Current Phone Distance"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Timeout Failsafe Lock",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_timeout_lock_enabled",
+                  "name": "Enable Timeout Lock"
+                },
+                {
+                  "entity": "input_number.ev9_unlock_timeout",
+                  "name": "Timeout Duration (min)"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Auto-Close Windows",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_auto_close_windows_enabled",
+                  "name": "Enable Auto-Close"
+                },
+                {
+                  "entity": "input_number.ev9_auto_close_windows_delay",
+                  "name": "Delay (min)"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Charging Monitor",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_overnight_charge_monitor",
+                  "name": "Overnight Monitor"
+                },
+                {
+                  "entity": "input_number.ev9_expected_charge_power",
+                  "name": "Expected Power (kW)"
+                },
+                {
+                  "entity": "input_number.ev9_low_power_threshold",
+                  "name": "Low Power Threshold (kW)"
+                },
+                {
+                  "entity": "input_number.ev9_charge_interrupt_check_delay",
+                  "name": "Interrupt Check Delay (min)"
+                }
+              ]
+            },
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "entities",
+                  "title": "Pre-conditioning",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_boolean.ev9_precondition_enabled",
+                      "name": "Master Enable"
+                    },
+                    {
+                      "entity": "input_boolean.ev9_smart_precondition",
+                      "name": "Smart Mode (Weather-Based)"
+                    },
+                    {
+                      "entity": "input_number.ev9_precondition_lead_time",
+                      "name": "Lead Time (min)"
+                    },
+                    {
+                      "entity": "input_number.ev9_target_temperature",
+                      "name": "Global Target Temp"
+                    }
+                  ]
+                },
+                {
+                  "type": "markdown",
+                  "content": "### Schedules\nTap time/temp to edit. Use entities below to configure each schedule."
+                },
+                {
+                  "type": "entities",
+                  "title": "Schedule 1",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_boolean.ev9_schedule_1_enabled",
+                      "name": "Enabled"
+                    },
+                    {
+                      "entity": "input_datetime.ev9_schedule_1_time",
+                      "name": "Time"
+                    },
+                    {
+                      "entity": "input_number.ev9_schedule_1_temperature",
+                      "name": "Temperature"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_1_mon",
+                      "name": "M",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_1_tue",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_1_wed",
+                      "name": "W",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_1_thu",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_1_fri",
+                      "name": "F",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_1_sat",
+                      "name": "S",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_1_sun",
+                      "name": "S",
+                      "icon": "none"
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "title": "Schedule 2",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_boolean.ev9_schedule_2_enabled",
+                      "name": "Enabled"
+                    },
+                    {
+                      "entity": "input_datetime.ev9_schedule_2_time",
+                      "name": "Time"
+                    },
+                    {
+                      "entity": "input_number.ev9_schedule_2_temperature",
+                      "name": "Temperature"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_2_mon",
+                      "name": "M",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_2_tue",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_2_wed",
+                      "name": "W",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_2_thu",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_2_fri",
+                      "name": "F",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_2_sat",
+                      "name": "S",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_2_sun",
+                      "name": "S",
+                      "icon": "none"
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "title": "Schedule 3",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_boolean.ev9_schedule_3_enabled",
+                      "name": "Enabled"
+                    },
+                    {
+                      "entity": "input_datetime.ev9_schedule_3_time",
+                      "name": "Time"
+                    },
+                    {
+                      "entity": "input_number.ev9_schedule_3_temperature",
+                      "name": "Temperature"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_3_mon",
+                      "name": "M",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_3_tue",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_3_wed",
+                      "name": "W",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_3_thu",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_3_fri",
+                      "name": "F",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_3_sat",
+                      "name": "S",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_3_sun",
+                      "name": "S",
+                      "icon": "none"
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "title": "Schedule 4",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_boolean.ev9_schedule_4_enabled",
+                      "name": "Enabled"
+                    },
+                    {
+                      "entity": "input_datetime.ev9_schedule_4_time",
+                      "name": "Time"
+                    },
+                    {
+                      "entity": "input_number.ev9_schedule_4_temperature",
+                      "name": "Temperature"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_4_mon",
+                      "name": "M",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_4_tue",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_4_wed",
+                      "name": "W",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_4_thu",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_4_fri",
+                      "name": "F",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_4_sat",
+                      "name": "S",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_4_sun",
+                      "name": "S",
+                      "icon": "none"
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "title": "Schedule 5",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_boolean.ev9_schedule_5_enabled",
+                      "name": "Enabled"
+                    },
+                    {
+                      "entity": "input_datetime.ev9_schedule_5_time",
+                      "name": "Time"
+                    },
+                    {
+                      "entity": "input_number.ev9_schedule_5_temperature",
+                      "name": "Temperature"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_5_mon",
+                      "name": "M",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_5_tue",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_5_wed",
+                      "name": "W",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_5_thu",
+                      "name": "T",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_5_fri",
+                      "name": "F",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_5_sat",
+                      "name": "S",
+                      "icon": "none"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "input_boolean.ev9_schedule_5_sun",
+                      "name": "S",
+                      "icon": "none"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Notifications",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_boolean.ev9_notify_charging_complete",
+                  "name": "Charging Complete"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_low_battery",
+                  "name": "Low Battery"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_unlocked_at_home",
+                  "name": "Unlocked at Home"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_charging_interrupted",
+                  "name": "Charging Interrupted"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_low_charging_power",
+                  "name": "Low Charging Power"
+                },
+                {
+                  "entity": "input_boolean.ev9_notify_trunk_open",
+                  "name": "Trunk Left Open"
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Alert Thresholds",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_number.ev9_low_battery_threshold",
+                  "name": "Low Battery Threshold (%)"
+                },
+                {
+                  "entity": "input_number.ev9_unlocked_alert_delay",
+                  "name": "Unlocked Alert Delay (min)"
+                },
+                {
+                  "entity": "input_number.ev9_trunk_open_delay",
+                  "name": "Trunk Open Delay (min)"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Logs",
+          "path": "logs",
+          "icon": "mdi:format-list-bulleted",
+          "cards": [
+            {
+              "type": "vertical-stack",
+              "cards": [
+                {
+                  "type": "markdown",
+                  "content": "## Automation Event History\nLast 10 events from EV9 automations."
+                },
+                {
+                  "type": "entities",
+                  "show_header_toggle": false,
+                  "entities": [
+                    {
+                      "entity": "input_text.ev9_event_1",
+                      "name": "1"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_2",
+                      "name": "2"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_3",
+                      "name": "3"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_4",
+                      "name": "4"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_5",
+                      "name": "5"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_6",
+                      "name": "6"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_7",
+                      "name": "7"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_8",
+                      "name": "8"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_9",
+                      "name": "9"
+                    },
+                    {
+                      "entity": "input_text.ev9_event_10",
+                      "name": "10"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "entities",
+              "title": "Last Run Summary",
+              "show_header_toggle": false,
+              "entities": [
+                {
+                  "entity": "input_text.ev9_last_walkaway_result",
+                  "name": "Walk-Away Lock"
+                },
+                {
+                  "entity": "input_text.ev9_last_timeout_lock_result",
+                  "name": "Timeout Lock"
+                },
+                {
+                  "entity": "input_text.ev9_last_precondition_result",
+                  "name": "Pre-conditioning"
+                }
+              ]
+            },
+            {
+              "type": "button",
+              "name": "Clear Event Log",
+              "icon": "mdi:delete",
+              "tap_action": {
+                "action": "call-service",
+                "service": "script.ev9_clear_event_log",
+                "confirmation": {
+                  "text": "Clear all event log entries?"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

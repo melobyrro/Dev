@@ -1,0 +1,16 @@
+[Unit]
+Description=Plex Dynamic Resource Priority Service
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=simple
+User=byrro
+ExecStart=/usr/local/bin/plex_dynamic_priority.sh
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

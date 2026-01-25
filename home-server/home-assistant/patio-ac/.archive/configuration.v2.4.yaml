@@ -1,0 +1,296 @@
+# Patio AC configuration patch v2.4
+# Merge these blocks into configuration.yaml under the matching sections.
+
+# --- input_boolean additions ---
+input_boolean:
+  patio_ac_show_explain_global:
+    name: "Show Global Config Explanation"
+    initial: off
+    icon: mdi:help-circle-outline
+  patio_ac_show_explain_heat_guard:
+    name: "Show Heat Guard Explanation"
+    initial: off
+    icon: mdi:help-circle-outline
+
+# --- input_button additions ---
+input_button:
+  patio_ac_resume_automation:
+    name: "Patio AC - Resume Automation"
+    icon: mdi:refresh
+  patio_ac_activity_clear:
+    name: "Patio AC - Clear Activity"
+    icon: mdi:broom
+
+# --- input_number updates/additions ---
+input_number:
+  patio_ac_daily_limit:
+    name: "Patio AC Automation Cap (minutes)"
+    min: 0
+    max: 1440
+    step: 30
+    initial: 240
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-lock
+  patio_ac_compressor_cooldown_minutes:
+    name: "Compressor Cooldown (minutes)"
+    min: 0
+    max: 30
+    step: 1
+    initial: 10
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:snowflake-alert
+  patio_ac_default_dry_temp:
+    name: "Default DRY Setpoint (°F)"
+    min: 45
+    max: 100
+    step: 1
+    initial: 76
+    unit_of_measurement: "°F"
+    mode: slider
+    icon: mdi:thermostat
+  patio_ac_heat_duration:
+    name: "Heat Guard Max Duration (minutes)"
+    min: 0
+    max: 1440
+    step: 30
+    initial: 60
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer
+
+# --- template sensor updates/additions ---
+# Replace existing sensors with matching unique_id values.
+# Append runtime helpers under template -> sensor.
+
+template:
+  - binary_sensor:
+      - name: "Patio AC Automation Cool Running"
+        unique_id: patio_ac_automation_cool_running
+        state: >
+          {{ states('climate.150633095083490_climate') == 'cool' and
+             states('input_select.patio_ac_reason') == 'heat_guard' }}
+      - name: "Patio AC Automation Dry Running"
+        unique_id: patio_ac_automation_dry_running
+        state: >
+          {{ states('climate.150633095083490_climate') == 'dry' and
+             states('input_select.patio_ac_reason') in ['humidity_day', 'humidity_night'] }}
+      - name: "Patio AC Manual Cool Running"
+        unique_id: patio_ac_manual_cool_running
+        state: >
+          {{ states('climate.150633095083490_climate') == 'cool' and
+             states('input_select.patio_ac_reason') == 'manual' }}
+      - name: "Patio AC Manual Dry Running"
+        unique_id: patio_ac_manual_dry_running
+        state: >
+          {{ states('climate.150633095083490_climate') == 'dry' and
+             states('input_select.patio_ac_reason') == 'manual' }}
+
+  - trigger:
+      - platform: time_pattern
+        seconds: "/1"
+    sensor:
+      - name: "Patio AC Next Evaluation"
+        unique_id: patio_ac_next_evaluation
+        icon: mdi:timer-sand
+        state: >
+          {% set last = state_attr('automation.patio_ac_evaluation_logic', 'last_triggered') %}
+          {% set last_ts = as_timestamp(last) if last else as_timestamp(now()) %}
+          {% set next_ts = last_ts + 300 %}
+          {% set remaining = (next_ts - as_timestamp(now())) | int(0) %}
+          {% set remaining = [remaining, 0] | max %}
+          {% set mins = remaining // 60 %}
+          {% set secs = remaining % 60 %}
+          {{ '%02d:%02d' | format(mins, secs) }}
+      - name: "Patio AC Compressor Wait Time"
+        unique_id: patio_ac_compressor_wait
+        icon: mdi:timer-outline
+        state: >
+          {% set until = as_timestamp(states('input_datetime.patio_ac_compressor_protection_until'), 0) %}
+          {% set remaining = (until - as_timestamp(now())) | int(0) %}
+          {% set remaining = [remaining, 0] | max %}
+          {% set mins = remaining // 60 %}
+          {% set secs = remaining % 60 %}
+          {{ '%02d:%02d' | format(mins, secs) }}
+
+  - sensor:
+      - name: "Patio AC Last Evaluated"
+        unique_id: patio_ac_last_evaluated
+        icon: mdi:clock-check-outline
+        state: >
+          {% set last = state_attr('automation.patio_ac_evaluation_logic', 'last_triggered') %}
+          {% if last %}
+            {{ as_local(as_datetime(last)).strftime('%H:%M:%S') }}
+          {% else %}
+            {{ now().strftime('%H:%M:%S') }}
+          {% endif %}
+
+      - name: "Patio AC Reason Friendly"
+        unique_id: patio_ac_reason_friendly
+        icon: mdi:information-outline
+        state: >
+          {% set reason = states('input_select.patio_ac_reason') %}
+          {% set mapping = {
+            'idle': 'Idle',
+            'manual': 'Manual',
+            'heat_guard': 'Heat Guard',
+            'humidity_day': 'Day Humidity',
+            'humidity_night': 'Night Humidity',
+            'humidity_emergency': 'Safety/Emergency',
+            'safety_lock': 'Safety/Emergency'
+          } %}
+          {{ mapping.get(reason, reason | replace('_', ' ') | title) }}
+
+      - name: "Patio AC Automation Cap Display"
+        unique_id: patio_ac_daily_limit_display
+        icon: mdi:timer-lock
+        state: >
+          {% set minutes = states('input_number.patio_ac_daily_limit') | int(0) %}
+          {% set hours = minutes // 60 %}
+          {% set mins = minutes % 60 %}
+          {{ hours }}h {{ '%02d' | format(mins) }}m
+
+      - name: "Patio AC Automation Total Runtime"
+        unique_id: patio_ac_automation_total_runtime
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set cool = states('sensor.patio_ac_automation_cool_runtime') | float(0) %}
+          {% set dry = states('sensor.patio_ac_automation_dry_runtime') | float(0) %}
+          {{ (cool + dry) | round(2) }}
+
+      - name: "Patio AC Manual Total Runtime"
+        unique_id: patio_ac_manual_total_runtime
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set cool = states('sensor.patio_ac_manual_cool_runtime') | float(0) %}
+          {% set dry = states('sensor.patio_ac_manual_dry_runtime') | float(0) %}
+          {{ (cool + dry) | round(2) }}
+
+      - name: "Patio AC Total Runtime"
+        unique_id: patio_ac_total_runtime
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set auto = states('sensor.patio_ac_automation_total_runtime') | float(0) %}
+          {% set manual = states('sensor.patio_ac_manual_total_runtime') | float(0) %}
+          {{ (auto + manual) | round(2) }}
+
+      - name: "Patio AC Total Cool Runtime"
+        unique_id: patio_ac_total_cool_runtime
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set auto = states('sensor.patio_ac_automation_cool_runtime') | float(0) %}
+          {% set manual = states('sensor.patio_ac_manual_cool_runtime') | float(0) %}
+          {{ (auto + manual) | round(2) }}
+
+      - name: "Patio AC Total Dry Runtime"
+        unique_id: patio_ac_total_dry_runtime
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set auto = states('sensor.patio_ac_automation_dry_runtime') | float(0) %}
+          {% set manual = states('sensor.patio_ac_manual_dry_runtime') | float(0) %}
+          {{ (auto + manual) | round(2) }}
+
+      - name: "Patio AC Runtime Cool Automation"
+        unique_id: patio_ac_runtime_cool_automation
+        unit_of_measurement: "h"
+        device_class: duration
+        state: "{{ states('sensor.patio_ac_automation_cool_runtime') | float(0) | round(2) }}"
+
+      - name: "Patio AC Runtime Dry Automation"
+        unique_id: patio_ac_runtime_dry_automation
+        unit_of_measurement: "h"
+        device_class: duration
+        state: "{{ states('sensor.patio_ac_automation_dry_runtime') | float(0) | round(2) }}"
+
+      - name: "Patio AC Runtime Total Automation"
+        unique_id: patio_ac_runtime_total_automation
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set cool = states('sensor.patio_ac_runtime_cool_automation') | float(0) %}
+          {% set dry = states('sensor.patio_ac_runtime_dry_automation') | float(0) %}
+          {{ (cool + dry) | round(2) }}
+
+      - name: "Patio AC Runtime Cool Manual"
+        unique_id: patio_ac_runtime_cool_manual
+        unit_of_measurement: "h"
+        device_class: duration
+        state: "{{ states('sensor.patio_ac_manual_cool_runtime') | float(0) | round(2) }}"
+
+      - name: "Patio AC Runtime Dry Manual"
+        unique_id: patio_ac_runtime_dry_manual
+        unit_of_measurement: "h"
+        device_class: duration
+        state: "{{ states('sensor.patio_ac_manual_dry_runtime') | float(0) | round(2) }}"
+
+      - name: "Patio AC Runtime Total Manual"
+        unique_id: patio_ac_runtime_total_manual
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set cool = states('sensor.patio_ac_runtime_cool_manual') | float(0) %}
+          {% set dry = states('sensor.patio_ac_runtime_dry_manual') | float(0) %}
+          {{ (cool + dry) | round(2) }}
+
+      - name: "Patio AC Runtime Total All"
+        unique_id: patio_ac_runtime_total_all
+        unit_of_measurement: "h"
+        device_class: duration
+        state: >
+          {% set auto = states('sensor.patio_ac_runtime_total_automation') | float(0) %}
+          {% set manual = states('sensor.patio_ac_runtime_total_manual') | float(0) %}
+          {{ (auto + manual) | round(2) }}
+
+      - name: "Patio AC Runtime Cool Total"
+        unique_id: patio_ac_runtime_cool_total
+        unit_of_measurement: "h"
+        device_class: duration
+        state: "{{ states('sensor.patio_ac_total_cool_runtime') | float(0) | round(2) }}"
+
+      - name: "Patio AC Runtime Dry Total"
+        unique_id: patio_ac_runtime_dry_total
+        unit_of_measurement: "h"
+        device_class: duration
+        state: "{{ states('sensor.patio_ac_total_dry_runtime') | float(0) | round(2) }}"
+
+# --- history_stats additions (merge into sensor: list) ---
+# These track runtime since midnight in hours.
+
+sensor:
+  - platform: history_stats
+    name: "Patio AC Automation Cool Runtime"
+    entity_id: binary_sensor.patio_ac_automation_cool_running
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Patio AC Automation Dry Runtime"
+    entity_id: binary_sensor.patio_ac_automation_dry_running
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Patio AC Manual Cool Runtime"
+    entity_id: binary_sensor.patio_ac_manual_cool_running
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: "Patio AC Manual Dry Runtime"
+    entity_id: binary_sensor.patio_ac_manual_dry_running
+    state: "on"
+    type: time
+    start: "{{ now().replace(hour=0, minute=0, second=0) }}"
+    end: "{{ now() }}"

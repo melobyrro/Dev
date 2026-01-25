@@ -1,0 +1,99 @@
+# Patio AC - Day/Night Boundary Handler
+#
+# This automation addresses FR-SCHED-02: Hard cutoff at schedule boundaries
+#
+# Problem: If Day Humidity is running when night_start time arrives, it continues
+# indefinitely because there's no automation to enforce the schedule boundary.
+#
+# Solution: This automation triggers at day_start and night_start, and either:
+# - Stops the wrong ruleset and returns to Idle (seamless handoff OFF)
+# - Transitions to the new ruleset if eligible (seamless handoff ON)
+#
+# Add this to automations.yaml in Home Assistant
+
+- id: patio_ac_day_night_boundary
+  alias: "Patio AC - Day/Night Boundary Handler"
+  description: "Enforce schedule cutoff at day/night boundaries per FR-SCHED-02"
+  mode: single
+  trigger:
+    - platform: time
+      at: input_datetime.patio_ac_night_start
+      id: night_start
+    - platform: time
+      at: input_datetime.patio_ac_day_start
+      id: day_start
+  condition:
+    # Only act if currently running a humidity ruleset
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') in ['humidity_day', 'humidity_night'] }}"
+  action:
+    - variables:
+        current_reason: "{{ states('input_select.patio_ac_reason') }}"
+        is_night_start: "{{ trigger.id == 'night_start' }}"
+        is_day_start: "{{ trigger.id == 'day_start' }}"
+        # Check if we're running the wrong ruleset for the new time period
+        wrong_ruleset: >
+          {{ (is_night_start and current_reason == 'humidity_day') or
+             (is_day_start and current_reason == 'humidity_night') }}
+        seamless: "{{ is_state('input_boolean.patio_ac_allow_seamless_handoff', 'on') }}"
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ wrong_ruleset }}"
+          sequence:
+            - choose:
+                # Seamless handoff enabled: try to transition to new ruleset
+                - conditions:
+                    - condition: template
+                      value_template: "{{ seamless }}"
+                  sequence:
+                    - variables:
+                        dp: "{{ states('sensor.patio_dew_point') | float(0) }}"
+                        new_trigger: >
+                          {% if is_night_start %}
+                            {{ states('input_number.patio_ac_dewpoint_night_start') | float(0) }}
+                          {% else %}
+                            {{ states('input_number.patio_ac_dewpoint_start') | float(0) }}
+                          {% endif %}
+                        new_enabled: >
+                          {% if is_night_start %}
+                            {{ is_state('input_boolean.patio_ac_night_humidity_enabled', 'on') }}
+                          {% else %}
+                            {{ is_state('input_boolean.patio_ac_day_humidity_enabled', 'on') }}
+                          {% endif %}
+                        eligible: "{{ new_enabled and dp >= new_trigger }}"
+                        new_reason: "{{ 'humidity_night' if is_night_start else 'humidity_day' }}"
+                    - choose:
+                        # New ruleset is eligible: seamlessly transition
+                        - conditions:
+                            - condition: template
+                              value_template: "{{ eligible }}"
+                          sequence:
+                            # Just update the reason - AC is already running DRY
+                            - action: input_select.select_option
+                              target:
+                                entity_id: input_select.patio_ac_reason
+                              data:
+                                option: "{{ new_reason }}"
+                            # Log the seamless transition
+                            - action: script.patio_ac_shift_event_log
+                              data:
+                                message: "Seamless handoff: {{ current_reason }} → {{ new_reason }}"
+                      default:
+                        # New ruleset not eligible: stop and go idle
+                        - action: script.patio_ac_control
+                          data:
+                            action: "off"
+                            reason: "{{ current_reason }}"
+                        - action: script.patio_ac_shift_event_log
+                          data:
+                            message: "Boundary stop: {{ current_reason }} (new ruleset not eligible)"
+              default:
+                # Seamless handoff disabled: just stop
+                - action: script.patio_ac_control
+                  data:
+                    action: "off"
+                    reason: "{{ current_reason }}"
+                - action: script.patio_ac_shift_event_log
+                  data:
+                    message: "Boundary stop: {{ current_reason }} (seamless handoff OFF)"

@@ -1,0 +1,290 @@
+# Patio AC scripts patch v2.8
+# Fix 1: Move reason update to AFTER mode change (from v2.6)
+# Fix 2: Remove separate climate.turn_on call to prevent Tuya mode reversion (from v2.7)
+# Fix 3: Clamp temperature to AC's supported range (61-86°F) before setting
+#        This prevents script timeout when temperature is out of range.
+# Replace patio_ac_control with this version.
+
+patio_ac_control:
+  alias: Patio AC Control (Protected)
+  mode: queued
+  max: 3
+  fields:
+    action:
+      description: Turn on or off
+      example: 'on'
+      selector:
+        select:
+          options:
+          - 'on'
+          - 'off'
+    mode:
+      description: AC mode (if turning on)
+      example: cool
+      selector:
+        select:
+          options:
+          - cool
+          - dry
+          - fan_only
+    temperature:
+      description: Target temperature (if turning on)
+      example: 75
+      selector:
+        number:
+          min: 61
+          max: 86
+          unit_of_measurement: "°F"
+    reason:
+      description: Reason for operation
+      example: heat_guard
+      selector:
+        select:
+          options:
+          - heat_guard
+          - humidity_night
+          - humidity_day
+          - humidity_emergency
+          - manual
+          - safety_lock
+    duration:
+      description: Max runtime in minutes (optional)
+      example: 60
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+  sequence:
+  - condition: state
+    entity_id: timer.patio_ac_command_throttle
+    state: idle
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: "{{ action == 'on' }}"
+      sequence:
+      - condition: template
+        value_template: >
+          {% set auto_hours = states('sensor.patio_ac_runtime_total_automation') | float(0) %}
+          {% set auto_minutes = auto_hours * 60 %}
+          {{ reason not in ['heat_guard', 'humidity_day', 'humidity_night'] or
+             auto_minutes < states('input_number.patio_ac_daily_limit') | float(0) }}
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: timer.patio_ac_compressor_protection
+          state: idle
+        - condition: template
+          value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+      # v2.8: Calculate clamped temperature early for use in all subsequent steps
+      - variables:
+          ac_min_temp: 61
+          ac_max_temp: 86
+          clamped_temp: >
+            {% if mode == 'cool' %}
+              {{ [[temperature|int, ac_min_temp]|max, ac_max_temp]|min }}
+            {% else %}
+              {{ temperature|int(0) }}
+            {% endif %}
+      - condition: template
+        value_template: >
+          {{ states('climate.150633095083490_climate') == 'off' or
+             state_attr('climate.150633095083490_climate', 'hvac_mode') != mode or
+             (state_attr('climate.150633095083490_climate', 'temperature')|int(0) != clamped_temp|int(0) if mode == 'cool' else false) }}
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.patio_ac_expected_signature
+        data:
+          # v2.8: Use clamped temperature in signature for COOL mode
+          value: >
+            {% if mode == 'cool' %}
+              cool|{{ clamped_temp }}
+            {% elif mode == 'dry' %}
+              dry|none
+            {% else %}
+              {{ mode }}|none
+            {% endif %}
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: >
+            {% set settle = states('input_number.patio_ac_poll_settle_seconds') | int(0) %}
+            {{ now().timestamp() + settle + 10 }}
+      # v2.7: Removed separate climate.turn_on + delay block.
+      # The set_hvac_mode service handles power-on atomically, avoiding Tuya race condition
+      # where the device would revert to its last mode (DRY) after being powered on.
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.150633095083490_climate
+        data:
+          hvac_mode: "{{ mode }}"
+      # v2.8: Only set temperature for COOL mode with valid (clamped) temperature
+      # DRY mode doesn't use temperature on this AC unit
+      - if:
+        - condition: template
+          value_template: "{{ mode == 'cool' }}"
+        then:
+        - delay: "00:00:01"
+        - service: climate.set_temperature
+          target:
+            entity_id: climate.150633095083490_climate
+          data:
+            temperature: "{{ clamped_temp }}"
+      - wait_template: >
+          {% set sig = states('input_text.patio_ac_expected_signature').split('|') %}
+          {% set target_mode = sig[0] %}
+          {% set target_temp = sig[1] %}
+          {{ is_state('climate.150633095083490_climate', target_mode) and
+             (state_attr('climate.150633095083490_climate', 'temperature')|int(0) == target_temp|int(0) if target_temp != 'none' else true) }}
+        timeout: "{{ states('input_number.patio_ac_poll_settle_seconds')|int }}"
+      - delay: 00:00:03
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      # Set reason AFTER mode change to fix event logger race condition
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.patio_ac_reason
+        data:
+          option: "{{ reason }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_runtime_start
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - if:
+        - condition: template
+          value_template: "{{ duration is defined and duration|int > 0 and reason == 'heat_guard' }}"
+        then:
+        - service: timer.start
+          target:
+            entity_id: timer.patio_ac_heat_spike
+          data:
+            duration: "{{ '00:%02d:00'|format(duration|int) }}"
+        - service: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.patio_ac_heat_spike_until
+          data:
+            timestamp: "{{ now().timestamp() + (duration|int * 60) }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_command
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - service: timer.start
+        target:
+          entity_id: timer.patio_ac_command_throttle
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_command_throttle_until
+        data:
+          timestamp: "{{ now().timestamp() + 30 }}"
+    - conditions:
+      - condition: template
+        value_template: "{{ action == 'off' }}"
+      sequence:
+      - condition: template
+        value_template: >
+          {{ states('input_select.patio_ac_reason') == reason or reason == 'safety_lock' }}
+      - condition: template
+        value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+      - variables:
+          run_duration: >
+            {% set start = states('input_datetime.patio_ac_runtime_start') %}
+            {% if start not in ['unknown', '', 'unavailable'] %}
+              {{ (now().timestamp() - as_timestamp(start)) / 60 }}
+            {% else %}
+              0
+            {% endif %}
+          is_short_run: "{{ run_duration|float < states('input_number.patio_ac_min_meaningful_run_minutes')|float }}"
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.patio_ac_daily_runtime
+        data:
+          value: "{{ (states('input_number.patio_ac_daily_runtime')|float + run_duration|float)|round(1) }}"
+      - if:
+        - condition: template
+          value_template: "{{ states('input_select.patio_ac_reason') in ['humidity_day','humidity_night'] }}"
+        then:
+        - service: input_number.set_value
+          target:
+            entity_id: input_number.patio_ac_humidity_runtime
+          data:
+            value: "{{ (states('input_number.patio_ac_humidity_runtime')|float + run_duration|float)|round(1) }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.patio_ac_expected_signature
+        data:
+          value: "off|none"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: >
+            {% set settle = states('input_number.patio_ac_poll_settle_seconds') | int(0) %}
+            {{ now().timestamp() + settle + 10 }}
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.150633095083490_climate
+        data:
+          hvac_mode: 'off'
+      - wait_template: "{{ is_state('climate.150633095083490_climate', 'off') }}"
+        timeout: "{{ states('input_number.patio_ac_poll_settle_seconds')|int }}"
+      - delay: 00:00:03
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.patio_ac_reason
+        data:
+          option: idle
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_off
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - if:
+          - condition: template
+            value_template: >
+              {% set cooldown = states('input_number.patio_ac_compressor_cooldown_minutes') | int(0) %}
+              {{ (not is_short_run or reason == 'safety_lock') and cooldown > 0 }}
+        then:
+          - service: timer.start
+            target:
+              entity_id: timer.patio_ac_compressor_protection
+            data:
+              duration: "{{ '00:%02d:00'|format(states('input_number.patio_ac_compressor_cooldown_minutes')|int(0)) }}"
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.patio_ac_compressor_protection_until
+            data:
+              timestamp: "{{ now().timestamp() + (states('input_number.patio_ac_compressor_cooldown_minutes')|int(0) * 60) }}"
+        else:
+          - service: timer.cancel
+            target:
+              entity_id: timer.patio_ac_compressor_protection
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.patio_ac_compressor_protection_until
+            data:
+              timestamp: "{{ now().timestamp() }}"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_command
+        data:
+          timestamp: "{{ now().timestamp() }}"
+      - service: timer.start
+        target:
+          entity_id: timer.patio_ac_command_throttle
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_command_throttle_until
+        data:
+          timestamp: "{{ now().timestamp() + 30 }}"

@@ -1,0 +1,1265 @@
+# Kia EV9 Automations
+# Version: 2.5
+# Last Updated: 2026-01-22
+#
+# CHANGES from v2.4:
+# - Smart mode is now always-on (removed toggle check)
+# - Rate is configurable via input_number.ev9_smart_mode_rate (default 0.5 min/°F)
+# - Formula: extra_time = temp_diff * rate (capped at 20 min)
+#
+# CHANGES from v2.3 (retained):
+# - Full email OTP automation for self-healing integration recovery:
+#   - ev9_connection_watchdog: Now triggers full recovery with OTP flow
+#   - ev9_otp_received: Extracts OTP from email and completes config flow
+#   - ev9_otp_timeout: Handles timeout if email doesn't arrive in 5 min
+# - Requires: Gmail IMAP integration configured to monitor Kia emails
+# - Requires: secrets.yaml with gmail_app_password, kia_username, kia_password, kia_pin
+#
+# CHANGES from v2.2 (retained in v2.3/v2.4):
+# - Added Connection Watchdog automation
+#
+# CHANGES from v2.1 (retained in v2.2/v2.3/v2.4):
+# - Added AUT-05 Theft/Movement Alert automations
+#
+# CHANGES from v2.0 (retained in v2.1/v2.2/v2.3/v2.4):
+# - Fixed Smart Mode formula: Changed from `/3` to `*0.5`
+# - Centralized device_id via input_text.ev9_device_id
+#
+# CHANGES from v1.4 (retained in v2.0/v2.1/v2.2/v2.3/v2.4):
+# - Distance-based walk-away lock, timeout failsafe, structured logging
+#
+# DEPLOYMENT:
+# 1. Ensure python_scripts/shift_event_log.py is deployed to HA
+# 2. Ensure helpers from helpers.v2.4.yaml are created
+# 3. Ensure secrets.yaml has: gmail_app_password, kia_username, kia_password, kia_pin
+# 4. Configure IMAP integration for Gmail (Settings > Integrations > IMAP)
+# 5. Deploy scripts/ev9_recovery_with_otp.sh and ev9_submit_otp.sh to /config/scripts/
+# 6. Add shell_commands to configuration.yaml (see below)
+# 7. Reload automations: Settings -> Automations -> Reload
+#
+# SHELL COMMANDS (add to configuration.yaml):
+# shell_command:
+#   ev9_recovery_start: "bash /config/scripts/ev9_recovery_with_otp.sh '{{ token }}' /config/secrets.yaml"
+#   ev9_submit_otp: "bash /config/scripts/ev9_submit_otp.sh '{{ token }}' '{{ flow_id }}' '{{ otp }}'"
+
+# ============================================================
+# CHARGING NOTIFICATIONS
+# ============================================================
+
+- id: ev9_charging_complete
+  alias: "EV9: Charging Complete Notification"
+  description: "Notify when EV9 finishes charging"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      from: "on"
+      to: "off"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_charging_complete
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      state: "on"
+  action:
+    - service: python_script.shift_event_log
+      data:
+        new_event: "{{ now().strftime('%H:%M') }} - CHARGING_COMPLETE: Battery at {{ states('sensor.ev9_ev_battery_level') }}%"
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Charging Complete"
+        message: >
+          Battery at {{ states('sensor.ev9_ev_battery_level') }}%
+          Range: {{ states('sensor.ev9_ev_range') }} miles
+        data:
+          push:
+            sound: default
+            interruption-level: active
+  mode: single
+
+- id: ev9_low_battery_alert
+  alias: "EV9: Low Battery Alert"
+  description: "Notify when battery drops below threshold"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.ev9_ev_battery_level
+      below: input_number.ev9_low_battery_threshold
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_low_battery
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      state: "off"
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - LOW_BATTERY: {{ states('sensor.ev9_ev_battery_level') }}% (threshold: {{ states('input_number.ev9_low_battery_threshold') }}%)"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Low Battery"
+        message: >
+          Battery at {{ states('sensor.ev9_ev_battery_level') }}%
+          Range: {{ states('sensor.ev9_ev_range') }} miles
+          Consider charging soon.
+        data:
+          push:
+            sound: default
+            interruption-level: time-sensitive
+  mode: single
+
+# ============================================================
+# CHARGING INTERRUPTION MONITORING
+# ============================================================
+
+- id: ev9_charging_interrupted
+  alias: "EV9: Charging Interrupted Alert"
+  description: "Alert if charging stops unexpectedly while plugged in (overnight only)"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      from: "on"
+      to: "off"
+      for:
+        minutes: "{{ states('input_number.ev9_charge_interrupt_check_delay') | int(10) }}"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_charging_interrupted
+      state: "on"
+    - condition: state
+      entity_id: input_boolean.ev9_overnight_charge_monitor
+      state: "on"
+    # Still plugged in
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      state: "on"
+    # Not fully charged (below 95%)
+    - condition: numeric_state
+      entity_id: sensor.ev9_ev_battery_level
+      below: 95
+    # It's nighttime (overnight charging window)
+    - condition: time
+      after: "20:00:00"
+      before: "07:00:00"
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - CHARGING_INTERRUPTED: Stopped at {{ states('sensor.ev9_ev_battery_level') }}%, power was {{ states('sensor.ev9_ev_charging_power') }} kW"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Charging Stopped!"
+        message: >
+          Charging interrupted at {{ states('sensor.ev9_ev_battery_level') }}%
+          Car is still plugged in but not charging.
+          Last power: {{ states('sensor.ev9_ev_charging_power') }} kW
+        data:
+          push:
+            sound: default
+            interruption-level: time-sensitive
+          actions:
+            - action: EV9_RESTART_CHARGE
+              title: "Restart Charging"
+            - action: EV9_FORCE_UPDATE
+              title: "Refresh Status"
+  mode: single
+
+- id: ev9_restart_charge_from_notification
+  alias: "EV9: Restart Charge from Notification"
+  description: "Handle restart charging action from notification"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: EV9_RESTART_CHARGE
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - RESTART_CHARGE: User initiated from notification"
+    - service: kia_uvo.stop_charge
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    - delay:
+        seconds: 30
+    - service: kia_uvo.start_charge
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Charging Restarted"
+        message: "Sent command to restart charging. Check status in a few minutes."
+  mode: single
+
+# ============================================================
+# LOW CHARGING POWER ALERT
+# ============================================================
+
+- id: ev9_low_charging_power
+  alias: "EV9: Low Charging Power Alert"
+  description: "Alert if charging power drops below expected threshold"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.ev9_ev_charging_power
+      below: input_number.ev9_low_power_threshold
+      for:
+        minutes: 5
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_low_charging_power
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      state: "on"
+    # Only alert if not near full charge (tapering is normal above 80%)
+    - condition: numeric_state
+      entity_id: sensor.ev9_ev_battery_level
+      below: 80
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - LOW_POWER: Charging at {{ states('sensor.ev9_ev_charging_power') }} kW (expected {{ states('input_number.ev9_expected_charge_power') }} kW)"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Low Charging Power"
+        message: >
+          Charging at {{ states('sensor.ev9_ev_charging_power') }} kW
+          Expected: {{ states('input_number.ev9_expected_charge_power') }} kW
+          Battery: {{ states('sensor.ev9_ev_battery_level') }}%
+
+          Possible causes: Temperature, EVSE issue, or car limiting charge.
+        data:
+          push:
+            sound: default
+          actions:
+            - action: EV9_RESTART_CHARGE
+              title: "Restart Charging"
+  mode: single
+
+# ============================================================
+# SECURITY NOTIFICATIONS
+# ============================================================
+
+- id: ev9_unlocked_at_home
+  alias: "EV9: Unlocked at Home Alert"
+  description: "Notify if car is unlocked at home for too long (informational, not auto-lock)"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_locked
+      to: "off"
+      for:
+        minutes: "{{ states('input_number.ev9_unlocked_alert_delay') | int(10) }}"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_unlocked_at_home
+      state: "on"
+    - condition: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - UNLOCKED_ALERT: At home for {{ states('input_number.ev9_unlocked_alert_delay') | int }} min"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Unlocked"
+        message: >
+          Your EV9 has been unlocked at home for {{ states('input_number.ev9_unlocked_alert_delay') | int }} minutes.
+        data:
+          push:
+            sound: default
+          actions:
+            - action: LOCK_EV9
+              title: "Lock Now"
+              destructive: false
+  mode: single
+
+- id: ev9_lock_from_notification
+  alias: "EV9: Lock from Notification Action"
+  description: "Lock car when notification action is tapped"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: LOCK_EV9
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - MANUAL_LOCK: User initiated from notification"
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Locked"
+        message: "Your EV9 has been locked."
+  mode: single
+
+# ============================================================
+# WALK-AWAY LOCK (v2.0: Distance-Based, AUT-09)
+# Trigger: Phone distance > configurable threshold (default 5m)
+# Range: 1-20 meters
+# ============================================================
+
+- id: ev9_walkaway_lock
+  alias: "EV9: Walk-Away Auto Lock"
+  description: "Auto-lock when phone moves beyond configured distance from vehicle"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.ev9_phone_distance
+      above: input_number.ev9_walkaway_distance
+      for:
+        minutes: 1
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_walk_away_lock_enabled
+      state: "on"
+    # Engine is off (car is parked)
+    - condition: state
+      entity_id: binary_sensor.ev9_engine
+      state: "off"
+  action:
+    - variables:
+        current_distance: "{{ states('sensor.ev9_phone_distance') | float(0) }}"
+        threshold: "{{ states('input_number.ev9_walkaway_distance') | float(5) }}"
+        is_already_locked: "{{ is_state('lock.ev9_door_lock', 'locked') }}"
+    # First check if already locked - skip lock command if so
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ is_already_locked }}"
+          sequence:
+            # Already locked - just log it
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_last_walkaway_result
+              data:
+                value: "{{ now().strftime('%H:%M') }} - SKIPPED: Already locked at {{ current_distance | round(0) }}m"
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - WALKAWAY_LOCK: SKIPPED - Vehicle already locked at {{ current_distance | round(0) }}m"
+      default:
+        # Not locked - try to lock
+        - service: lock.lock
+          target:
+            entity_id: lock.ev9_door_lock
+          continue_on_error: true
+        # Wait for lock state to update from Kia API
+        - delay:
+            seconds: 10
+        # Check if lock succeeded using lock entity (more reliable)
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: lock.ev9_door_lock
+                  state: "locked"
+              sequence:
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.ev9_last_walkaway_result
+                  data:
+                    value: "{{ now().strftime('%H:%M') }} - SUCCESS: Locked at {{ current_distance | round(0) }}m (threshold: {{ threshold | round(0) }}m)"
+                - service: python_script.shift_event_log
+                  data:
+                    entity_prefix: input_text.ev9_event
+                    max_events: 10
+                    new_event: "{{ now().strftime('%H:%M') }} - WALKAWAY_LOCK: SUCCESS - Distance {{ current_distance | round(0) }}m > {{ threshold | round(0) }}m threshold"
+                - service: notify.mobile_app_andre_iphone
+                  data:
+                    title: "EV9 Walk-Away Locked"
+                    message: >
+                      Auto-locked when you moved {{ current_distance | round(0) }}m away from vehicle.
+                      (Threshold: {{ threshold | round(0) }}m)
+                    data:
+                      push:
+                        sound: default
+          default:
+            # Lock failed - notify user
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_last_walkaway_result
+              data:
+                value: "{{ now().strftime('%H:%M') }} - FAILED: Lock command sent at {{ current_distance | round(0) }}m but vehicle may not have locked"
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - WALKAWAY_LOCK: FAILED - API error or timeout at {{ current_distance | round(0) }}m"
+            - service: notify.mobile_app_andre_iphone
+              data:
+                title: "⚠️ EV9 Walk-Away Lock FAILED"
+                message: >
+                  Tried to auto-lock at {{ current_distance | round(0) }}m but command may have failed.
+                  Please verify vehicle is locked.
+                data:
+                  push:
+                    sound: default
+                    interruption-level: time-sensitive
+  mode: single
+
+# ============================================================
+# TIMEOUT FAILSAFE LOCK (v2.0: AUT-10)
+# Trigger: Vehicle unlocked for configurable duration (default 30 min)
+# Range: 5-120 minutes
+# ============================================================
+
+- id: ev9_timeout_lock
+  alias: "EV9: Timeout Failsafe Lock"
+  description: "Auto-lock if vehicle remains unlocked for configured time"
+  trigger:
+    - platform: state
+      entity_id: lock.ev9_door_lock
+      to: "unlocked"
+      for:
+        minutes: "{{ states('input_number.ev9_unlock_timeout') | int(30) }}"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_timeout_lock_enabled
+      state: "on"
+    # Engine is off (car is parked)
+    - condition: state
+      entity_id: binary_sensor.ev9_engine
+      state: "off"
+  action:
+    - variables:
+        timeout_minutes: "{{ states('input_number.ev9_unlock_timeout') | int(30) }}"
+        is_already_locked: "{{ is_state('lock.ev9_door_lock', 'locked') }}"
+    # First check if already locked (someone locked it manually during timeout)
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ is_already_locked }}"
+          sequence:
+            # Already locked - just log it
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_last_timeout_lock_result
+              data:
+                value: "{{ now().strftime('%H:%M') }} - SKIPPED: Already locked (timeout was {{ timeout_minutes }}min)"
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - TIMEOUT_LOCK: SKIPPED - Vehicle already locked"
+      default:
+        # Not locked - try to lock
+        - service: lock.lock
+          target:
+            entity_id: lock.ev9_door_lock
+          continue_on_error: true
+        # Wait for lock state to update from Kia API
+        - delay:
+            seconds: 10
+        # Check if lock succeeded using lock entity
+        - choose:
+            - conditions:
+                - condition: state
+                  entity_id: lock.ev9_door_lock
+                  state: "locked"
+              sequence:
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.ev9_last_timeout_lock_result
+                  data:
+                    value: "{{ now().strftime('%H:%M') }} - SUCCESS: Locked after {{ timeout_minutes }}min timeout"
+                - service: python_script.shift_event_log
+                  data:
+                    entity_prefix: input_text.ev9_event
+                    max_events: 10
+                    new_event: "{{ now().strftime('%H:%M') }} - TIMEOUT_LOCK: SUCCESS - Unlocked for {{ timeout_minutes }}min exceeded timeout"
+                - service: notify.mobile_app_andre_iphone
+                  data:
+                    title: "EV9 Timeout Locked"
+                    message: >
+                      Auto-locked after being unlocked for {{ timeout_minutes }} minutes.
+                      (Failsafe timeout triggered)
+                    data:
+                      push:
+                        sound: default
+          default:
+            # Lock failed - notify user
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_last_timeout_lock_result
+              data:
+                value: "{{ now().strftime('%H:%M') }} - FAILED: Lock command sent after {{ timeout_minutes }}min but vehicle may not have locked"
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - TIMEOUT_LOCK: FAILED - API error or timeout"
+            - service: notify.mobile_app_andre_iphone
+              data:
+                title: "⚠️ EV9 Timeout Lock FAILED"
+                message: >
+                  Tried to auto-lock after {{ timeout_minutes }}min timeout but command may have failed.
+                  Please verify vehicle is locked.
+                data:
+              push:
+                sound: default
+                interruption-level: time-sensitive
+  mode: single
+
+# ============================================================
+# AUTO-CLOSE WINDOWS
+# ============================================================
+
+- id: ev9_auto_close_windows
+  alias: "EV9: Auto-Close Windows on Leave"
+  description: "Auto-close windows when leaving home zone"
+  trigger:
+    - platform: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+      event: leave
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_auto_close_windows_enabled
+      state: "on"
+  action:
+    - delay:
+        minutes: "{{ states('input_number.ev9_auto_close_windows_delay') | int(2) }}"
+    # Re-check we're still away from home
+    - condition: not
+      conditions:
+        - condition: zone
+          entity_id: device_tracker.ev9_location
+          zone: zone.home
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - AUTO_CLOSE_WINDOWS: Triggered after leaving home zone"
+    - service: kia_uvo.set_windows
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+        close_all: true
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Windows Closed"
+        message: "Auto-close windows activated after leaving home."
+  mode: single
+
+# ============================================================
+# TRUNK LEFT OPEN ALERT
+# ============================================================
+
+- id: ev9_trunk_left_open
+  alias: "EV9: Trunk Left Open Alert"
+  description: "Alert when trunk is left open for too long"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_trunk
+      to: "on"
+      for:
+        minutes: "{{ states('input_number.ev9_trunk_open_delay') | int(5) }}"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_trunk_open
+      state: "on"
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - TRUNK_OPEN: Alert after {{ states('input_number.ev9_trunk_open_delay') | int }}min"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Trunk Open"
+        message: >
+          Your EV9 trunk has been open for {{ states('input_number.ev9_trunk_open_delay') | int }} minutes.
+        data:
+          push:
+            sound: default
+            interruption-level: time-sensitive
+  mode: single
+
+# ============================================================
+# CLIMATE TIMER AUTO-STOP
+# ============================================================
+
+- id: ev9_climate_timer_stop
+  alias: "EV9: Climate Timer Auto-Stop"
+  description: "Stop climate control when timer finishes"
+  trigger:
+    - platform: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.ev9_climate_timer
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - CLIMATE_STOP: Timer expired, stopping climate control"
+    - service: kia_uvo.stop_climate
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Climate Timer Finished"
+        message: "Climate control stopped automatically after timer expired."
+  mode: single
+
+# ============================================================
+# PRE-CONDITIONING AUTOMATION (v2.1: Fixed Smart Mode formula)
+# Changed formula from temp_diff/3 to temp_diff*0.5
+# ============================================================
+
+- id: ev9_precondition_schedule
+  alias: "EV9: Scheduled Pre-conditioning"
+  description: "Start climate control before scheduled departure using 5 flexible schedules with individual temperatures"
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_precondition_enabled
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_air_conditioner
+      state: "off"
+    - condition: template
+      value_template: >
+        {# Get current day abbreviation #}
+        {% set day_map = {'Monday': 'mon', 'Tuesday': 'tue', 'Wednesday': 'wed',
+                          'Thursday': 'thu', 'Friday': 'fri', 'Saturday': 'sat', 'Sunday': 'sun'} %}
+        {% set today = day_map[now().strftime('%A')] %}
+
+        {# Get settings #}
+        {% set base_lead = states('input_number.ev9_precondition_lead_time') | int(10) %}
+        {% set smart_rate = states('input_number.ev9_smart_mode_rate') | float(0.5) %}
+        {% set global_temp = states('input_number.ev9_target_temperature') | float(72) %}
+        {% set current_temp = state_attr('weather.forecast_home', 'temperature') | float(72) %}
+
+        {# Check each schedule (1-5) for a match #}
+        {% set ns = namespace(should_trigger=false, matched_schedule=0, target_temp=global_temp) %}
+        {% for sched_num in range(1, 6) %}
+          {% if not ns.should_trigger %}
+            {% set enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_enabled', 'on') %}
+            {% set day_enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_' ~ today, 'on') %}
+            {% set departure = states('input_datetime.ev9_schedule_' ~ sched_num ~ '_time') %}
+
+            {% if enabled and day_enabled and departure not in ['unknown', 'unavailable', ''] %}
+              {# Get per-schedule temperature #}
+              {% set sched_temp = states('input_number.ev9_schedule_' ~ sched_num ~ '_temperature') | float(global_temp) %}
+
+              {# Smart mode is always on - calculate lead time based on temp difference and rate #}
+              {% set temp_diff = (sched_temp - current_temp) | abs %}
+              {% set extra_time = [[(temp_diff * smart_rate) | round(0) | int, 20] | min, 0] | max %}
+              {% set lead_time = base_lead + extra_time %}
+
+              {% set dep_time = today_at(departure) %}
+              {% set start_time = dep_time - timedelta(minutes=lead_time) %}
+              {% if start_time <= now() < start_time + timedelta(minutes=1) %}
+                {% set ns.should_trigger = true %}
+                {% set ns.matched_schedule = sched_num %}
+                {% set ns.target_temp = sched_temp %}
+              {% endif %}
+            {% endif %}
+          {% endif %}
+        {% endfor %}
+
+        {{ ns.should_trigger }}
+  action:
+    - variables:
+        day_map: >
+          {{ {'Monday': 'mon', 'Tuesday': 'tue', 'Wednesday': 'wed',
+              'Thursday': 'thu', 'Friday': 'fri', 'Saturday': 'sat', 'Sunday': 'sun'} }}
+        today: "{{ day_map[now().strftime('%A')] }}"
+        global_temp: "{{ states('input_number.ev9_target_temperature') | float(72) }}"
+        current_temp: "{{ state_attr('weather.forecast_home', 'temperature') | float(72) }}"
+        smart_rate: "{{ states('input_number.ev9_smart_mode_rate') | float(0.5) }}"
+        base_lead: "{{ states('input_number.ev9_precondition_lead_time') | int(10) }}"
+        # Find matched schedule and its temperature
+        matched_schedule: >
+          {% set ns = namespace(matched=0) %}
+          {% for sched_num in range(1, 6) %}
+            {% if ns.matched == 0 %}
+              {% set enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_enabled', 'on') %}
+              {% set day_enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_' ~ today, 'on') %}
+              {% if enabled and day_enabled %}
+                {% set ns.matched = sched_num %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {{ ns.matched }}
+        target_temp: >
+          {% set matched = 0 %}
+          {% for sched_num in range(1, 6) %}
+            {% if matched == 0 %}
+              {% set enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_enabled', 'on') %}
+              {% set day_enabled = is_state('input_boolean.ev9_schedule_' ~ sched_num ~ '_' ~ today, 'on') %}
+              {% if enabled and day_enabled %}
+                {% set matched = sched_num %}
+              {% endif %}
+            {% endif %}
+          {% endfor %}
+          {% if matched > 0 %}
+            {{ states('input_number.ev9_schedule_' ~ matched ~ '_temperature') | float(global_temp) }}
+          {% else %}
+            {{ global_temp }}
+          {% endif %}
+        temp_diff: "{{ (target_temp | float - current_temp | float) | abs }}"
+        # Smart mode is always on - uses configurable rate
+        extra_time: "{{ [[((target_temp | float - current_temp | float) | abs * smart_rate) | round(0) | int, 20] | min, 0] | max }}"
+        actual_lead: "{{ base_lead | int + extra_time | int }}"
+        climate_mode: >
+          {% if current_temp | float > target_temp | float %}
+            cooling
+          {% else %}
+            heating
+          {% endif %}
+    - service: kia_uvo.start_climate
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+        climate: true
+        temperature: "{{ target_temp | int }}"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_precondition_result
+      data:
+        value: "{{ now().strftime('%H:%M') }} - SUCCESS: Schedule {{ matched_schedule }}, {{ target_temp }}°F, {{ climate_mode }}"
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - PRECONDITION: Schedule {{ matched_schedule }} triggered - Target {{ target_temp }}°F ({{ climate_mode }}), lead time {{ actual_lead }}min"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Pre-conditioning Started"
+        message: >
+          Schedule {{ matched_schedule }} triggered.
+          Smart mode: Started {{ actual_lead }} min early (base: {{ base_lead }} + {{ extra_time }} min for {{ temp_diff | round(0) }}°F diff @ {{ smart_rate }} min/°F)
+          Outside: {{ current_temp }}°F -> Target: {{ target_temp }}°F ({{ climate_mode }})
+          Departure in {{ actual_lead }} minutes.
+  mode: single
+
+# ============================================================
+# DATA REFRESH
+# ============================================================
+
+- id: ev9_force_update_on_plug
+  alias: "EV9: Force Update When Plugged In"
+  description: "Refresh data when charging cable is connected"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      to: "on"
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - PLUG_DETECTED: Forcing data refresh"
+    - delay:
+        seconds: 30
+    - service: kia_uvo.force_update
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+  mode: single
+
+- id: ev9_force_update_from_notification
+  alias: "EV9: Force Update from Notification"
+  description: "Handle force update action from notification"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: EV9_FORCE_UPDATE
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - FORCE_UPDATE: User initiated from notification"
+    - service: kia_uvo.force_update
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Status Refreshing"
+        message: "Requested fresh data from vehicle. Check back in 1-2 minutes."
+  mode: single
+
+# ============================================================
+# THEFT/MOVEMENT ALERT (v2.2 - AUT-05)
+# Detects potential theft when vehicle moves while you're away
+# ============================================================
+
+- id: ev9_update_last_location
+  alias: "EV9: Update Last Known Location"
+  description: "Store vehicle location when engine turns off (parked)"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_engine
+      from: "on"
+      to: "off"
+  action:
+    - variables:
+        lat: "{{ state_attr('device_tracker.ev9_location', 'latitude') }}"
+        lon: "{{ state_attr('device_tracker.ev9_location', 'longitude') }}"
+    - condition: template
+      value_template: "{{ lat is not none and lon is not none }}"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_known_location
+      data:
+        value: "{{ lat }},{{ lon }}"
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - PARKED: Location saved ({{ lat | round(4) }}, {{ lon | round(4) }})"
+  mode: single
+
+- id: ev9_theft_alert
+  alias: "EV9: Theft/Movement Alert"
+  description: "Alert if vehicle moves while you're away (AUT-05)"
+  trigger:
+    - platform: state
+      entity_id: device_tracker.ev9_location
+  condition:
+    # Feature must be enabled
+    - condition: state
+      entity_id: input_boolean.ev9_theft_alert_enabled
+      state: "on"
+    # Vehicle must have moved more than threshold from parked location
+    - condition: numeric_state
+      entity_id: sensor.ev9_movement_distance
+      above: input_number.ev9_theft_distance_threshold
+    # Phone must be far from vehicle (you're not driving it)
+    - condition: numeric_state
+      entity_id: sensor.ev9_phone_distance
+      above: input_number.ev9_theft_phone_distance_threshold
+    # 15-minute cooldown to prevent spam
+    - condition: template
+      value_template: >
+        {% set last_alert = states('input_text.ev9_last_theft_alert') %}
+        {% if last_alert in ['unknown', 'unavailable', ''] %}
+          true
+        {% else %}
+          {% set last_time = as_timestamp(strptime(last_alert, '%Y-%m-%d %H:%M:%S')) | default(0) %}
+          {{ (as_timestamp(now()) - last_time) > 900 }}
+        {% endif %}
+  action:
+    - variables:
+        movement_dist: "{{ states('sensor.ev9_movement_distance') | int(0) }}"
+        phone_dist: "{{ states('sensor.ev9_phone_distance') | int(0) }}"
+        curr_lat: "{{ state_attr('device_tracker.ev9_location', 'latitude') }}"
+        curr_lon: "{{ state_attr('device_tracker.ev9_location', 'longitude') }}"
+    # Update last alert timestamp
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_theft_alert
+      data:
+        value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    # Update last known location to current (in case it's you driving)
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_known_location
+      data:
+        value: "{{ curr_lat }},{{ curr_lon }}"
+    # Store result
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_theft_result
+      data:
+        value: "{{ now().strftime('%H:%M') }} - ALERT: Moved {{ movement_dist }}m while phone {{ phone_dist }}m away"
+    # Log event
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - THEFT_ALERT: Vehicle moved {{ movement_dist }}m while phone {{ phone_dist }}m away"
+    # Send CRITICAL notification with location and lock button
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 MOVEMENT DETECTED"
+        message: >
+          Your EV9 has moved {{ movement_dist }}m from its parked location!
+          Your phone is {{ phone_dist }}m away from the vehicle.
+
+          Location: {{ curr_lat | round(4) }}, {{ curr_lon | round(4) }}
+
+          If this wasn't you, lock the vehicle immediately!
+        data:
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1.0
+            interruption-level: critical
+          actions:
+            - action: EV9_LOCK_NOW
+              title: "Lock Vehicle"
+              destructive: false
+            - action: EV9_FORCE_UPDATE
+              title: "Refresh Status"
+          url: "https://www.google.com/maps?q={{ curr_lat }},{{ curr_lon }}"
+  mode: single
+
+- id: ev9_lock_from_theft_notification
+  alias: "EV9: Lock from Theft Alert"
+  description: "Lock vehicle when theft alert notification action is tapped"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: EV9_LOCK_NOW
+  action:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - EMERGENCY_LOCK: User initiated from theft alert"
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Emergency Locked"
+        message: "Your EV9 has been locked via theft alert action."
+        data:
+          push:
+            sound: default
+            interruption-level: time-sensitive
+  mode: single
+
+# ============================================================
+# NOTE: Charging current control removed in v2.0
+# Per CTL-09: Charging current is read-only unless Kia API
+# explicitly supports safe remote modification
+# ============================================================
+
+# ============================================================
+# CONNECTION WATCHDOG WITH EMAIL OTP (v2.4)
+# Full self-healing: detects unavailable, requests OTP via email,
+# monitors inbox, extracts OTP, completes config flow automatically
+# ============================================================
+
+- id: ev9_connection_watchdog
+  alias: "EV9: Connection Watchdog"
+  description: "Auto-recover kia_uvo integration with email OTP"
+  trigger:
+    # Trigger 1: Sensor becomes unavailable for 2 hours
+    - platform: state
+      entity_id: sensor.ev9_ev_battery_level
+      to: "unavailable"
+      for:
+        hours: 2
+      id: unavailable_trigger
+    # Trigger 2: Periodic check every 8 hours for missing integration
+    - platform: time_pattern
+      hours: "/8"
+      id: periodic_trigger
+  condition:
+    # Feature must be enabled
+    - condition: state
+      entity_id: input_boolean.ev9_connection_watchdog_enabled
+      state: "on"
+    # Must not already be in recovery state
+    - condition: template
+      value_template: "{{ states('input_text.ev9_recovery_state') in ['idle', 'unknown', 'unavailable', ''] }}"
+    # For periodic trigger: only proceed if sensor doesn't exist or is unavailable
+    - condition: or
+      conditions:
+        - condition: trigger
+          id: unavailable_trigger
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: periodic_trigger
+            - condition: template
+              value_template: "{{ states('sensor.ev9_ev_battery_level') in ['unknown', 'unavailable'] or state_attr('sensor.ev9_ev_battery_level', 'friendly_name') is none }}"
+    # 8-hour cooldown between recovery attempts
+    - condition: template
+      value_template: >
+        {% set last_attempt = states('input_text.ev9_last_recovery_attempt') %}
+        {% if last_attempt in ['unknown', 'unavailable', ''] %}
+          true
+        {% else %}
+          {% set last_time = as_timestamp(strptime(last_attempt, '%Y-%m-%d %H:%M:%S')) | default(0) %}
+          {{ (as_timestamp(now()) - last_time) > 28800 }}
+        {% endif %}
+  action:
+    # Set state to starting
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_recovery_state
+      data:
+        value: "starting"
+    # Update last attempt timestamp
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_recovery_attempt
+      data:
+        value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    # Log start
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_START: Beginning auto-recovery with OTP"
+    # Notify user
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Recovery Started"
+        message: "Kia integration unavailable. Starting auto-recovery with email OTP..."
+    # Run recovery script (deletes old, starts flow, requests OTP)
+    - service: shell_command.ev9_recovery_start
+      data:
+        token: "{{ state_attr('sensor.ev9_data', 'access_token') | default(states('input_text.ha_long_lived_token')) }}"
+      response_variable: recovery_result
+    # Check if script succeeded and returned flow_id
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ recovery_result.returncode == 0 }}"
+          sequence:
+            # Store flow_id
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_recovery_flow_id
+              data:
+                value: "{{ recovery_result.stdout | trim }}"
+            # Set state to awaiting_otp
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_recovery_state
+              data:
+                value: "awaiting_otp"
+            # Record OTP request time
+            - service: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.ev9_otp_requested_at
+              data:
+                datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+            # Log
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_OTP_REQUESTED: Waiting for email (flow: {{ recovery_result.stdout | trim }})"
+      default:
+        # Script failed
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_recovery_state
+          data:
+            value: "failed"
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_last_recovery_result
+          data:
+            value: "{{ now().strftime('%H:%M') }} - FAILED: Recovery script error"
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_FAILED: Recovery script error"
+        - service: notify.mobile_app_andre_iphone
+          data:
+            title: "EV9 Recovery FAILED"
+            message: "Recovery script failed. Manual intervention required."
+            data:
+              push:
+                interruption-level: critical
+  mode: single
+
+# ============================================================
+# OTP EMAIL RECEIVED (v2.4)
+# Triggers when IMAP detects new Kia email, extracts OTP, completes flow
+# ============================================================
+
+- id: ev9_otp_received
+  alias: "EV9: OTP Email Received"
+  description: "Extract OTP from Kia email and complete config flow"
+  trigger:
+    - platform: event
+      event_type: imap_content
+      event_data:
+        sender: "no-reply@notification.kiausa.com"
+  condition:
+    # Must be awaiting OTP
+    - condition: template
+      value_template: "{{ states('input_text.ev9_recovery_state') == 'awaiting_otp' }}"
+    # Must have a flow_id
+    - condition: template
+      value_template: "{{ states('input_text.ev9_recovery_flow_id') not in ['', 'unknown', 'unavailable'] }}"
+  action:
+    # Extract OTP from email body
+    - variables:
+        email_text: "{{ trigger.event.data.text }}"
+        otp_match: "{{ email_text | regex_findall('Verification code is:\\s*(\\d{6})') }}"
+        otp_code: "{{ otp_match[0] if otp_match else '' }}"
+        flow_id: "{{ states('input_text.ev9_recovery_flow_id') }}"
+    # Check if we got an OTP
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ otp_code | length == 6 }}"
+          sequence:
+            # Set state to completing
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_recovery_state
+              data:
+                value: "completing"
+            # Log OTP received
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_OTP_RECEIVED: Got code {{ otp_code }}"
+            # Submit OTP via shell command
+            - service: shell_command.ev9_submit_otp
+              data:
+                token: "{{ state_attr('sensor.ev9_data', 'access_token') | default(states('input_text.ha_long_lived_token')) }}"
+                flow_id: "{{ flow_id }}"
+                otp: "{{ otp_code }}"
+              response_variable: submit_result
+            # Wait for integration to initialize
+            - delay:
+                minutes: 2
+            # Check if sensor is now available
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ states('sensor.ev9_ev_battery_level') not in ['unavailable', 'unknown'] }}"
+                  sequence:
+                    # SUCCESS!
+                    - service: input_text.set_value
+                      target:
+                        entity_id: input_text.ev9_recovery_state
+                      data:
+                        value: "idle"
+                    - service: input_text.set_value
+                      target:
+                        entity_id: input_text.ev9_recovery_flow_id
+                      data:
+                        value: ""
+                    - service: input_text.set_value
+                      target:
+                        entity_id: input_text.ev9_last_recovery_result
+                      data:
+                        value: "{{ now().strftime('%H:%M') }} - SUCCESS: Auto-recovered with OTP"
+                    - service: python_script.shift_event_log
+                      data:
+                        entity_prefix: input_text.ev9_event
+                        max_events: 10
+                        new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_SUCCESS: Integration restored! Battery {{ states('sensor.ev9_ev_battery_level') }}%"
+                    - service: notify.mobile_app_andre_iphone
+                      data:
+                        title: "EV9 Connection Restored!"
+                        message: >
+                          Auto-recovery completed successfully!
+                          Battery: {{ states('sensor.ev9_ev_battery_level') }}%
+              default:
+                # OTP submitted but integration still not working
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.ev9_recovery_state
+                  data:
+                    value: "failed"
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.ev9_last_recovery_result
+                  data:
+                    value: "{{ now().strftime('%H:%M') }} - FAILED: OTP submitted but integration not working"
+                - service: python_script.shift_event_log
+                  data:
+                    entity_prefix: input_text.ev9_event
+                    max_events: 10
+                    new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_FAILED: OTP submitted but sensor still unavailable"
+                - service: notify.mobile_app_andre_iphone
+                  data:
+                    title: "EV9 Recovery Partial Failure"
+                    message: "OTP was submitted but integration didn't initialize. Manual check needed."
+                    data:
+                      push:
+                        interruption-level: time-sensitive
+      default:
+        # Couldn't extract OTP from email
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_ERROR: Could not extract OTP from email"
+  mode: single
+
+# ============================================================
+# OTP TIMEOUT (v2.4)
+# If OTP email doesn't arrive within 5 minutes, reset and notify
+# ============================================================
+
+- id: ev9_otp_timeout
+  alias: "EV9: OTP Timeout"
+  description: "Handle timeout if OTP email doesn't arrive"
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  condition:
+    # Must be awaiting OTP
+    - condition: template
+      value_template: "{{ states('input_text.ev9_recovery_state') == 'awaiting_otp' }}"
+    # Must be more than 5 minutes since OTP was requested
+    - condition: template
+      value_template: >
+        {% set requested = states('input_datetime.ev9_otp_requested_at') %}
+        {% if requested in ['unknown', 'unavailable', ''] %}
+          false
+        {% else %}
+          {% set req_time = as_timestamp(requested) %}
+          {{ (as_timestamp(now()) - req_time) > 300 }}
+        {% endif %}
+  action:
+    # Reset state
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_recovery_state
+      data:
+        value: "failed"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_recovery_flow_id
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_recovery_result
+      data:
+        value: "{{ now().strftime('%H:%M') }} - TIMEOUT: OTP email not received in 5 min"
+    # Log
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_TIMEOUT: No OTP email received within 5 minutes"
+    # Notify
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Recovery Timeout"
+        message: >
+          OTP email was not received within 5 minutes.
+          Recovery failed. Manual intervention may be needed.
+
+          Check spam folder or try again later.
+        data:
+          push:
+            interruption-level: time-sensitive
+  mode: single

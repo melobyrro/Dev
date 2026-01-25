@@ -1,0 +1,55 @@
+# Simplified Patio AC template for Google Assistant
+- climate:
+    - name: "Patio AC"
+      unique_id: patio_ac_simple_google
+      
+      modes:
+        - "off"
+        - "cool"
+      
+      current_temperature_template: >-
+        {{ state_attr('climate.150633095083490_climate', 'current_temperature') | float }}
+      
+      temperature_template: >-
+        {{ state_attr('climate.150633095083490_climate', 'temperature') | float }}
+      
+      hvac_mode_template: >-
+        {% set mode = states('climate.150633095083490_climate') %}
+        {% if mode in ['cool', 'dry'] %}cool
+        {% elif mode == 'off' %}off
+        {% else %}cool
+        {% endif %}
+      
+      min_temp: 61
+      max_temp: 86
+      temp_step: 1
+      
+      turn_off:
+        service: climate.turn_off
+        data:
+          entity_id: climate.150633095083490_climate
+      
+      turn_on:
+        service: climate.set_hvac_mode
+        data:
+          entity_id: climate.150633095083490_climate
+          hvac_mode: cool
+      
+      set_temperature:
+        - service: climate.set_hvac_mode
+          data:
+            entity_id: climate.150633095083490_climate
+            hvac_mode: cool
+        - service: climate.set_temperature
+          data:
+            entity_id: climate.150633095083490_climate
+            temperature: "{{ temperature }}"
+      
+      set_hvac_mode:
+        service: climate.set_hvac_mode
+        data:
+          entity_id: climate.150633095083490_climate
+          hvac_mode: >-
+            {% if hvac_mode == 'cool' %}cool
+            {% else %}off
+            {% endif %}

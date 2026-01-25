@@ -1,0 +1,298 @@
+# Jose (Ecovacs) Integration Auto-Recovery Package
+# Monitors vacuum connectivity and automatically reconnects when needed
+# Location: packages/ecovacs_recovery_package.yaml
+# Version: 1.1
+# Updated: 2026-01-24
+#
+# Tiered Recovery Approach:
+#   1. First attempt: Reload config entry (gentle - fixes temporary issues)
+#   2. Second attempt: Delete and recreate integration (aggressive - fixes auth issues)
+#
+# Recovery State Machine: idle → recovering → (idle|failed)
+# Event Log Prefix: WATCHDOG_ (standard across all self-healing integrations)
+
+# Shell commands for integration management
+shell_command:
+  # Delete the ecovacs config entry
+  ecovacs_delete_integration: >
+    curl -s -X DELETE
+    "http://localhost:8123/api/config/config_entries/entry/{{ states('input_text.ecovacs_entry_id') }}"
+    -H "Authorization: Bearer {{ states('input_text.ha_api_token') }}"
+    -H "Content-Type: application/json"
+
+  # Create new ecovacs config flow and complete it
+  ecovacs_create_integration: >
+    /config/scripts/ecovacs_recovery.sh
+
+# Input helpers for tracking
+input_text:
+  ecovacs_entry_id:
+    name: "Ecovacs Entry ID"
+    initial: "01KFHF6055M2FBH4N0ZJWC27TQ"
+    max: 64
+  ha_api_token:
+    name: "HA API Token"
+    max: 255
+    mode: password
+  jose_recovery_state:
+    name: "Jose Recovery State"
+    max: 32
+    icon: mdi:state-machine
+    initial: "idle"
+    # Values: idle, recovering, failed
+  jose_last_recovery_result:
+    name: "Jose Last Recovery Result"
+    max: 255
+    icon: mdi:history
+
+input_boolean:
+  ecovacs_recovery_enabled:
+    name: "Jose Watchdog Enabled"
+    icon: mdi:refresh-auto
+
+input_number:
+  ecovacs_recovery_attempts:
+    name: "Jose Recovery Attempts"
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    icon: mdi:counter
+
+input_datetime:
+  ecovacs_last_recovery:
+    name: "Jose Last Recovery Attempt"
+    has_date: true
+    has_time: true
+
+# Automation to detect and recover from connection loss
+automation:
+  - alias: "Jose: Connection Watchdog"
+    id: jose_connection_watchdog
+    description: >
+      Monitors Jose vacuum connectivity. Tier 1: Reload after 10 min offline.
+      Tier 2: Full recreation after 1 hour if reload failed.
+      Uses WATCHDOG_ event prefix for consistent logging.
+    mode: single
+    trigger:
+      # Check every 5 minutes
+      - platform: time_pattern
+        minutes: "/5"
+    condition:
+      # Only if auto-recovery is enabled
+      - condition: state
+        entity_id: input_boolean.ecovacs_recovery_enabled
+        state: "on"
+      # Only if vacuum has been unknown/unavailable for more than 10 minutes
+      - condition: template
+        value_template: >
+          {{ states('sensor.jose_battery') in ['unknown', 'unavailable'] and
+             (now() - states.sensor.jose_battery.last_changed).total_seconds() > 600 }}
+      # Don't attempt recovery more than once per hour
+      - condition: template
+        value_template: >
+          {% set last = states('input_datetime.ecovacs_last_recovery') %}
+          {% if last in ['unknown', 'unavailable', ''] %}
+            true
+          {% else %}
+            {{ (now() - last | as_datetime).total_seconds() > 3600 }}
+          {% endif %}
+    action:
+      # Update tracking
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ecovacs_last_recovery
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+      # Increment attempt counter
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ecovacs_recovery_attempts
+        data:
+          value: "{{ (states('input_number.ecovacs_recovery_attempts') | int) + 1 }}"
+
+      # Set state to recovering
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_recovery_state
+        data:
+          value: "recovering"
+
+      # Determine which tier to use based on attempt count
+      - choose:
+          # TIER 1: First attempt - try gentle reload
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.ecovacs_recovery_attempts') | int == 1 }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: input_text.jose_last_recovery_result
+                data:
+                  value: "{{ now().strftime('%H:%M') }} - WATCHDOG_RELOAD: Attempting reload..."
+              - service: notify.mobile_app_andre_iphone
+                data:
+                  title: "Jose Vacuum"
+                  message: "WATCHDOG_START: Connection lost. Trying reload..."
+
+              - service: homeassistant.reload_config_entry
+                data:
+                  entry_id: "{{ states('input_text.ecovacs_entry_id') }}"
+
+              - delay:
+                  seconds: 30
+
+              # Check if reload worked
+              - if:
+                  - condition: template
+                    value_template: "{{ states('sensor.jose_battery') not in ['unknown', 'unavailable'] }}"
+                then:
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.jose_recovery_state
+                    data:
+                      value: "idle"
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.jose_last_recovery_result
+                    data:
+                      value: "{{ now().strftime('%H:%M') }} - WATCHDOG_SUCCESS: Restored via reload"
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "WATCHDOG_SUCCESS: Connection restored via reload!"
+                  - service: input_number.set_value
+                    target:
+                      entity_id: input_number.ecovacs_recovery_attempts
+                    data:
+                      value: 0
+                else:
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.jose_last_recovery_result
+                    data:
+                      value: "{{ now().strftime('%H:%M') }} - WATCHDOG_RELOAD_FAILED: Will retry with recreate"
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "Reload didn't work. Will try full recreation in 1 hour."
+
+          # TIER 2: Second attempt - delete and recreate
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.ecovacs_recovery_attempts') | int == 2 }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: input_text.jose_last_recovery_result
+                data:
+                  value: "{{ now().strftime('%H:%M') }} - WATCHDOG_RECREATE: Full recreation starting..."
+              - service: notify.mobile_app_andre_iphone
+                data:
+                  title: "Jose Vacuum"
+                  message: "WATCHDOG_RECREATE: Reload failed. Trying full recreation..."
+
+              # Delete integration
+              - service: shell_command.ecovacs_delete_integration
+              - delay:
+                  seconds: 5
+
+              # Recreate integration
+              - service: shell_command.ecovacs_create_integration
+              - delay:
+                  seconds: 30
+
+              # Check if recreation worked
+              - if:
+                  - condition: template
+                    value_template: "{{ states('sensor.jose_battery') not in ['unknown', 'unavailable'] }}"
+                then:
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.jose_recovery_state
+                    data:
+                      value: "idle"
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.jose_last_recovery_result
+                    data:
+                      value: "{{ now().strftime('%H:%M') }} - WATCHDOG_SUCCESS: Restored via recreation"
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "WATCHDOG_SUCCESS: Connection restored via recreation!"
+                  - service: input_number.set_value
+                    target:
+                      entity_id: input_number.ecovacs_recovery_attempts
+                    data:
+                      value: 0
+                else:
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.jose_recovery_state
+                    data:
+                      value: "failed"
+                  - service: input_text.set_value
+                    target:
+                      entity_id: input_text.jose_last_recovery_result
+                    data:
+                      value: "{{ now().strftime('%H:%M') }} - WATCHDOG_FAILED: Recreation unsuccessful"
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "WATCHDOG_FAILED: Full recreation failed. Ecovacs cloud issue. Will retry in 1 hour."
+
+        # TIER 3+: Repeated failures - just notify, don't spam recreations
+        default:
+          - service: input_text.set_value
+            target:
+              entity_id: input_text.jose_last_recovery_result
+            data:
+              value: "{{ now().strftime('%H:%M') }} - WATCHDOG_RETRY: Attempt {{ states('input_number.ecovacs_recovery_attempts') }}"
+          - service: notify.mobile_app_andre_iphone
+            data:
+              title: "Jose Vacuum"
+              message: "Still offline (attempt {{ states('input_number.ecovacs_recovery_attempts') }}). Ecovacs cloud may be down. Check native app."
+
+  # Reset attempt counter when vacuum comes back online
+  - alias: "Jose: Reset Recovery Counter"
+    id: jose_reset_recovery_counter
+    description: "Resets recovery attempt counter when Jose comes back online"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.jose_battery
+        from:
+          - "unknown"
+          - "unavailable"
+    condition:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ecovacs_recovery_attempts
+        data:
+          value: 0
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_recovery_state
+        data:
+          value: "idle"
+
+  - alias: "Jose: Update Entry ID on Startup"
+    id: jose_update_entry_id
+    description: "Updates the stored Ecovacs entry ID on HA startup for recovery scripts"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay:
+          seconds: 60
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ecovacs_entry_id
+        data:
+          value: "{{ device_attr('vacuum.jose', 'config_entry_id') or states('input_text.ecovacs_entry_id') }}"

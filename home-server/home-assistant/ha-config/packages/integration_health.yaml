@@ -1,0 +1,250 @@
+# Integration Health Monitoring Package
+# Provides centralized health monitoring for all cloud integrations
+# Location: packages/integration_health.yaml
+# Version: 1.0
+# Created: 2026-01-24
+
+# ============================================================
+# TEMPLATE SENSORS
+# ============================================================
+
+template:
+  - sensor:
+      # Summary sensor showing overall health
+      - name: "Integration Health Summary"
+        unique_id: integration_health_summary
+        icon: mdi:heart-pulse
+        state: >
+          {% set integrations = [
+            states('sensor.ev9_ev_battery_level'),
+            states('sensor.jose_battery'),
+            states('climate.daikin'),
+            states('climate.patio_ac')
+          ] %}
+          {% set offline = integrations | select('in', ['unavailable', 'unknown']) | list | count %}
+          {% if offline == 0 %}
+            healthy
+          {% elif offline == 1 %}
+            1 offline
+          {% else %}
+            {{ offline }} offline
+          {% endif %}
+        attributes:
+          integrations: >
+            {% set data = namespace(items=[]) %}
+            {# EV9 #}
+            {% set entity = 'sensor.ev9_ev_battery_level' %}
+            {% set state = states(entity) %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {% set data.items = data.items + [{
+              'name': 'Kia EV9',
+              'entity': entity,
+              'status': 'offline' if state in ['unavailable', 'unknown'] else ('stale' if age_min > 60 else 'online'),
+              'last_updated': age_min ~ ' min ago',
+              'recovery': 'Auto (OTP)',
+              'watchdog': 'input_boolean.ev9_connection_watchdog_enabled'
+            }] %}
+            {# Jose #}
+            {% set entity = 'sensor.jose_battery' %}
+            {% set state = states(entity) %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {% set data.items = data.items + [{
+              'name': 'Jose (Vacuum)',
+              'entity': entity,
+              'status': 'offline' if state in ['unavailable', 'unknown'] else ('stale' if age_min > 60 else 'online'),
+              'last_updated': age_min ~ ' min ago',
+              'recovery': 'Auto',
+              'watchdog': 'input_boolean.ecovacs_recovery_enabled'
+            }] %}
+            {# Daikin #}
+            {% set entity = 'climate.daikin' %}
+            {% set state = states(entity) %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {% set data.items = data.items + [{
+              'name': 'Daikin',
+              'entity': entity,
+              'status': 'offline' if state in ['unavailable', 'unknown'] else ('stale' if age_min > 60 else 'online'),
+              'last_updated': age_min ~ ' min ago',
+              'recovery': 'Manual',
+              'watchdog': none
+            }] %}
+            {# Patio AC (Midea) #}
+            {% set entity = 'climate.patio_ac' %}
+            {% set state = states(entity) %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {% set data.items = data.items + [{
+              'name': 'Patio AC',
+              'entity': entity,
+              'status': 'offline' if state in ['unavailable', 'unknown'] else ('stale' if age_min > 60 else 'online'),
+              'last_updated': age_min ~ ' min ago',
+              'recovery': 'Manual',
+              'watchdog': none
+            }] %}
+            {{ data.items | to_json }}
+          offline_count: >
+            {% set integrations = [
+              states('sensor.ev9_ev_battery_level'),
+              states('sensor.jose_battery'),
+              states('climate.daikin'),
+              states('climate.patio_ac')
+            ] %}
+            {{ integrations | select('in', ['unavailable', 'unknown']) | list | count }}
+          stale_count: >
+            {% set count = namespace(val=0) %}
+            {% for entity in ['sensor.ev9_ev_battery_level', 'sensor.jose_battery', 'climate.daikin', 'climate.patio_ac'] %}
+              {% set state = states(entity) %}
+              {% if state not in ['unavailable', 'unknown'] %}
+                {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+                {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+                {% if age_min > 60 %}
+                  {% set count.val = count.val + 1 %}
+                {% endif %}
+              {% endif %}
+            {% endfor %}
+            {{ count.val }}
+
+      # Individual integration status sensors for dashboard chips
+      - name: "EV9 Integration Status"
+        unique_id: ev9_integration_status
+        icon: mdi:car-electric
+        state: >
+          {% set entity = 'sensor.ev9_ev_battery_level' %}
+          {% set state = states(entity) %}
+          {% if state in ['unavailable', 'unknown'] %}
+            offline
+          {% else %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {{ 'stale' if age_min > 60 else 'online' }}
+          {% endif %}
+
+      - name: "Jose Integration Status"
+        unique_id: jose_integration_status
+        icon: mdi:robot-vacuum
+        state: >
+          {% set entity = 'sensor.jose_battery' %}
+          {% set state = states(entity) %}
+          {% if state in ['unavailable', 'unknown'] %}
+            offline
+          {% else %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {{ 'stale' if age_min > 60 else 'online' }}
+          {% endif %}
+
+      - name: "Daikin Integration Status"
+        unique_id: daikin_integration_status
+        icon: mdi:air-conditioner
+        state: >
+          {% set entity = 'climate.daikin' %}
+          {% set state = states(entity) %}
+          {% if state in ['unavailable', 'unknown'] %}
+            offline
+          {% else %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {{ 'stale' if age_min > 60 else 'online' }}
+          {% endif %}
+
+      - name: "Patio AC Integration Status"
+        unique_id: patio_ac_integration_status
+        icon: mdi:hvac
+        state: >
+          {% set entity = 'climate.patio_ac' %}
+          {% set state = states(entity) %}
+          {% if state in ['unavailable', 'unknown'] %}
+            offline
+          {% else %}
+            {% set last_changed = states[entity].last_changed if states[entity] else now() %}
+            {% set age_min = ((now() - last_changed).total_seconds() / 60) | int %}
+            {{ 'stale' if age_min > 60 else 'online' }}
+          {% endif %}
+
+# ============================================================
+# AUTOMATIONS
+# ============================================================
+
+automation:
+  # Alert when any integration goes offline for more than 30 minutes
+  - alias: "Integration Health - Offline Alert"
+    id: integration_health_offline_alert
+    description: "Notify when any monitored integration goes offline for more than 30 minutes"
+    mode: single
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.ev9_integration_status
+          - sensor.jose_integration_status
+          - sensor.daikin_integration_status
+          - sensor.patio_ac_integration_status
+        to: "offline"
+        for:
+          minutes: 30
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Integration Offline"
+          message: >
+            {{ trigger.to_state.attributes.friendly_name | replace(' Integration Status', '') }}
+            has been offline for 30+ minutes.
+            {% if 'ev9' in trigger.entity_id or 'jose' in trigger.entity_id %}
+            Auto-recovery will attempt if enabled.
+            {% else %}
+            Manual intervention may be needed.
+            {% endif %}
+          data:
+            push:
+              interruption-level: time-sensitive
+            url: /config/integrations
+
+  # Alert when integration comes back online
+  - alias: "Integration Health - Recovery Alert"
+    id: integration_health_recovery_alert
+    description: "Notify when an offline integration recovers"
+    mode: parallel
+    trigger:
+      - platform: state
+        entity_id:
+          - sensor.ev9_integration_status
+          - sensor.jose_integration_status
+          - sensor.daikin_integration_status
+          - sensor.patio_ac_integration_status
+        from: "offline"
+        to: "online"
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Integration Recovered"
+          message: >
+            {{ trigger.to_state.attributes.friendly_name | replace(' Integration Status', '') }}
+            is back online.
+
+  # Daily health summary (optional - runs at 8 AM)
+  - alias: "Integration Health - Daily Summary"
+    id: integration_health_daily_summary
+    description: "Send daily summary of integration health at 8 AM"
+    mode: single
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    condition:
+      # Only send if there are issues
+      - condition: template
+        value_template: >
+          {{ state_attr('sensor.integration_health_summary', 'offline_count') | int > 0 or
+             state_attr('sensor.integration_health_summary', 'stale_count') | int > 0 }}
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Daily Integration Health"
+          message: >
+            {% set offline = state_attr('sensor.integration_health_summary', 'offline_count') | int %}
+            {% set stale = state_attr('sensor.integration_health_summary', 'stale_count') | int %}
+            {% if offline > 0 %}{{ offline }} integration(s) offline. {% endif %}
+            {% if stale > 0 %}{{ stale }} integration(s) stale (>1hr old data).{% endif %}
+          data:
+            url: /lovelace/system-health

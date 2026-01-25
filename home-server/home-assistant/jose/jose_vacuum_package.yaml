@@ -1,0 +1,68 @@
+# Package file for Jose Vacuum Dashboard Backend
+# Contains the automation for error logging.
+# NOTE: The input_text helpers (jose_error_log_1 through jose_error_log_10)
+# are defined in configuration.yaml - do not duplicate here.
+
+automation:
+  - alias: Jose Vacuum Log Error Messages
+    id: jose_vacuum_log_error_messages
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.jose_error
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.state not in ['none', 'unknown', 'unavailable', ''] and
+             trigger.to_state.state != trigger.from_state.state }}
+    action:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_10
+        data:
+          value: "{{ states('input_text.jose_error_log_9') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_9
+        data:
+          value: "{{ states('input_text.jose_error_log_8') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_8
+        data:
+          value: "{{ states('input_text.jose_error_log_7') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_7
+        data:
+          value: "{{ states('input_text.jose_error_log_6') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_6
+        data:
+          value: "{{ states('input_text.jose_error_log_5') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_5
+        data:
+          value: "{{ states('input_text.jose_error_log_4') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_4
+        data:
+          value: "{{ states('input_text.jose_error_log_3') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_3
+        data:
+          value: "{{ states('input_text.jose_error_log_2') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_2
+        data:
+          value: "{{ states('input_text.jose_error_log_1') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.jose_error_log_1
+        data:
+          value: "{{ now().strftime('%Y-%m-%d %H:%M') }}: {{ trigger.to_state.state | truncate(235, true, '...') }}"

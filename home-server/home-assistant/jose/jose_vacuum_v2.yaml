@@ -1,0 +1,234 @@
+views:
+  - title: Jose
+    path: jose
+    icon: mdi:robot-vacuum
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:layout-card
+            layout_type: custom:grid-layout
+            layout:
+              grid-template-columns: 1fr 1fr
+              grid-gap: 16px
+              mediaquery:
+                '(max-width: 800px)':
+                  grid-template-columns: 1fr
+            cards:
+              # Left Column - Controls & Status
+              - type: vertical-stack
+                cards:
+                  # Main Vacuum Control
+                  - type: tile
+                    entity: vacuum.jose
+                    name: Jose
+                    icon: mdi:robot-vacuum
+                    features:
+                      - type: vacuum-commands
+                        commands:
+                          - start_pause
+                          - stop
+                          - return_home
+                          - locate
+
+                  # Status Row
+                  - type: grid
+                    columns: 4
+                    square: false
+                    cards:
+                      - type: tile
+                        entity: sensor.jose_battery
+                        name: Battery
+                        color: primary
+                      - type: tile
+                        entity: sensor.jose_station_state
+                        name: Station
+                        color: cyan
+                      - type: tile
+                        entity: binary_sensor.jose_mop_attached
+                        name: Mop
+                        color: blue
+                      - type: tile
+                        entity: sensor.jose_error
+                        name: Error
+                        color: red
+
+                  # Last Error Alert (Sticky)
+                  - type: markdown
+                    title: Last Error
+                    content: >
+                      **{{ states('input_text.jose_error_log_1') }}**
+
+
+                      {% if states('sensor.jose_error') not in ['none', 'unknown', ''] %}
+
+                      Current: {{ states('sensor.jose_error') }}
+
+                      {% endif %}
+
+                  # Last Cleaning Session
+                  - type: entities
+                    title: Last Cleaning Session
+                    entities:
+                      - entity: sensor.jose_area_cleaned
+                        name: Area Cleaned
+                        icon: mdi:texture-box
+                      - entity: sensor.jose_cleaning_duration
+                        name: Duration
+                        icon: mdi:timer-outline
+                      - entity: event.jose_last_job
+                        name: Last Job Result
+                        icon: mdi:check-circle-outline
+
+                  # Quick Actions
+                  - type: grid
+                    columns: 2
+                    square: false
+                    cards:
+                      - type: tile
+                        entity: button.jose_empty_dustbin
+                        name: Empty Dustbin
+                        icon: mdi:delete-empty
+                        tap_action:
+                          action: call-service
+                          service: button.press
+                          target:
+                            entity_id: button.jose_empty_dustbin
+                        color: orange
+                      - type: tile
+                        entity: button.jose_relocate
+                        name: Relocate
+                        icon: mdi:crosshairs-gps
+                        tap_action:
+                          action: call-service
+                          service: button.press
+                          target:
+                            entity_id: button.jose_relocate
+                        color: teal
+
+                  # Settings
+                  - type: grid
+                    columns: 3
+                    square: false
+                    cards:
+                      - type: tile
+                        entity: select.jose_auto_empty_frequency
+                        name: Auto Empty
+                        icon: mdi:autorenew
+                        features:
+                          - type: select-options
+                      - type: tile
+                        entity: select.jose_water_flow_level
+                        name: Water Flow
+                        icon: mdi:water
+                        features:
+                          - type: select-options
+                      - type: tile
+                        entity: select.jose_active_map
+                        name: Active Map
+                        icon: mdi:map
+                        features:
+                          - type: select-options
+
+              # Right Column - Stats, Maintenance & History
+              - type: vertical-stack
+                cards:
+                  # Map
+                  - type: picture-entity
+                    entity: image.jose_map
+                    name: Cleaning Map
+                    show_name: true
+                    show_state: false
+                    camera_view: auto
+
+                  # Lifetime Statistics
+                  - type: entities
+                    title: Lifetime Statistics
+                    entities:
+                      - entity: sensor.jose_total_cleanings
+                        name: Total Cleanings
+                        icon: mdi:counter
+                      - entity: sensor.jose_total_area_cleaned
+                        name: Total Area
+                        icon: mdi:texture-box
+                      - entity: sensor.jose_total_cleaning_duration
+                        name: Total Duration
+                        icon: mdi:clock-outline
+
+                  # Maintenance
+                  - type: horizontal-stack
+                    cards:
+                      - type: gauge
+                        entity: sensor.jose_filter_lifespan
+                        name: Filter
+                        min: 0
+                        max: 100
+                        severity:
+                          green: 50
+                          yellow: 25
+                          red: 0
+                      - type: gauge
+                        entity: sensor.jose_main_brush_lifespan
+                        name: Main Brush
+                        min: 0
+                        max: 100
+                        severity:
+                          green: 50
+                          yellow: 25
+                          red: 0
+                      - type: gauge
+                        entity: sensor.jose_side_brush_lifespan
+                        name: Side Brush
+                        min: 0
+                        max: 100
+                        severity:
+                          green: 50
+                          yellow: 25
+                          red: 0
+
+                  - type: horizontal-stack
+                    cards:
+                      - type: gauge
+                        entity: sensor.jose_hand_filter_lifespan
+                        name: Hand Filter
+                        min: 0
+                        max: 100
+                        severity:
+                          green: 50
+                          yellow: 25
+                          red: 0
+                      - type: gauge
+                        entity: sensor.jose_unit_care_lifespan
+                        name: Unit Care
+                        min: 0
+                        max: 100
+                        severity:
+                          green: 50
+                          yellow: 25
+                          red: 0
+
+                  # Error History
+                  - type: entities
+                    title: Error History (Recent)
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_text.jose_error_log_1
+                        name: "1"
+                      - entity: input_text.jose_error_log_2
+                        name: "2"
+                      - entity: input_text.jose_error_log_3
+                        name: "3"
+                      - entity: input_text.jose_error_log_4
+                        name: "4"
+                      - entity: input_text.jose_error_log_5
+                        name: "5"
+                      - entity: input_text.jose_error_log_6
+                        name: "6"
+                      - entity: input_text.jose_error_log_7
+                        name: "7"
+                      - entity: input_text.jose_error_log_8
+                        name: "8"
+                      - entity: input_text.jose_error_log_9
+                        name: "9"
+                      - entity: input_text.jose_error_log_10
+                        name: "10"

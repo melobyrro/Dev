@@ -1,0 +1,1072 @@
+{
+  "version": 1,
+  "minor_version": 1,
+  "key": "lovelace.homelab",
+  "data": {
+    "config": {
+      "title": "Homelab",
+      "views": [
+        {
+          "title": "Overview",
+          "path": "overview",
+          "icon": "mdi:home-analytics",
+          "cards": [
+            {
+              "type": "custom:stack-in-card",
+              "title": "System Status",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.proxmox_cpu_usage",
+                      "name": "Proxmox CPU",
+                      "min": 0,
+                      "max": 100,
+                      "severity": {
+                        "green": 0,
+                        "yellow": 60,
+                        "red": 80
+                      }
+                    },
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.vm_cpu_usage",
+                      "name": "VM CPU",
+                      "min": 0,
+                      "max": 100,
+                      "severity": {
+                        "green": 0,
+                        "yellow": 60,
+                        "red": 80
+                      }
+                    },
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.proxmox_memory_usage",
+                      "name": "PVE RAM",
+                      "min": 0,
+                      "max": 100,
+                      "severity": {
+                        "green": 0,
+                        "yellow": 70,
+                        "red": 85
+                      }
+                    },
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.vm_memory_usage",
+                      "name": "VM RAM",
+                      "min": 0,
+                      "max": 100,
+                      "severity": {
+                        "green": 0,
+                        "yellow": 70,
+                        "red": 85
+                      }
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "Storage",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.vm_root_fs_usage",
+                      "name": "VM Root",
+                      "min": 0,
+                      "max": 100,
+                      "severity": {
+                        "green": 0,
+                        "yellow": 70,
+                        "red": 85
+                      }
+                    },
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.byrroserver_usage",
+                      "name": "NAS",
+                      "min": 0,
+                      "max": 100,
+                      "severity": {
+                        "green": 0,
+                        "yellow": 80,
+                        "red": 90
+                      }
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "sensor.byrroserver_free_tb",
+                      "name": "NAS Free Space",
+                      "icon": "mdi:harddisk"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:mini-graph-card",
+              "name": "Disk I/O (VM)",
+              "entities": [
+                {
+                  "entity": "sensor.vm_disk_read_mb_s",
+                  "name": "Read (MB/s)",
+                  "color": "#3498db"
+                },
+                {
+                  "entity": "sensor.vm_disk_write_mb_s",
+                  "name": "Write (MB/s)",
+                  "color": "#e74c3c"
+                }
+              ],
+              "hours_to_show": 6,
+              "points_per_hour": 12,
+              "line_width": 2,
+              "show": {
+                "labels": true,
+                "points": false,
+                "legend": true
+              }
+            },
+            {
+              "type": "entities",
+              "title": "Quick Stats",
+              "entities": [
+                {
+                  "entity": "sensor.running_containers",
+                  "name": "Running Containers",
+                  "icon": "mdi:docker"
+                },
+                {
+                  "entity": "sensor.proxmox_uptime",
+                  "name": "Proxmox Uptime",
+                  "icon": "mdi:clock-outline"
+                },
+                {
+                  "entity": "sensor.vm_uptime",
+                  "name": "VM Uptime",
+                  "icon": "mdi:clock-outline"
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "Proxmox",
+          "path": "proxmox",
+          "icon": "mdi:server",
+          "cards": [
+            {
+              "type": "custom:stack-in-card",
+              "title": "Proxmox Host (192.168.1.10)",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.proxmox_cpu_usage",
+                      "name": "CPU",
+                      "min": 0,
+                      "max": 100
+                    },
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.proxmox_memory_usage",
+                      "name": "Memory",
+                      "min": 0,
+                      "max": 100
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "sensor.proxmox_memory_used_gb",
+                      "name": "Memory Used",
+                      "icon": "mdi:memory"
+                    },
+                    {
+                      "entity": "sensor.proxmox_uptime",
+                      "name": "Uptime",
+                      "icon": "mdi:clock-outline"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "VM (qemu/100)",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.vm_cpu_from_proxmox",
+                      "name": "CPU (from PVE)",
+                      "min": 0,
+                      "max": 100
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "sensor.vm_memory_from_proxmox_gb",
+                      "name": "Memory (from PVE)"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "markdown",
+              "content": "**Legend**\n- QEMU/100 = Proxmox VM ID for Docker host"
+            }
+          ]
+        },
+        {
+          "title": "Docker VM",
+          "path": "vm",
+          "icon": "mdi:debian",
+          "cards": [
+            {
+              "type": "custom:stack-in-card",
+              "title": "VM Resources (192.168.1.11)",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.vm_cpu_usage",
+                      "name": "CPU",
+                      "min": 0,
+                      "max": 100
+                    },
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.vm_memory_usage",
+                      "name": "Memory",
+                      "min": 0,
+                      "max": 100
+                    },
+                    {
+                      "type": "gauge",
+                      "entity": "sensor.vm_root_fs_usage",
+                      "name": "Root FS",
+                      "min": 0,
+                      "max": 100
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "sensor.vm_memory_used_gb",
+                      "name": "Memory Used"
+                    },
+                    {
+                      "entity": "sensor.vm_memory_total_gb",
+                      "name": "Memory Total"
+                    },
+                    {
+                      "entity": "sensor.vm_uptime",
+                      "name": "Uptime"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:mini-graph-card",
+              "name": "CPU History",
+              "entities": [
+                {
+                  "entity": "sensor.vm_cpu_usage",
+                  "color": "#3498db"
+                }
+              ],
+              "hours_to_show": 24,
+              "points_per_hour": 4,
+              "show": {
+                "legend": true,
+                "labels": true
+              }
+            },
+            {
+              "type": "custom:mini-graph-card",
+              "name": "Memory History",
+              "entities": [
+                {
+                  "entity": "sensor.vm_memory_usage",
+                  "color": "#9b59b6"
+                }
+              ],
+              "hours_to_show": 24,
+              "points_per_hour": 4,
+              "show": {
+                "legend": true,
+                "labels": true
+              }
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "Intel GPU",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "entity",
+                      "entity": "sensor.intel_gpu_render",
+                      "name": "Render"
+                    },
+                    {
+                      "type": "entity",
+                      "entity": "sensor.intel_gpu_video",
+                      "name": "Video"
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "entities": [
+                    {
+                      "entity": "sensor.intel_gpu_frequency_mhz",
+                      "name": "Frequency"
+                    },
+                    {
+                      "entity": "sensor.intel_gpu_power_w",
+                      "name": "Power"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:mini-graph-card",
+              "name": "Network I/O",
+              "entities": [
+                {
+                  "entity": "sensor.vm_network_rx_mb_s",
+                  "name": "RX (Receive)",
+                  "color": "#2ecc71"
+                },
+                {
+                  "entity": "sensor.vm_network_tx_mb_s",
+                  "name": "TX (Transmit)",
+                  "color": "#e67e22"
+                }
+              ],
+              "hours_to_show": 6,
+              "points_per_hour": 12,
+              "show": {
+                "legend": true,
+                "labels": true
+              }
+            },
+            {
+              "type": "markdown",
+              "content": "**Legend**\n- RX = received (download) throughput\n- TX = transmitted (upload) throughput"
+            }
+          ]
+        },
+        {
+          "title": "Containers",
+          "path": "containers",
+          "icon": "mdi:docker",
+          "cards": [
+            {
+              "type": "custom:stack-in-card",
+              "title": "Container Count",
+              "cards": [
+                {
+                  "type": "entity",
+                  "entity": "sensor.running_containers"
+                }
+              ]
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "Immich",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.immich_server_cpu",
+                      "name": "Server CPU",
+                      "icon": "mdi:percent"
+                    },
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.immich_server_memory_mb",
+                      "name": "Server RAM",
+                      "icon": "mdi:memory"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.immich_ml_cpu",
+                      "name": "ML CPU",
+                      "icon": "mdi:percent"
+                    },
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.immich_ml_memory_mb",
+                      "name": "ML RAM",
+                      "icon": "mdi:memory"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "Plex",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.plex_cpu",
+                      "name": "CPU",
+                      "icon": "mdi:percent"
+                    },
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.plex_memory_mb",
+                      "name": "Memory",
+                      "icon": "mdi:memory"
+                    }
+                  ]
+                },
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.intel_gpu_render",
+                      "name": "iGPU Render",
+                      "icon": "mdi:gpu"
+                    },
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.intel_gpu_video",
+                      "name": "iGPU Video",
+                      "icon": "mdi:video"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "Home Assistant",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.ha_container_cpu",
+                      "name": "CPU",
+                      "icon": "mdi:percent"
+                    },
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.ha_container_memory_mb",
+                      "name": "Memory",
+                      "icon": "mdi:memory"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "CultoTranscript",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.culto_worker_cpu",
+                      "name": "Worker CPU",
+                      "icon": "mdi:percent"
+                    },
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.culto_worker_memory_mb",
+                      "name": "Worker RAM",
+                      "icon": "mdi:memory"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "custom:stack-in-card",
+              "title": "Prometheus",
+              "cards": [
+                {
+                  "type": "horizontal-stack",
+                  "cards": [
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.prometheus_cpu",
+                      "name": "CPU",
+                      "icon": "mdi:percent"
+                    },
+                    {
+                      "type": "custom:mushroom-entity-card",
+                      "entity": "sensor.prometheus_memory_mb",
+                      "name": "Memory",
+                      "icon": "mdi:memory"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "grid",
+              "title": "All Containers",
+              "columns": 2,
+              "square": false,
+              "cards": [
+                {
+                  "type": "entities",
+                  "title": "CPU %",
+                  "entities": [
+                    {
+                      "entity": "sensor.actualbudget_cpu",
+                      "name": "Actualbudget"
+                    },
+                    {
+                      "entity": "sensor.adguardhome_cpu",
+                      "name": "Adguardhome"
+                    },
+                    {
+                      "entity": "sensor.authelia_cpu",
+                      "name": "Authelia"
+                    },
+                    {
+                      "entity": "sensor.authelia_redis_cpu",
+                      "name": "Authelia Redis"
+                    },
+                    {
+                      "entity": "sensor.blackbox_exporter_cpu",
+                      "name": "Blackbox Exporter"
+                    },
+                    {
+                      "entity": "sensor.caddy_cpu",
+                      "name": "Caddy"
+                    },
+                    {
+                      "entity": "sensor.cadvisor_cpu",
+                      "name": "Cadvisor"
+                    },
+                    {
+                      "entity": "sensor.cross_seed_cpu",
+                      "name": "Cross Seed"
+                    },
+                    {
+                      "entity": "sensor.culto_caddy_cpu",
+                      "name": "Culto Caddy"
+                    },
+                    {
+                      "entity": "sensor.culto_db_cpu",
+                      "name": "Culto DB"
+                    },
+                    {
+                      "entity": "sensor.culto_redis_cpu",
+                      "name": "Culto Redis"
+                    },
+                    {
+                      "entity": "sensor.culto_scheduler_cpu",
+                      "name": "Culto Scheduler"
+                    },
+                    {
+                      "entity": "sensor.culto_web_cpu",
+                      "name": "Culto Web"
+                    },
+                    {
+                      "entity": "sensor.culto_worker_cpu",
+                      "name": "Culto Worker"
+                    },
+                    {
+                      "entity": "sensor.dawarich_app_cpu",
+                      "name": "Dawarich App"
+                    },
+                    {
+                      "entity": "sensor.dawarich_db_cpu",
+                      "name": "Dawarich DB"
+                    },
+                    {
+                      "entity": "sensor.dawarich_redis_cpu",
+                      "name": "Dawarich Redis"
+                    },
+                    {
+                      "entity": "sensor.dawarich_sidekiq_cpu",
+                      "name": "Dawarich Sidekiq"
+                    },
+                    {
+                      "entity": "sensor.falco_cpu",
+                      "name": "Falco"
+                    },
+                    {
+                      "entity": "sensor.falco_ha_bridge_cpu",
+                      "name": "Falco HA Bridge"
+                    },
+                    {
+                      "entity": "sensor.falcosidekick_cpu",
+                      "name": "Falcosidekick"
+                    },
+                    {
+                      "entity": "sensor.flaresolverr_cpu",
+                      "name": "Flaresolverr"
+                    },
+                    {
+                      "entity": "sensor.gluetun_cpu",
+                      "name": "Gluetun"
+                    },
+                    {
+                      "entity": "sensor.ha_container_cpu",
+                      "name": "Home Assistant"
+                    },
+                    {
+                      "entity": "sensor.immich_ml_cpu",
+                      "name": "Immich ML"
+                    },
+                    {
+                      "entity": "sensor.immich_postgres_cpu",
+                      "name": "Immich Postgres"
+                    },
+                    {
+                      "entity": "sensor.immich_redis_cpu",
+                      "name": "Immich Redis"
+                    },
+                    {
+                      "entity": "sensor.immich_server_cpu",
+                      "name": "Immich Server"
+                    },
+                    {
+                      "entity": "sensor.immich_typesense_cpu",
+                      "name": "Immich Typesense"
+                    },
+                    {
+                      "entity": "sensor.intel_gpu_exporter_cpu",
+                      "name": "Intel GPU Exporter"
+                    },
+                    {
+                      "entity": "sensor.jellyseerr_cpu",
+                      "name": "Jellyseerr"
+                    },
+                    {
+                      "entity": "sensor.loki_cpu",
+                      "name": "Loki"
+                    },
+                    {
+                      "entity": "sensor.node_exporter_cpu",
+                      "name": "Node Exporter"
+                    },
+                    {
+                      "entity": "sensor.paperless_cpu",
+                      "name": "Paperless"
+                    },
+                    {
+                      "entity": "sensor.paperless_db_cpu",
+                      "name": "Paperless DB"
+                    },
+                    {
+                      "entity": "sensor.paperless_gotenberg_cpu",
+                      "name": "Paperless Gotenberg"
+                    },
+                    {
+                      "entity": "sensor.paperless_redis_cpu",
+                      "name": "Paperless Redis"
+                    },
+                    {
+                      "entity": "sensor.paperless_tika_cpu",
+                      "name": "Paperless Tika"
+                    },
+                    {
+                      "entity": "sensor.plex_cpu",
+                      "name": "Plex"
+                    },
+                    {
+                      "entity": "sensor.portainer_cpu",
+                      "name": "Portainer"
+                    },
+                    {
+                      "entity": "sensor.process_exporter_cpu",
+                      "name": "Process Exporter"
+                    },
+                    {
+                      "entity": "sensor.prometheus_cpu",
+                      "name": "Prometheus"
+                    },
+                    {
+                      "entity": "sensor.promtail_cpu",
+                      "name": "Promtail"
+                    },
+                    {
+                      "entity": "sensor.prowlarr_cpu",
+                      "name": "Prowlarr"
+                    },
+                    {
+                      "entity": "sensor.pushgateway_cpu",
+                      "name": "Pushgateway"
+                    },
+                    {
+                      "entity": "sensor.pve_exporter_cpu",
+                      "name": "PVE Exporter"
+                    },
+                    {
+                      "entity": "sensor.qb_port_sync_cpu",
+                      "name": "QB Port Sync"
+                    },
+                    {
+                      "entity": "sensor.qbit_safety_cleaner_cpu",
+                      "name": "QBit Safety Cleaner"
+                    },
+                    {
+                      "entity": "sensor.qbittorrent_cpu",
+                      "name": "QBittorrent"
+                    },
+                    {
+                      "entity": "sensor.radarr_cpu",
+                      "name": "Radarr"
+                    },
+                    {
+                      "entity": "sensor.snmp_exporter_cpu",
+                      "name": "SNMP Exporter"
+                    },
+                    {
+                      "entity": "sensor.sonarr_cpu",
+                      "name": "Sonarr"
+                    },
+                    {
+                      "entity": "sensor.tautulli_cpu",
+                      "name": "Tautulli"
+                    },
+                    {
+                      "entity": "sensor.telemetrygen_cpu",
+                      "name": "Telemetrygen"
+                    },
+                    {
+                      "entity": "sensor.tempo_cpu",
+                      "name": "Tempo"
+                    },
+                    {
+                      "entity": "sensor.tracker_monitor_cpu",
+                      "name": "Tracker Monitor"
+                    },
+                    {
+                      "entity": "sensor.trivy_api_cpu",
+                      "name": "Trivy API"
+                    },
+                    {
+                      "entity": "sensor.trivy_runner_cpu",
+                      "name": "Trivy Runner"
+                    },
+                    {
+                      "entity": "sensor.unpackerr_cpu",
+                      "name": "Unpackerr"
+                    },
+                    {
+                      "entity": "sensor.uptime_kuma_cpu",
+                      "name": "Uptime Kuma"
+                    },
+                    {
+                      "entity": "sensor.vaultwarden_cpu",
+                      "name": "Vaultwarden"
+                    },
+                    {
+                      "entity": "sensor.wireguard_cpu",
+                      "name": "Wireguard"
+                    }
+                  ]
+                },
+                {
+                  "type": "entities",
+                  "title": "Memory MB",
+                  "entities": [
+                    {
+                      "entity": "sensor.actualbudget_memory_mb",
+                      "name": "Actualbudget"
+                    },
+                    {
+                      "entity": "sensor.adguardhome_memory_mb",
+                      "name": "Adguardhome"
+                    },
+                    {
+                      "entity": "sensor.authelia_memory_mb",
+                      "name": "Authelia"
+                    },
+                    {
+                      "entity": "sensor.authelia_redis_memory_mb",
+                      "name": "Authelia Redis"
+                    },
+                    {
+                      "entity": "sensor.blackbox_exporter_memory_mb",
+                      "name": "Blackbox Exporter"
+                    },
+                    {
+                      "entity": "sensor.caddy_memory_mb",
+                      "name": "Caddy"
+                    },
+                    {
+                      "entity": "sensor.cadvisor_memory_mb",
+                      "name": "Cadvisor"
+                    },
+                    {
+                      "entity": "sensor.cross_seed_memory_mb",
+                      "name": "Cross Seed"
+                    },
+                    {
+                      "entity": "sensor.culto_caddy_memory_mb",
+                      "name": "Culto Caddy"
+                    },
+                    {
+                      "entity": "sensor.culto_db_memory_mb",
+                      "name": "Culto DB"
+                    },
+                    {
+                      "entity": "sensor.culto_redis_memory_mb",
+                      "name": "Culto Redis"
+                    },
+                    {
+                      "entity": "sensor.culto_scheduler_memory_mb",
+                      "name": "Culto Scheduler"
+                    },
+                    {
+                      "entity": "sensor.culto_web_memory_mb",
+                      "name": "Culto Web"
+                    },
+                    {
+                      "entity": "sensor.culto_worker_memory_mb",
+                      "name": "Culto Worker"
+                    },
+                    {
+                      "entity": "sensor.dawarich_app_memory_mb",
+                      "name": "Dawarich App"
+                    },
+                    {
+                      "entity": "sensor.dawarich_db_memory_mb",
+                      "name": "Dawarich DB"
+                    },
+                    {
+                      "entity": "sensor.dawarich_redis_memory_mb",
+                      "name": "Dawarich Redis"
+                    },
+                    {
+                      "entity": "sensor.dawarich_sidekiq_memory_mb",
+                      "name": "Dawarich Sidekiq"
+                    },
+                    {
+                      "entity": "sensor.falco_memory_mb",
+                      "name": "Falco"
+                    },
+                    {
+                      "entity": "sensor.falco_ha_bridge_memory_mb",
+                      "name": "Falco HA Bridge"
+                    },
+                    {
+                      "entity": "sensor.falcosidekick_memory_mb",
+                      "name": "Falcosidekick"
+                    },
+                    {
+                      "entity": "sensor.flaresolverr_memory_mb",
+                      "name": "Flaresolverr"
+                    },
+                    {
+                      "entity": "sensor.gluetun_memory_mb",
+                      "name": "Gluetun"
+                    },
+                    {
+                      "entity": "sensor.ha_container_memory_mb",
+                      "name": "Home Assistant"
+                    },
+                    {
+                      "entity": "sensor.immich_ml_memory_mb",
+                      "name": "Immich ML"
+                    },
+                    {
+                      "entity": "sensor.immich_postgres_memory_mb",
+                      "name": "Immich Postgres"
+                    },
+                    {
+                      "entity": "sensor.immich_redis_memory_mb",
+                      "name": "Immich Redis"
+                    },
+                    {
+                      "entity": "sensor.immich_server_memory_mb",
+                      "name": "Immich Server"
+                    },
+                    {
+                      "entity": "sensor.immich_typesense_memory_mb",
+                      "name": "Immich Typesense"
+                    },
+                    {
+                      "entity": "sensor.intel_gpu_exporter_memory_mb",
+                      "name": "Intel GPU Exporter"
+                    },
+                    {
+                      "entity": "sensor.jellyseerr_memory_mb",
+                      "name": "Jellyseerr"
+                    },
+                    {
+                      "entity": "sensor.loki_memory_mb",
+                      "name": "Loki"
+                    },
+                    {
+                      "entity": "sensor.node_exporter_memory_mb",
+                      "name": "Node Exporter"
+                    },
+                    {
+                      "entity": "sensor.paperless_memory_mb",
+                      "name": "Paperless"
+                    },
+                    {
+                      "entity": "sensor.paperless_db_memory_mb",
+                      "name": "Paperless DB"
+                    },
+                    {
+                      "entity": "sensor.paperless_gotenberg_memory_mb",
+                      "name": "Paperless Gotenberg"
+                    },
+                    {
+                      "entity": "sensor.paperless_redis_memory_mb",
+                      "name": "Paperless Redis"
+                    },
+                    {
+                      "entity": "sensor.paperless_tika_memory_mb",
+                      "name": "Paperless Tika"
+                    },
+                    {
+                      "entity": "sensor.plex_memory_mb",
+                      "name": "Plex"
+                    },
+                    {
+                      "entity": "sensor.portainer_memory_mb",
+                      "name": "Portainer"
+                    },
+                    {
+                      "entity": "sensor.process_exporter_memory_mb",
+                      "name": "Process Exporter"
+                    },
+                    {
+                      "entity": "sensor.prometheus_memory_mb",
+                      "name": "Prometheus"
+                    },
+                    {
+                      "entity": "sensor.promtail_memory_mb",
+                      "name": "Promtail"
+                    },
+                    {
+                      "entity": "sensor.prowlarr_memory_mb",
+                      "name": "Prowlarr"
+                    },
+                    {
+                      "entity": "sensor.pushgateway_memory_mb",
+                      "name": "Pushgateway"
+                    },
+                    {
+                      "entity": "sensor.pve_exporter_memory_mb",
+                      "name": "PVE Exporter"
+                    },
+                    {
+                      "entity": "sensor.qb_port_sync_memory_mb",
+                      "name": "QB Port Sync"
+                    },
+                    {
+                      "entity": "sensor.qbit_safety_cleaner_memory_mb",
+                      "name": "QBit Safety Cleaner"
+                    },
+                    {
+                      "entity": "sensor.qbittorrent_memory_mb",
+                      "name": "QBittorrent"
+                    },
+                    {
+                      "entity": "sensor.radarr_memory_mb",
+                      "name": "Radarr"
+                    },
+                    {
+                      "entity": "sensor.snmp_exporter_memory_mb",
+                      "name": "SNMP Exporter"
+                    },
+                    {
+                      "entity": "sensor.sonarr_memory_mb",
+                      "name": "Sonarr"
+                    },
+                    {
+                      "entity": "sensor.tautulli_memory_mb",
+                      "name": "Tautulli"
+                    },
+                    {
+                      "entity": "sensor.telemetrygen_memory_mb",
+                      "name": "Telemetrygen"
+                    },
+                    {
+                      "entity": "sensor.tempo_memory_mb",
+                      "name": "Tempo"
+                    },
+                    {
+                      "entity": "sensor.tracker_monitor_memory_mb",
+                      "name": "Tracker Monitor"
+                    },
+                    {
+                      "entity": "sensor.trivy_api_memory_mb",
+                      "name": "Trivy API"
+                    },
+                    {
+                      "entity": "sensor.trivy_runner_memory_mb",
+                      "name": "Trivy Runner"
+                    },
+                    {
+                      "entity": "sensor.unpackerr_memory_mb",
+                      "name": "Unpackerr"
+                    },
+                    {
+                      "entity": "sensor.uptime_kuma_memory_mb",
+                      "name": "Uptime Kuma"
+                    },
+                    {
+                      "entity": "sensor.vaultwarden_memory_mb",
+                      "name": "Vaultwarden"
+                    },
+                    {
+                      "entity": "sensor.wireguard_memory_mb",
+                      "name": "Wireguard"
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

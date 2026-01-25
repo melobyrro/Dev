@@ -1,0 +1,454 @@
+views:
+  - title: Patio AC Control
+    path: patio-ac-control
+    icon: mdi:air-conditioner
+    type: panel
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:layout-card
+            layout_type: custom:grid-layout
+            layout:
+              grid-template-columns: 1fr 1fr
+              grid-gap: 16px
+              mediaquery:
+                "(max-width: 800px)":
+                  grid-template-columns: 1fr
+            cards:
+              # === LEFT COLUMN ===
+              - type: vertical-stack
+                cards:
+                  - type: tile
+                    entity: climate.150633095083490_climate
+                    name: Patio AC Unit
+                    show_state: false
+                    features:
+                      - type: climate-hvac-modes
+                        hvac_modes:
+                          - 'off'
+                          - cool
+                          - dry
+                          - fan_only
+                      - type: target-temperature
+                  - type: grid
+                    columns: 4
+                    square: false
+                    cards:
+                      - type: tile
+                        entity: sensor.patio_temp_sensor_temperature
+                        name: Temp
+                      - type: tile
+                        entity: sensor.patio_temp_sensor_humidity
+                        name: Humidity
+                      - type: tile
+                        entity: sensor.patio_dew_point
+                        name: Dew Point
+                      - type: tile
+                        entity: input_boolean.patio_ac_show_explain_dew_point
+                        icon: mdi:help-circle-outline
+                        name: Dew Point Help
+                        show_name: false
+                        show_state: false
+                        tap_action:
+                          action: toggle
+                  - type: conditional
+                    conditions:
+                      - entity: input_boolean.patio_ac_show_explain_dew_point
+                        state: 'on'
+                    card:
+                      type: markdown
+                      content: >
+                        **Dew Point Explained**
+
+
+                        - Dew point is the temperature where air becomes saturated
+                        and water condenses.
+
+                        - Comfort drops quickly once dew point stays above ~60°F.
+
+                        - Higher dew point means more moisture for the AC to remove.
+
+
+                        **Automation thresholds (dew point only)**
+
+
+                        - Day trigger: {{
+                        states('input_number.patio_ac_dewpoint_start') }}°F
+
+                        - Night trigger: {{
+                        states('input_number.patio_ac_dewpoint_night_start') }}°F
+
+                        - Target (stop): {{
+                        states('input_number.patio_ac_dewpoint_stop') }}°F
+
+
+                        Day/Night humidity starts DRY at the trigger and stops when
+                        dew point reaches the target.
+                  - type: entities
+                    title: Global Configuration
+                    show_header_toggle: false
+                    entities:
+                      - type: section
+                        label: Status & Timing
+                      - entity: sensor.patio_ac_reason_friendly
+                        name: Current State
+                      - entity: sensor.patio_ac_last_evaluated
+                        name: Last Checked
+                      - entity: sensor.patio_ac_next_evaluation
+                        name: Next Check
+                      - type: section
+                        label: Schedule
+                      - entity: input_datetime.patio_ac_day_start
+                        name: Day Start
+                      - entity: input_datetime.patio_ac_night_start
+                        name: Night Start
+                      - entity: input_boolean.patio_ac_allow_seamless_handoff
+                        name: Seamless Handoff
+                      - type: section
+                        label: Protections
+                      - entity: timer.patio_ac_compressor_protection
+                        name: Compressor Cooldown
+                      - entity: sensor.patio_ac_compressor_wait_time
+                        name: Cooldown Remaining
+                      - entity: input_number.patio_ac_compressor_cooldown_minutes
+                        name: Cooldown Duration (min)
+                      - entity: input_number.patio_ac_rh_emergency
+                        name: Emergency RH Cutoff (%)
+                      - type: section
+                        label: Caps & Limits
+                      - entity: input_number.patio_ac_daily_limit
+                        name: Automation Cap (min)
+                      - entity: sensor.patio_ac_automation_cap_display
+                        name: Automation Cap (hh:mm)
+                      - type: section
+                        label: Runtime Today
+                      - entity: sensor.patio_ac_runtime_cool_automation
+                        name: Auto Cool
+                      - entity: sensor.patio_ac_runtime_dry_automation
+                        name: Auto Dry
+                      - entity: sensor.patio_ac_runtime_total_automation
+                        name: Auto Total
+                      - entity: sensor.patio_ac_runtime_cool_manual
+                        name: Manual Cool
+                      - entity: sensor.patio_ac_runtime_dry_manual
+                        name: Manual Dry
+                      - entity: sensor.patio_ac_runtime_total_manual
+                        name: Manual Total
+                      - entity: sensor.patio_ac_runtime_total_all
+                        name: Grand Total
+                      - type: section
+                        label: Actions
+                      - entity: input_button.patio_ac_resume_automation
+                        name: Resume Automation
+                        icon: mdi:refresh
+                      - entity: input_button.patio_ac_activity_clear
+                        name: Clear Activity
+                        icon: mdi:broom
+                      - type: section
+                        label: Help
+                      - entity: input_boolean.patio_ac_show_explain_global
+                        name: Explain Settings
+                        icon: mdi:help-circle-outline
+                  - type: conditional
+                    conditions:
+                      - entity: input_boolean.patio_ac_show_explain_global
+                        state: 'on'
+                    card:
+                      type: markdown
+                      content: >
+                        **Status & Timing**
+
+
+                        - **Current State**: `Idle` (automation eligible), `Manual`
+                        (user control; automations paused), `Day Humidity` (DRY
+                        automation), `Night Humidity` (DRY automation), `Heat Guard`
+                        (COOL automation), `Safety/Emergency` (forced OFF).
+
+                        - **Last Checked**: Time-of-day of the last evaluation cycle.
+
+                        - **Next Check**: Countdown to the next evaluation cycle.
+
+
+                        **Schedule**
+
+
+                        - **Day Start**: Start of the day humidity window.
+
+                        - **Night Start**: Start of the night humidity window.
+
+                        - **Seamless Handoff**: `On` switches Day/Night without
+                        forcing OFF; `Off` stops at the boundary.
+
+
+                        **Protections**
+
+
+                        - **Compressor Cooldown**: Timer state (`active`/`idle`/`paused`).
+
+                        - **Cooldown Remaining**: Countdown until automation can restart.
+
+                        - **Cooldown Duration**: Applied after stopping.
+
+                        - **Emergency RH Cutoff**: Forces AC OFF if RH exceeds threshold.
+
+
+                        **Caps & Limits**
+
+
+                        - **Automation Cap**: Max automation runtime per day (resets midnight).
+
+
+                        **Runtime Today**
+
+
+                        - Runtimes split by Cool/Dry mode and Manual/Automation authority.
+
+
+                        **Actions**
+
+
+                        - **Resume Automation**: Clears Manual state, sets to Idle.
+
+                        - **Clear Activity**: Clears the Activity log.
+              # === RIGHT COLUMN ===
+              - type: vertical-stack
+                cards:
+                  - type: entities
+                    title: Heat Guard (Cool)
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_boolean.patio_ac_heat_guard_enabled
+                        name: Enabled
+                      - entity: input_number.patio_ac_heat_threshold
+                        name: Trigger Temp (°F)
+                      - entity: input_number.patio_ac_heat_target
+                        name: Target Temp (°F)
+                      - entity: input_number.patio_ac_heat_duration
+                        name: Max Duration (min)
+                      - entity: input_boolean.patio_ac_show_explain_heat_guard
+                        name: Explain
+                        icon: mdi:help-circle-outline
+                  - type: conditional
+                    conditions:
+                      - entity: input_boolean.patio_ac_show_explain_heat_guard
+                        state: 'on'
+                    card:
+                      type: markdown
+                      content: >
+                        **Heat Guard (COOL mode)**
+
+
+                        - **Enabled**: Toggle Heat Guard on/off.
+
+                        - **Trigger Temp**: Starts COOL when temp >= trigger.
+
+                        - **Target Temp**: Stops COOL when temp <= target.
+
+                        - **Max Duration**: Safety cap; stops when reached.
+
+                        - If Target >= Trigger, Heat Guard will not start.
+                  - type: entities
+                    title: Day Humidity (Dry)
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_boolean.patio_ac_day_humidity_enabled
+                        name: Enabled
+                      - entity: input_number.patio_ac_dewpoint_start
+                        name: Dew Point Trigger (°F)
+                      - entity: input_number.patio_ac_dewpoint_stop
+                        name: Dew Point Target (°F)
+                      - entity: input_number.patio_ac_default_dry_temp
+                        name: DRY Setpoint (°F)
+                      - entity: input_boolean.patio_ac_show_explain_day_rules
+                        name: Explain
+                        icon: mdi:help-circle-outline
+                  - type: conditional
+                    conditions:
+                      - entity: input_boolean.patio_ac_show_explain_day_rules
+                        state: 'on'
+                    card:
+                      type: markdown
+                      content: >
+                        **Day Humidity (DRY mode)**
+
+
+                        - **Enabled**: Toggle day rules on/off.
+
+                        - **Dew Point Trigger**: Start DRY when dew point >= trigger.
+
+                        - **Dew Point Target**: Stop DRY when dew point <= target.
+
+                        - **DRY Setpoint**: Temperature setpoint when running DRY.
+
+                        - Day rules only eligible between Day Start and Night Start.
+                  - type: entities
+                    title: Night Humidity (Dry)
+                    show_header_toggle: false
+                    entities:
+                      - entity: input_boolean.patio_ac_night_humidity_enabled
+                        name: Enabled
+                      - entity: input_number.patio_ac_dewpoint_night_start
+                        name: Dew Point Trigger (°F)
+                      - entity: input_number.patio_ac_dewpoint_stop
+                        name: Dew Point Target (°F)
+                      - entity: input_boolean.patio_ac_show_explain_night_rules
+                        name: Explain
+                        icon: mdi:help-circle-outline
+                  - type: conditional
+                    conditions:
+                      - entity: input_boolean.patio_ac_show_explain_night_rules
+                        state: 'on'
+                    card:
+                      type: markdown
+                      content: >
+                        **Night Humidity (DRY mode)**
+
+
+                        - **Enabled**: Toggle night rules on/off.
+
+                        - **Dew Point Trigger**: Start DRY when dew point >= trigger.
+
+                        - **Dew Point Target**: Stop DRY when dew point <= target.
+
+                        - Uses same DRY setpoint as Day Humidity.
+
+                        - Night rules only eligible between Night Start and Day Start.
+          # === CHARTS (full width) ===
+          - type: grid
+            columns: 1
+            square: false
+            cards:
+              - type: custom:apexcharts-card
+                header:
+                  show: true
+                  title: Humidity & Dew Point (24h)
+                  show_states: true
+                graph_span: 24h
+                apex_config:
+                  chart:
+                    height: 280
+                  legend:
+                    show: true
+                    position: bottom
+                  stroke:
+                    width: 2
+                  yaxis:
+                    - id: humidity
+                      min: 0
+                      max: 100
+                      decimalsInFloat: 0
+                      title:
+                        text: Humidity (%)
+                    - id: dewpoint
+                      opposite: true
+                      min: 45
+                      max: 100
+                      decimalsInFloat: 0
+                      title:
+                        text: Dew Point (°F)
+                    - id: runtime
+                      show: false
+                      min: 0
+                series:
+                  - entity: sensor.patio_temp_sensor_humidity
+                    name: Humidity
+                    yaxis_id: humidity
+                    color: '#2196F3'
+                    stroke_width: 2
+                  - entity: sensor.patio_dew_point
+                    name: Dew Point
+                    yaxis_id: dewpoint
+                    color: '#4CAF50'
+                    stroke_width: 2
+                  - entity: sensor.patio_ac_runtime_dry_total
+                    name: Dry Runtime
+                    yaxis_id: runtime
+                    color: '#FF9800'
+                    stroke_width: 1
+                    type: area
+                    opacity: 0.3
+                  - entity: sensor.patio_ac_runtime_cool_total
+                    name: Cool Runtime
+                    yaxis_id: runtime
+                    color: '#9C27B0'
+                    stroke_width: 1
+                    type: area
+                    opacity: 0.3
+              - type: custom:apexcharts-card
+                header:
+                  show: true
+                  title: Temperature (24h)
+                  show_states: true
+                graph_span: 24h
+                apex_config:
+                  chart:
+                    height: 250
+                  legend:
+                    show: true
+                    position: bottom
+                  stroke:
+                    width: 2
+                  yaxis:
+                    - id: temp
+                      min: 45
+                      max: 100
+                      decimalsInFloat: 0
+                      title:
+                        text: Temperature (°F)
+                    - id: runtime
+                      show: false
+                      min: 0
+                series:
+                  - entity: sensor.patio_temp_sensor_temperature
+                    name: Temperature
+                    yaxis_id: temp
+                    color: '#F44336'
+                    stroke_width: 2
+                  - entity: sensor.patio_ac_runtime_dry_total
+                    name: Dry Runtime
+                    yaxis_id: runtime
+                    color: '#FF9800'
+                    stroke_width: 1
+                    type: area
+                    opacity: 0.3
+                  - entity: sensor.patio_ac_runtime_cool_total
+                    name: Cool Runtime
+                    yaxis_id: runtime
+                    color: '#9C27B0'
+                    stroke_width: 1
+                    type: area
+                    opacity: 0.3
+          # === ACTIVITY LOG (full width) ===
+          - type: markdown
+            title: Activity Log
+            content: |
+              {%- set keys = [
+                'input_text.patio_ac_event_1',
+                'input_text.patio_ac_event_2',
+                'input_text.patio_ac_event_3',
+                'input_text.patio_ac_event_4',
+                'input_text.patio_ac_event_5',
+                'input_text.patio_ac_event_6',
+                'input_text.patio_ac_event_7',
+                'input_text.patio_ac_event_8',
+                'input_text.patio_ac_event_9',
+                'input_text.patio_ac_event_10'
+              ] -%}
+              {%- set ns = namespace(has_rows=false) -%}
+              {%- for key in keys -%}
+                {%- set val = states(key) -%}
+                {%- if val not in ['unknown', 'unavailable', '', None] -%}
+                  {%- if not ns.has_rows -%}
+              | Time | Event |
+              |---|---|
+                    {%- set ns.has_rows = true -%}
+                  {%- endif -%}
+                  {%- set parts = val.split(' - ', 1) -%}
+                  {%- set ts = parts[0] -%}
+                  {%- set msg = parts[1] if parts|length > 1 else val -%}
+              | {{ ts }} | {{ msg | replace('|', '/') }} |
+                {%- endif -%}
+              {%- endfor -%}
+              {%- if not ns.has_rows -%}
+              _No recent activity._
+              {%- endif -%}

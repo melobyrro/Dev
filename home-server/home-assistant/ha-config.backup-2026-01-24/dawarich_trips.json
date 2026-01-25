@@ -1,0 +1,49 @@
+{
+  "geo_cache": {
+    "25.94|-80.19": "Miami-Dade County, Florida",
+    "25.98|-80.17": "Pembroke Park, Florida",
+    "25.99|-80.12": "Broward County, Florida",
+    "25.99|-80.13": "Broward County, Florida",
+    "26.04|-80.16": "Broward County, Florida",
+    "26.13|-80.17": "Fort Lauderdale, Florida",
+    "26.18|-80.16": "Broward County, Florida",
+    "26.19|-80.15": "Broward County, Florida",
+    "26.21|-80.14": "Pompano Beach, Florida",
+    "26.26|-80.13": "Pompano Beach, Florida",
+    "26.28|-80.11": "Pompano Beach, Florida",
+    "26.31|-80.12": "Deerfield Beach, Florida",
+    "26.31|-80.19": "Broward County, Florida",
+    "26.32|-80.12": "Deerfield Beach, Florida",
+    "26.32|-80.15": "Deerfield Beach, Florida",
+    "26.32|-80.16": "Deerfield Beach, Florida",
+    "26.32|-80.2": "Broward County, Florida",
+    "26.33|-80.15": "Deerfield Beach, Florida",
+    "26.33|-80.16": "Deerfield Beach, Florida",
+    "26.35|-80.15": "Palm Beach County, Florida",
+    "26.3|-80.1": "Deerfield Beach, Florida",
+    "26.3|-80.13": "Deerfield Beach, Florida",
+    "26.3|-80.19": "Broward County, Florida",
+    "26.41|-80.15": "Palm Beach County, Florida",
+    "26.47|-80.17": "Palm Beach County, Florida"
+  },
+  "trips_daytype_monthly": {},
+  "trips_daytype_yearly": {},
+  "trips_distance_monthly": {},
+  "trips_distance_yearly": {},
+  "trips_monthly": {
+    "2026-01": {
+      "area_name": "",
+      "first_seen": "2026-01-05T22:35:57-05:00",
+      "last_seen": "2026-01-23T08:00:01-05:00",
+      "trip_id": "36"
+    }
+  },
+  "trips_yearly": {
+    "2026": {
+      "area_name": "",
+      "first_seen": "2026-01-05T22:35:57-05:00",
+      "last_seen": "2026-01-23T08:00:01-05:00",
+      "trip_id": "37"
+    }
+  }
+}

@@ -1,0 +1,662 @@
+# Kia EV9 Dashboard Cards
+# Version: 1.2
+# Last Updated: 2025-01-19
+#
+# CHANGES from v1.1:
+# - Added "Help" tab with documentation for all automations and metrics
+# - Fixed target temperature configuration in pre-conditioning section
+# - Improved schedule display with clearer labels
+#
+# DEPLOYMENT:
+# 1. Create a new dashboard or add to existing
+# 2. Edit dashboard → Raw configuration editor
+# 3. Add these cards to your views
+#
+# REQUIREMENTS:
+# - mushroom cards (recommended, available in HACS)
+# - fold-entity-row (optional, for collapsible schedule)
+
+# ============================================================
+# VIEW 1: STATUS (Main Vehicle View)
+# ============================================================
+
+views:
+  - title: Status
+    path: status
+    icon: mdi:car-electric
+    cards:
+
+      # ============================================================
+      # ROW 1: BATTERY & RANGE
+      # ============================================================
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.ev9_ev_battery_level
+            name: Battery
+            min: 0
+            max: 100
+            severity:
+              green: 50
+              yellow: 20
+              red: 10
+            needle: true
+
+          - type: vertical-stack
+            cards:
+              - type: entity
+                entity: sensor.ev9_ev_range
+                name: EV Range
+                icon: mdi:road-variant
+
+              - type: entity
+                entity: sensor.ev9_odometer
+                name: Odometer
+                icon: mdi:counter
+
+      # ============================================================
+      # ROW 2: CHARGING STATUS (Conditional - shows when plugged in)
+      # ============================================================
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.ev9_ev_battery_plug
+            state: "on"
+        card:
+          type: vertical-stack
+          cards:
+            - type: markdown
+              content: |
+                ## ⚡ Charging Status
+
+            - type: horizontal-stack
+              cards:
+                - type: entity
+                  entity: sensor.ev9_ev_charging_power
+                  name: Current Power
+                  icon: mdi:flash
+
+                - type: entity
+                  entity: input_number.ev9_expected_charge_power
+                  name: Expected Power
+                  icon: mdi:flash-outline
+
+            - type: entities
+              entities:
+                - entity: binary_sensor.ev9_ev_battery_charge
+                  name: Charging Active
+                - entity: sensor.ev9_estimated_charge_duration
+                  name: Time Remaining
+                - entity: number.ev9_ac_charging_limit
+                  name: AC Charge Limit
+                - entity: number.ev9_dc_charging_limit
+                  name: DC Charge Limit
+                - entity: input_select.ev9_charging_current
+                  name: Charging Current
+
+            # Stop/Start Charging Buttons
+            - type: horizontal-stack
+              cards:
+                - type: button
+                  name: Stop Charging
+                  icon: mdi:stop-circle
+                  icon_height: 40px
+                  tap_action:
+                    action: call-service
+                    service: kia_uvo.stop_charge
+                    data:
+                      device_id: 7f6b71f10dc261408a02149c68aa3e23
+                    confirmation:
+                      text: "Stop charging?"
+
+                - type: button
+                  name: Start Charging
+                  icon: mdi:play-circle
+                  icon_height: 40px
+                  tap_action:
+                    action: call-service
+                    service: kia_uvo.start_charge
+                    data:
+                      device_id: 7f6b71f10dc261408a02149c68aa3e23
+
+                - type: button
+                  name: Refresh Status
+                  icon: mdi:refresh
+                  icon_height: 40px
+                  tap_action:
+                    action: call-service
+                    service: kia_uvo.force_update
+                    data:
+                      device_id: 7f6b71f10dc261408a02149c68aa3e23
+
+      # ============================================================
+      # ROW 3: QUICK ACTIONS
+      # ============================================================
+      - type: horizontal-stack
+        cards:
+          - type: button
+            entity: lock.ev9_door_lock
+            name: Lock
+            icon: mdi:lock
+            tap_action:
+              action: call-service
+              service: lock.lock
+              target:
+                entity_id: lock.ev9_door_lock
+
+          - type: button
+            entity: lock.ev9_door_lock
+            name: Unlock
+            icon: mdi:lock-open
+            tap_action:
+              action: call-service
+              service: lock.unlock
+              target:
+                entity_id: lock.ev9_door_lock
+
+          - type: button
+            name: Climate On
+            icon: mdi:air-conditioner
+            tap_action:
+              action: call-service
+              service: kia_uvo.start_climate
+              data:
+                device_id: 7f6b71f10dc261408a02149c68aa3e23
+                climate: true
+                temperature: 72
+
+          - type: button
+            name: Climate Off
+            icon: mdi:fan-off
+            tap_action:
+              action: call-service
+              service: kia_uvo.stop_climate
+              data:
+                device_id: 7f6b71f10dc261408a02149c68aa3e23
+
+      # ============================================================
+      # ROW 4: VEHICLE STATUS
+      # ============================================================
+      - type: entities
+        title: Vehicle Status
+        show_header_toggle: false
+        entities:
+          - entity: binary_sensor.ev9_locked
+            name: Lock Status
+            secondary_info: last-changed
+          - entity: binary_sensor.ev9_air_conditioner
+            name: Climate Active
+          - entity: sensor.ev9_car_battery_level
+            name: 12V Battery
+          - entity: sensor.ev9_last_updated_at
+            name: Last Update
+            format: relative
+
+      # ============================================================
+      # ROW 5: DOORS & OPENINGS
+      # ============================================================
+      - type: glance
+        title: Doors & Openings
+        columns: 4
+        show_state: false
+        entities:
+          - entity: binary_sensor.ev9_front_left_door
+            name: FL
+          - entity: binary_sensor.ev9_front_right_door
+            name: FR
+          - entity: binary_sensor.ev9_back_left_door
+            name: BL
+          - entity: binary_sensor.ev9_back_right_door
+            name: BR
+          - entity: binary_sensor.ev9_trunk
+            name: Trunk
+          - entity: binary_sensor.ev9_hood
+            name: Hood
+
+      # ============================================================
+      # ROW 6: MAP
+      # ============================================================
+      - type: map
+        entities:
+          - entity: device_tracker.ev9_location
+        dark_mode: true
+        default_zoom: 15
+        aspect_ratio: 16:9
+
+  # ============================================================
+  # VIEW 2: SETTINGS
+  # ============================================================
+  - title: Settings
+    path: settings
+    icon: mdi:cog
+    cards:
+
+      # ============================================================
+      # WALK-AWAY LOCK & AUTO-CLOSE WINDOWS
+      # ============================================================
+      - type: entities
+        title: Security Automation
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: Walk-Away Lock
+          - entity: input_boolean.ev9_walk_away_lock_enabled
+            name: Enabled
+          - entity: input_number.ev9_walk_away_lock_delay
+            name: Delay After Leaving Home
+
+          - type: section
+            label: Auto-Close Windows
+          - entity: input_boolean.ev9_auto_close_windows_enabled
+            name: Enabled
+          - entity: input_number.ev9_auto_close_windows_delay
+            name: Delay After Leaving Home
+
+      # ============================================================
+      # CHARGING MONITORING SETTINGS
+      # ============================================================
+      - type: entities
+        title: Charging Monitor
+        show_header_toggle: false
+        entities:
+          - entity: input_number.ev9_expected_charge_power
+            name: Expected Charge Power (kW)
+          - entity: input_number.ev9_low_power_threshold
+            name: Low Power Alert Threshold
+          - entity: input_boolean.ev9_notify_low_charging_power
+            name: Alert on Low Power
+          - entity: input_boolean.ev9_notify_charging_interrupted
+            name: Alert on Charge Interrupted
+          - entity: input_number.ev9_charge_interrupt_check_delay
+            name: Interrupt Check Delay
+          - entity: input_boolean.ev9_overnight_charge_monitor
+            name: Overnight Monitor Enabled
+
+      # ============================================================
+      # PRE-CONDITIONING SETTINGS
+      # ============================================================
+      - type: entities
+        title: Pre-conditioning
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.ev9_precondition_enabled
+            name: Master Enable
+          - entity: input_number.ev9_precondition_lead_time
+            name: Start Before Departure (min)
+          - entity: input_number.ev9_target_temperature
+            name: Target Temperature (°F)
+          - entity: input_boolean.ev9_smart_precondition
+            name: Smart Mode (Weather-Based)
+
+      # ============================================================
+      # WEEKLY SCHEDULE - Simplified View
+      # ============================================================
+      - type: entities
+        title: Weekly Departure Schedule
+        show_header_toggle: false
+        entities:
+          - type: section
+            label: "Enable days and set departure times"
+
+          - type: custom:multiple-entity-row
+            entity: input_datetime.ev9_departure_monday
+            name: Monday
+            show_state: false
+            secondary_info:
+              entity: input_boolean.ev9_precondition_monday
+              name: Enabled
+            entities:
+              - entity: input_datetime.ev9_departure_monday
+                name: Time
+              - entity: input_boolean.ev9_precondition_monday
+                toggle: true
+                name: " "
+
+          - type: custom:multiple-entity-row
+            entity: input_datetime.ev9_departure_tuesday
+            name: Tuesday
+            show_state: false
+            secondary_info:
+              entity: input_boolean.ev9_precondition_tuesday
+              name: Enabled
+            entities:
+              - entity: input_datetime.ev9_departure_tuesday
+                name: Time
+              - entity: input_boolean.ev9_precondition_tuesday
+                toggle: true
+                name: " "
+
+          - type: custom:multiple-entity-row
+            entity: input_datetime.ev9_departure_wednesday
+            name: Wednesday
+            show_state: false
+            secondary_info:
+              entity: input_boolean.ev9_precondition_wednesday
+              name: Enabled
+            entities:
+              - entity: input_datetime.ev9_departure_wednesday
+                name: Time
+              - entity: input_boolean.ev9_precondition_wednesday
+                toggle: true
+                name: " "
+
+          - type: custom:multiple-entity-row
+            entity: input_datetime.ev9_departure_thursday
+            name: Thursday
+            show_state: false
+            secondary_info:
+              entity: input_boolean.ev9_precondition_thursday
+              name: Enabled
+            entities:
+              - entity: input_datetime.ev9_departure_thursday
+                name: Time
+              - entity: input_boolean.ev9_precondition_thursday
+                toggle: true
+                name: " "
+
+          - type: custom:multiple-entity-row
+            entity: input_datetime.ev9_departure_friday
+            name: Friday
+            show_state: false
+            secondary_info:
+              entity: input_boolean.ev9_precondition_friday
+              name: Enabled
+            entities:
+              - entity: input_datetime.ev9_departure_friday
+                name: Time
+              - entity: input_boolean.ev9_precondition_friday
+                toggle: true
+                name: " "
+
+          - type: custom:multiple-entity-row
+            entity: input_datetime.ev9_departure_saturday
+            name: Saturday
+            show_state: false
+            secondary_info:
+              entity: input_boolean.ev9_precondition_saturday
+              name: Enabled
+            entities:
+              - entity: input_datetime.ev9_departure_saturday
+                name: Time
+              - entity: input_boolean.ev9_precondition_saturday
+                toggle: true
+                name: " "
+
+          - type: custom:multiple-entity-row
+            entity: input_datetime.ev9_departure_sunday
+            name: Sunday
+            show_state: false
+            secondary_info:
+              entity: input_boolean.ev9_precondition_sunday
+              name: Enabled
+            entities:
+              - entity: input_datetime.ev9_departure_sunday
+                name: Time
+              - entity: input_boolean.ev9_precondition_sunday
+                toggle: true
+                name: " "
+
+      # ============================================================
+      # NOTIFICATION SETTINGS
+      # ============================================================
+      - type: entities
+        title: Notification Settings
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.ev9_notify_charging_complete
+            name: Charging Complete
+          - entity: input_boolean.ev9_notify_low_battery
+            name: Low Battery Alert
+          - entity: input_number.ev9_low_battery_threshold
+            name: Low Battery Threshold
+          - entity: input_boolean.ev9_notify_unlocked_at_home
+            name: Unlocked at Home Alert
+          - entity: input_number.ev9_unlocked_alert_delay
+            name: Unlocked Alert Delay
+
+  # ============================================================
+  # VIEW 3: HELP (Documentation)
+  # ============================================================
+  - title: Help
+    path: help
+    icon: mdi:help-circle
+    cards:
+
+      # ============================================================
+      # OVERVIEW
+      # ============================================================
+      - type: markdown
+        title: "📖 EV9 Integration Guide"
+        content: |
+          This dashboard integrates your **2024 Kia EV9** with Home Assistant using the kia_uvo integration.
+
+          All data comes from **Kia Connect** (the same service as your mobile app). Commands you send from here go through Kia's cloud servers to your vehicle.
+
+          **⚠️ Rate Limits**: Kia limits API calls. Data refreshes every ~30 minutes automatically. Use "Refresh Status" sparingly.
+
+      # ============================================================
+      # METRICS EXPLAINED
+      # ============================================================
+      - type: markdown
+        title: "📊 Metrics Explained"
+        content: |
+          ### Battery & Range
+
+          | Metric | Description |
+          |--------|-------------|
+          | **Battery %** | Current state of charge of the high-voltage traction battery |
+          | **EV Range** | Estimated driving range based on current charge and recent driving patterns |
+          | **12V Battery** | Health of the auxiliary 12V battery (powers electronics, starts the car) |
+
+          ### Charging Metrics
+
+          | Metric | Description |
+          |--------|-------------|
+          | **Charging Power** | Current power draw in kW. Level 1 (120V) typically 1.2-1.4 kW, Level 2 (240V) up to 11 kW |
+          | **Expected Power** | Your configured expected charging rate. Helps detect issues when actual < expected |
+          | **Time Remaining** | Estimated time to reach charge limit |
+          | **AC Charge Limit** | Max % the car will charge to on AC (Level 1/2). Set lower (80%) for daily use to preserve battery |
+          | **DC Charge Limit** | Max % for DC fast charging. Often set to 80% to avoid slow taper charging |
+
+          ### Why Charging Power Varies
+
+          Your car may charge slower than expected due to:
+          - **Temperature**: Battery too hot/cold reduces charging rate
+          - **Near Full**: Charging naturally slows above 80% (taper charging)
+          - **EVSE Limitation**: Your charger/outlet may limit power
+          - **12V Battery**: Weak 12V battery can affect charging
+          - **Vehicle Software**: The car may limit charging for battery health
+
+      # ============================================================
+      # AUTOMATIONS EXPLAINED
+      # ============================================================
+      - type: markdown
+        title: "🤖 Automations Explained"
+        content: |
+          ### 🔒 Walk-Away Auto Lock
+
+          **How it works**: Uses **GPS location only** (not phone Bluetooth or key fob).
+
+          When your car's GPS tracker (`device_tracker.ev9_location`) leaves the "Home" zone:
+          1. Waits the configured delay (default: 2 minutes)
+          2. Re-checks that the car is still unlocked AND still outside home zone
+          3. Locks the car automatically
+          4. Sends you a notification
+
+          **Note**: This is NOT the same as the car's built-in walk-away lock feature. This automation triggers based on the car leaving your home zone, regardless of where you (or your phone/key) are.
+
+          ---
+
+          ### 🪟 Auto-Close Windows
+
+          **How it works**: Same GPS-based trigger as walk-away lock.
+
+          When the car leaves your home zone, it sends a command to close all windows. Useful if you forget to close windows before driving away.
+
+          **Limitation**: This uses the `kia_uvo.set_windows` service. Not all EV9 trims support remote window control.
+
+      - type: markdown
+        title: "🤖 Automations (continued)"
+        content: |
+          ### ⚡ Charging Interrupted Alert
+
+          **How it works**: Monitors your charging overnight.
+
+          Triggers when:
+          - Charging stops (`binary_sensor.ev9_ev_battery_charge` goes from on → off)
+          - Car is still plugged in
+          - Battery is below 95%
+          - It's between 8 PM and 7 AM
+          - Condition persists for the configured delay (default: 10 min)
+
+          **Common causes for interruption**:
+          - Breaker tripped
+          - GFCI outlet tripped
+          - EVSE fault
+          - Temperature extremes
+          - Car software paused charging
+
+          ---
+
+          ### ⚡ Low Charging Power Alert
+
+          **How it works**: Compares actual charging power to your expected power setting.
+
+          Triggers when:
+          - Charging power drops below your "Low Power Threshold"
+          - Power stays low for 5+ minutes
+          - Battery is below 80% (above 80%, slow charging is normal)
+
+          **Set your expected power** based on your charging setup:
+          - Level 1 (120V/12A): ~1.3 kW
+          - Level 1 (120V/16A): ~1.6 kW
+          - Level 2 (240V): 7-11 kW depending on circuit
+
+      - type: markdown
+        title: "🤖 Automations (continued)"
+        content: |
+          ### ❄️ Scheduled Pre-conditioning
+
+          **How it works**: Starts climate control before your departure time.
+
+          1. You set departure times for each day of the week
+          2. You enable/disable each day individually
+          3. You set how many minutes before departure to start (lead time)
+          4. Automation checks every minute if it's time to start
+
+          **Smart Mode** (if enabled): Considers current weather temperature to calculate optimal lead time. Extreme temperatures get more lead time.
+
+          ---
+
+          ### 🔋 Charging Complete Notification
+
+          Notifies you when charging finishes. Triggers when:
+          - Charging state changes from "on" to "off"
+          - Car is still plugged in (rules out unplugging mid-charge)
+
+          ---
+
+          ### 🔋 Low Battery Alert
+
+          Notifies you when battery drops below your threshold. Triggers when:
+          - Battery drops below configured threshold (default: 20%)
+          - Car is NOT currently charging
+
+          ---
+
+          ### 🔓 Unlocked at Home Alert
+
+          Notifies you if car is left unlocked at home. Triggers when:
+          - Car is unlocked for longer than configured delay
+          - Car is in your Home zone
+
+      # ============================================================
+      # SETTINGS GUIDE
+      # ============================================================
+      - type: markdown
+        title: "⚙️ Settings Guide"
+        content: |
+          ### Charging Monitor Settings
+
+          | Setting | Recommended | Description |
+          |---------|-------------|-------------|
+          | Expected Charge Power | Your charger's kW | Set based on your EVSE. Level 1 = ~1.3kW |
+          | Low Power Threshold | 0.5-0.8 kW | Alert if power drops below this |
+          | Interrupt Check Delay | 10-15 min | How long to wait before alerting on stop |
+
+          ### Pre-conditioning Settings
+
+          | Setting | Recommended | Description |
+          |---------|-------------|-------------|
+          | Lead Time | 10-15 min | How early to start before departure |
+          | Target Temperature | 68-72°F | Your comfort temperature |
+          | Smart Mode | On | Auto-adjust lead time based on weather |
+
+          ### Walk-Away Lock Settings
+
+          | Setting | Recommended | Description |
+          |---------|-------------|-------------|
+          | Delay | 2-3 min | Wait time after leaving home zone |
+
+          **Tip**: Don't set delay too short or the car might lock while you're still nearby but GPS hasn't settled.
+
+      # ============================================================
+      # TROUBLESHOOTING
+      # ============================================================
+      - type: markdown
+        title: "🔧 Troubleshooting"
+        content: |
+          ### Commands Not Working?
+
+          1. **Check Kia Connect app** - Can you lock/unlock from the official app?
+          2. **Refresh status** - Press the refresh button and wait 2-3 minutes
+          3. **Check logs** - HA → Settings → System → Logs, filter for "kia_uvo"
+          4. **Rate limits** - Wait 30+ minutes if you've sent many commands
+
+          ### Data Not Updating?
+
+          - Normal refresh is every 30 minutes
+          - Use "Force Update" sparingly (contributes to rate limits)
+          - Check that Kia Connect subscription is active
+
+          ### Walk-Away Lock Not Triggering?
+
+          - Verify `device_tracker.ev9_location` is updating
+          - Check that car actually left the Home zone (GPS can drift)
+          - Verify the delay isn't too long
+          - Check that car was unlocked when leaving
+
+          ### Pre-conditioning Not Starting?
+
+          - Verify the day is enabled (toggle on)
+          - Verify master enable is on
+          - Check departure time is set correctly
+          - 12V battery must be healthy (>50%)
+          - Car cannot be actively driving
+
+# ============================================================
+# ALTERNATIVE SCHEDULE CARD (without custom cards)
+# Use this if you don't have multiple-entity-row installed
+# ============================================================
+
+# Replace the "Weekly Departure Schedule" card with this:
+#
+# - type: entities
+#   title: Weekly Departure Schedule
+#   show_header_toggle: false
+#   entities:
+#     - type: section
+#       label: Monday
+#     - entity: input_boolean.ev9_precondition_monday
+#       name: Enabled
+#     - entity: input_datetime.ev9_departure_monday
+#       name: Departure Time
+#
+#     - type: section
+#       label: Tuesday
+#     - entity: input_boolean.ev9_precondition_tuesday
+#       name: Enabled
+#     - entity: input_datetime.ev9_departure_tuesday
+#       name: Departure Time
+#
+#     # ... repeat for other days

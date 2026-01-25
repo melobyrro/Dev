@@ -1,0 +1,251 @@
+# packages/claude_config_auditor/claude_config_auditor.yaml
+# ============================================
+# CLAUDE CONFIG AUDITOR PACKAGE
+# ============================================
+# Purpose: Monitor Claude Code configuration files across projects
+#          and surface actionable recommendations via dashboard
+# Version: 1.0
+# Last Updated: 2026-01-24
+# ============================================
+
+# ============================================
+# REST SENSORS (Poll n8n Status API)
+# ============================================
+
+rest:
+  - resource: "http://192.168.1.11:5678/webhook/status-api"
+    scan_interval: 300  # 5 minutes
+    timeout: 30
+    sensor:
+      - name: "Claude Config Audit Raw"
+        unique_id: claude_config_audit_raw
+        value_template: "{{ value_json.status | default('unknown') }}"
+        json_attributes:
+          - projects
+          - total_projects
+          - critical_count
+          - error_count
+          - warning_count
+          - info_count
+          - pass_count
+          - health_score
+          - last_sync
+          - pending_candidates
+
+# ============================================
+# TEMPLATE SENSORS
+# ============================================
+
+template:
+  - sensor:
+      - name: "Claude Config Audit Status"
+        unique_id: claude_config_audit_status
+        icon: >
+          {% set status = states('sensor.claude_config_audit_raw') %}
+          {% if status == 'critical' %}
+            mdi:alert-circle
+          {% elif status == 'error' %}
+            mdi:alert
+          {% elif status == 'warning' %}
+            mdi:alert-outline
+          {% elif status == 'healthy' %}
+            mdi:check-circle
+          {% else %}
+            mdi:help-circle-outline
+          {% endif %}
+        state: "{{ states('sensor.claude_config_audit_raw') }}"
+
+      - name: "Claude Config Projects Count"
+        unique_id: claude_config_projects_count
+        icon: mdi:folder-multiple
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'total_projects') | default(0) }}"
+
+      - name: "Claude Config Health Score"
+        unique_id: claude_config_health_score
+        icon: mdi:gauge
+        unit_of_measurement: "%"
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'health_score') | default(0) }}"
+
+      - name: "Claude Config Critical Count"
+        unique_id: claude_config_critical_count
+        icon: mdi:alert-circle
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'critical_count') | default(0) }}"
+
+      - name: "Claude Config Error Count"
+        unique_id: claude_config_error_count
+        icon: mdi:alert
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'error_count') | default(0) }}"
+
+      - name: "Claude Config Warning Count"
+        unique_id: claude_config_warning_count
+        icon: mdi:alert-outline
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'warning_count') | default(0) }}"
+
+      - name: "Claude Config Info Count"
+        unique_id: claude_config_info_count
+        icon: mdi:information
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'info_count') | default(0) }}"
+
+      - name: "Claude Config Pass Count"
+        unique_id: claude_config_pass_count
+        icon: mdi:check
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'pass_count') | default(0) }}"
+
+      - name: "Claude Config Last Sync"
+        unique_id: claude_config_last_sync
+        icon: mdi:clock-outline
+        device_class: timestamp
+        state: >
+          {% set last_sync = state_attr('sensor.claude_config_audit_raw', 'last_sync') %}
+          {% if last_sync %}
+            {{ last_sync }}
+          {% else %}
+            unknown
+          {% endif %}
+
+      - name: "Claude Config Pending Candidates"
+        unique_id: claude_config_pending_candidates
+        icon: mdi:lightbulb-outline
+        state: "{{ state_attr('sensor.claude_config_audit_raw', 'pending_candidates') | default(0) }}"
+
+      - name: "Claude Config Audit Age"
+        unique_id: claude_config_audit_age
+        icon: mdi:timer-sand
+        unit_of_measurement: "h"
+        state: >
+          {% set last_sync = state_attr('sensor.claude_config_audit_raw', 'last_sync') %}
+          {% if last_sync %}
+            {% set age_seconds = (now().timestamp() - as_timestamp(last_sync)) %}
+            {{ (age_seconds / 3600) | round(1) }}
+          {% else %}
+            999
+          {% endif %}
+
+  - binary_sensor:
+      - name: "Claude Config Audit Stale"
+        unique_id: claude_config_audit_stale
+        icon: mdi:clock-alert
+        device_class: problem
+        state: >
+          {% set age = states('sensor.claude_config_audit_age') | float(999) %}
+          {{ age > 8 }}
+
+      - name: "Claude Config Has Critical Issues"
+        unique_id: claude_config_has_critical
+        icon: mdi:alert-circle
+        device_class: problem
+        state: >
+          {% set critical = states('sensor.claude_config_critical_count') | int(0) %}
+          {{ critical > 0 }}
+
+# ============================================
+# INPUT BOOLEANS (Notification Preferences)
+# ============================================
+
+input_boolean:
+  claude_config_notify_critical:
+    name: "Claude Config - Notify on Critical"
+    icon: mdi:bell-alert
+    initial: true
+
+  claude_config_notify_stale:
+    name: "Claude Config - Notify on Stale Data"
+    icon: mdi:bell-sleep
+    initial: true
+
+# ============================================
+# REST COMMANDS
+# ============================================
+
+rest_command:
+  claude_config_force_scan:
+    url: "http://192.168.1.11:5678/webhook/force-scan"
+    method: POST
+    timeout: 60
+    content_type: "application/json"
+    payload: '{"source": "home_assistant"}'
+
+# ============================================
+# AUTOMATIONS
+# ============================================
+
+automation:
+  - id: claude_config_critical_alert
+    alias: "Claude Config - Critical Issue Alert"
+    description: >
+      Send notification when critical security issues are detected
+      in Claude Code configuration files.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.claude_config_has_critical
+        to: "on"
+    condition:
+      - condition: state
+        entity_id: input_boolean.claude_config_notify_critical
+        state: "on"
+    action:
+      - service: notify.mobile_app_iphone
+        data:
+          title: "Claude Config: Critical Issue"
+          message: >
+            {{ states('sensor.claude_config_critical_count') }} critical security issue(s) detected.
+            Health score: {{ states('sensor.claude_config_health_score') }}%
+          data:
+            push:
+              sound:
+                name: default
+                critical: 1
+                volume: 1.0
+            url: "/lovelace/homelab"
+            tag: "claude_config_critical"
+
+  - id: claude_config_stale_warning
+    alias: "Claude Config - Stale Data Warning"
+    description: >
+      Send notification when audit data is older than 8 hours.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.claude_config_audit_stale
+        to: "on"
+        for:
+          minutes: 30
+    condition:
+      - condition: state
+        entity_id: input_boolean.claude_config_notify_stale
+        state: "on"
+    action:
+      - service: notify.mobile_app_iphone
+        data:
+          title: "Claude Config: Stale Audit"
+          message: >
+            Config audit data is {{ states('sensor.claude_config_audit_age') }} hours old.
+            Last sync: {{ states('sensor.claude_config_last_sync') }}
+          data:
+            url: "/lovelace/homelab"
+            tag: "claude_config_stale"
+
+  - id: claude_config_resolved_notification
+    alias: "Claude Config - Issues Resolved"
+    description: >
+      Send notification when critical issues are resolved.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: binary_sensor.claude_config_has_critical
+        from: "on"
+        to: "off"
+    condition:
+      - condition: state
+        entity_id: input_boolean.claude_config_notify_critical
+        state: "on"
+    action:
+      - service: notify.mobile_app_iphone
+        data:
+          title: "Claude Config: Issues Resolved"
+          message: >
+            All critical issues resolved. Health score: {{ states('sensor.claude_config_health_score') }}%
+          data:
+            url: "/lovelace/homelab"
+            tag: "claude_config_resolved"

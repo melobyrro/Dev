@@ -1,0 +1,12 @@
+# Debug version of patio_ac_temp_up to see what value we're getting
+patio_ac_temp_up_debug:
+  alias: 'Patio AC - Temperature Up (Debug)'
+  sequence:
+    - service: persistent_notification.create
+      data:
+        title: Debug: Temp Up
+        message: >
+          Current temp attr: {{ state_attr('climate.150633095083490_climate', 'temperature') }}
+          Type: {{ state_attr('climate.150633095083490_climate', 'temperature').__class__.__name__ }}
+          Is none: {{ state_attr('climate.150633095083490_climate', 'temperature') is none }}
+          All attributes: {{ state_attr('climate.150633095083490_climate', '') }}

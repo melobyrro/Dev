@@ -1,0 +1,296 @@
+# Kia EV9 Helper Entities
+# Version: 1.1
+# Last Updated: 2025-01-19
+#
+# These helpers enable UI-configurable settings for automations.
+# Add this content to your Home Assistant configuration.yaml or use the UI.
+#
+# DEPLOYMENT:
+# Option 1: Add to configuration.yaml and restart HA
+# Option 2: Create via UI (Settings → Devices & Services → Helpers)
+
+# ============================================================
+# DEPARTURE TIME SCHEDULE
+# Configure what time you typically leave each day
+# ============================================================
+
+input_datetime:
+  ev9_departure_monday:
+    name: "EV9 Monday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_tuesday:
+    name: "EV9 Tuesday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_wednesday:
+    name: "EV9 Wednesday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_thursday:
+    name: "EV9 Thursday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_friday:
+    name: "EV9 Friday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_saturday:
+    name: "EV9 Saturday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+  ev9_departure_sunday:
+    name: "EV9 Sunday Departure"
+    has_date: false
+    has_time: true
+    icon: mdi:calendar-clock
+
+# ============================================================
+# PRE-CONDITIONING ENABLE/DISABLE PER DAY
+# Toggle which days should auto-precondition
+# ============================================================
+
+input_boolean:
+  # Pre-conditioning toggles
+  ev9_precondition_monday:
+    name: "EV9 Pre-condition Monday"
+    icon: mdi:car-electric
+
+  ev9_precondition_tuesday:
+    name: "EV9 Pre-condition Tuesday"
+    icon: mdi:car-electric
+
+  ev9_precondition_wednesday:
+    name: "EV9 Pre-condition Wednesday"
+    icon: mdi:car-electric
+
+  ev9_precondition_thursday:
+    name: "EV9 Pre-condition Thursday"
+    icon: mdi:car-electric
+
+  ev9_precondition_friday:
+    name: "EV9 Pre-condition Friday"
+    icon: mdi:car-electric
+
+  ev9_precondition_saturday:
+    name: "EV9 Pre-condition Saturday"
+    icon: mdi:car-electric
+
+  ev9_precondition_sunday:
+    name: "EV9 Pre-condition Sunday"
+    icon: mdi:car-electric
+
+  # Master enable/disable for all pre-conditioning
+  ev9_precondition_enabled:
+    name: "EV9 Pre-conditioning Enabled"
+    icon: mdi:air-conditioner
+
+  # ============================================================
+  # NOTIFICATION TOGGLES
+  # ============================================================
+
+  ev9_notify_charging_complete:
+    name: "EV9 Notify Charging Complete"
+    icon: mdi:bell-ring
+
+  ev9_notify_low_battery:
+    name: "EV9 Notify Low Battery"
+    icon: mdi:battery-alert
+
+  ev9_notify_unlocked_at_home:
+    name: "EV9 Notify Unlocked at Home"
+    icon: mdi:lock-open-alert
+
+  ev9_notify_charging_interrupted:
+    name: "EV9 Notify Charging Interrupted"
+    icon: mdi:ev-plug-type1
+
+  ev9_notify_low_charging_power:
+    name: "EV9 Notify Low Charging Power"
+    icon: mdi:flash-alert
+
+  # ============================================================
+  # WALK-AWAY LOCK & AUTO-CLOSE WINDOWS
+  # ============================================================
+
+  ev9_walk_away_lock_enabled:
+    name: "EV9 Walk-Away Lock Enabled"
+    icon: mdi:lock-clock
+
+  ev9_auto_close_windows_enabled:
+    name: "EV9 Auto-Close Windows Enabled"
+    icon: mdi:window-closed
+
+  # ============================================================
+  # OVERNIGHT CHARGING MONITOR
+  # ============================================================
+
+  ev9_overnight_charge_monitor:
+    name: "EV9 Overnight Charge Monitor"
+    icon: mdi:weather-night
+
+# ============================================================
+# CONFIGURABLE THRESHOLDS
+# Set your preferred values for automations
+# ============================================================
+
+input_number:
+  # Pre-conditioning settings
+  ev9_precondition_lead_time:
+    name: "EV9 Pre-condition Lead Time"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:clock-start
+    mode: slider
+
+  ev9_target_temperature:
+    name: "EV9 Target Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  # Battery alerts
+  ev9_low_battery_threshold:
+    name: "EV9 Low Battery Threshold"
+    min: 10
+    max: 50
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-20
+    mode: slider
+
+  # Unlocked alert
+  ev9_unlocked_alert_delay:
+    name: "EV9 Unlocked Alert Delay"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer-outline
+    mode: slider
+
+  # Walk-away lock delay
+  ev9_walk_away_lock_delay:
+    name: "EV9 Walk-Away Lock Delay"
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer-lock
+    mode: slider
+
+  # Auto-close windows delay
+  ev9_auto_close_windows_delay:
+    name: "EV9 Auto-Close Windows Delay"
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer
+    mode: slider
+
+  # Charging power monitoring
+  ev9_expected_charge_power:
+    name: "EV9 Expected Charge Power"
+    min: 0.5
+    max: 20
+    step: 0.1
+    unit_of_measurement: "kW"
+    icon: mdi:flash
+    mode: box
+
+  ev9_low_power_threshold:
+    name: "EV9 Low Power Alert Threshold"
+    min: 0.3
+    max: 5
+    step: 0.1
+    unit_of_measurement: "kW"
+    icon: mdi:flash-alert
+    mode: box
+
+  # Charging interruption check time (minutes to wait before alerting)
+  ev9_charge_interrupt_check_delay:
+    name: "EV9 Charge Interrupt Check Delay"
+    min: 5
+    max: 60
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:clock-alert
+    mode: slider
+
+# ============================================================
+# CHARGING CURRENT SELECTOR
+# ============================================================
+
+input_select:
+  ev9_charging_current:
+    name: "EV9 Charging Current"
+    options:
+      - "100%"
+      - "90%"
+      - "60%"
+    icon: mdi:current-ac
+
+# ============================================================
+# TEMPLATE SENSORS
+# Add to configuration.yaml under 'template:' section
+# ============================================================
+
+# template:
+#   - sensor:
+#       - name: "EV9 Today Departure Time"
+#         state: >
+#           {% set day = now().strftime('%A').lower() %}
+#           {{ states('input_datetime.ev9_departure_' ~ day) }}
+#         icon: mdi:clock-outline
+#
+#       - name: "EV9 Today Precondition Enabled"
+#         state: >
+#           {% set day = now().strftime('%A').lower() %}
+#           {{ states('input_boolean.ev9_precondition_' ~ day) }}
+#         icon: mdi:car-electric
+#
+#       - name: "EV9 Charging Power Status"
+#         state: >
+#           {% set power = states('sensor.ev9_ev_charging_power') | float(0) %}
+#           {% set expected = states('input_number.ev9_expected_charge_power') | float(1.3) %}
+#           {% set threshold = states('input_number.ev9_low_power_threshold') | float(0.5) %}
+#           {% if power == 0 %}
+#             Not Charging
+#           {% elif power < threshold %}
+#             Very Low ({{ power }} kW)
+#           {% elif power < expected * 0.7 %}
+#             Below Expected ({{ power }} kW)
+#           {% else %}
+#             Normal ({{ power }} kW)
+#           {% endif %}
+#         icon: mdi:ev-station
+#
+#       - name: "EV9 Charging Power Percentage"
+#         state: >
+#           {% set power = states('sensor.ev9_ev_charging_power') | float(0) %}
+#           {% set expected = states('input_number.ev9_expected_charge_power') | float(1.3) %}
+#           {% if expected > 0 %}
+#             {{ ((power / expected) * 100) | round(0) }}
+#           {% else %}
+#             0
+#           {% endif %}
+#         unit_of_measurement: "%"
+#         icon: mdi:percent

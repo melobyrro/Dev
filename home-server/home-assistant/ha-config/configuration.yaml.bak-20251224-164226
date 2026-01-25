@@ -1,0 +1,62 @@
+  # Loads default set of integrations. Do not remove.
+  default_config:
+
+  # HTTP settings for reverse proxy
+  http:
+    use_x_forwarded_for: true
+    trusted_proxies:
+      - 127.0.0.1
+      - 192.168.1.0/24
+      - 172.16.0.0/12
+      - 10.0.0.0/8
+
+  # Google Assistant Integration
+  google_assistant:
+    project_id: ha-byrro
+    service_account: !include SERVICE_ACCOUNT.json
+    report_state: true
+    expose_by_default: false
+    exposed_domains:
+      - light
+      - switch
+      - fan
+      - climate
+      - lock
+      - script
+      - scene
+    entity_config:
+      light.living_room_light_2:
+        name: "Living Room Light"
+        expose: true
+      light.master_light:
+        name: "Master Light"
+        expose: true
+      light.master_fan:
+        name: "Master Fan"
+        expose: true
+      light.office_light:
+        name: "Office Light"
+        expose: true
+      switch.cinema_light:
+        name: "Cinema Light"
+        expose: true
+      fan.living_room_light:
+        name: "Living Room Fan"
+        expose: true
+      lock.front_door:
+        name: "Front Door"
+        expose: true
+      climate.150633095083490_climate:
+        name: "Patio AC"
+        expose: true
+      vacuum.jose:
+        name: "Jose"
+        expose: true
+
+  # Load frontend themes from the themes folder
+  frontend:
+    themes: !include_dir_merge_named themes
+
+  automation: !include automations.yaml
+  script: !include scripts.yaml
+  scene: !include scenes.yaml

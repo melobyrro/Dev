@@ -1,0 +1,71 @@
+{
+  "name": "Force Scan Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "force-scan",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "force-scan-webhook",
+      "name": "Force Scan Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/scan-github",
+        "options": {
+          "timeout": 300000
+        }
+      },
+      "id": "trigger-github-scan",
+      "name": "Trigger GitHub Scanner",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"scan_triggered\", \"message\": \"GitHub repo scan initiated.\", \"timestamp\": new Date().toISOString(), \"github_scanner_response\": $json } }}"
+      },
+      "id": "respond-force-scan",
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Force Scan Webhook": {
+      "main": [
+        [
+          {
+            "node": "Trigger GitHub Scanner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Trigger GitHub Scanner": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

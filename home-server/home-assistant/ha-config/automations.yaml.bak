@@ -1,0 +1,2539 @@
+- alias: Update Plex Priority Config
+  id: plex_priority_config_sync
+  trigger:
+  - platform: state
+    entity_id:
+    - input_number.plex_niceness
+    - input_number.qbit_niceness
+    - input_select.plex_io_class
+    - input_select.qbit_io_class
+    - input_boolean.plex_priority_enabled
+  action:
+  - service: shell_command.update_plex_priority_config
+- id: dawarich_trip_start
+  alias: Dawarich Trip - Start
+  description: Start or resume a trip when leaving home zone
+  mode: single
+  trigger:
+  - platform: zone
+    entity_id: person.andre_byrro
+    zone: zone.home
+    event: leave
+  condition:
+  - condition: state
+    entity_id: input_boolean.dawarich_on_trip
+    state: 'off'
+  - condition: state
+    entity_id: timer.dawarich_trip_debounce
+    state: idle
+  action:
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.dawarich_on_trip
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.dawarich_trip_start
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  - service: shell_command.dawarich_trip_create
+- id: dawarich_trip_extend
+  alias: Dawarich Trip - Extend
+  description: Extend the current trip based on configurable interval
+  mode: single
+  trigger:
+  - platform: time_pattern
+    minutes: /1
+  condition:
+  - condition: state
+    entity_id: input_boolean.dawarich_on_trip
+    state: 'on'
+  - condition: template
+    value_template: '{% set interval = states(''input_number.dawarich_extend_minutes'')
+      | int(10) %} {{ now().minute % interval == 0 }}
+
+      '
+  action:
+  - service: shell_command.dawarich_trip_extend
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.dawarich_trip_last_update
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+- id: dawarich_trip_finalize
+  alias: Dawarich Trip - Finalize
+  description: Finalize the trip when returning home
+  mode: single
+  trigger:
+  - platform: zone
+    entity_id: person.andre_byrro
+    zone: zone.home
+    event: enter
+  condition:
+  - condition: state
+    entity_id: input_boolean.dawarich_on_trip
+    state: 'on'
+  action:
+  - service: shell_command.dawarich_trip_finalize
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.dawarich_on_trip
+  - service: timer.start
+    target:
+      entity_id: timer.dawarich_trip_debounce
+    data:
+      duration: '{{ (states(''input_number.dawarich_debounce_minutes'') | int(5))
+        * 60 }}'
+- id: dawarich_log_start
+  alias: Dawarich Log - Trip Started
+  description: Log when a trip starts
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_start
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.dawarich_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Start|zone|success|Trip
+        started'
+- id: dawarich_log_extend
+  alias: Dawarich Log - Trip Extended
+  description: Log when a trip is extended
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_extend
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.dawarich_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Extend|scheduled|success|-'
+- id: dawarich_log_finalize
+  alias: Dawarich Log - Trip Finalized
+  description: Log when a trip is finalized
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_finalize
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.dawarich_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Finalize|zone|success|Trip
+        finalized'
+- id: plex_priority_log_change
+  alias: Plex Priority Log - Config Changed
+  description: Log when Plex priority config is synced
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.plex_priority_config_sync
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.plex_priority_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Config Sync|state_change|success|Plex={{
+        states(''input_number.plex_niceness'')|int }}, qBit={{ states(''input_number.qbit_niceness'')|int
+        }}'
+- id: dawarich_error_notify
+  alias: Dawarich Error - Notify on Failure
+  description: Send notification when Dawarich automations become unavailable
+  mode: single
+  trigger:
+  - platform: state
+    entity_id:
+    - automation.dawarich_trip_start
+    - automation.dawarich_trip_extend
+    - automation.dawarich_trip_finalize
+    to: unavailable
+    for:
+      minutes: 5
+  action:
+  - service: persistent_notification.create
+    data:
+      title: Dawarich Automation Error
+      message: One or more Dawarich trip automations are unavailable. Please check
+        the configuration.
+      notification_id: dawarich_automation_error
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Dawarich Error
+      message: Trip automations are unavailable
+      data:
+        tag: dawarich_error
+- id: dawarich_error_clear
+  alias: Dawarich Error - Clear Notification
+  description: Clear error notification when automations recover
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_start
+    from: unavailable
+    to: 'on'
+  action:
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: dawarich_automation_error
+- id: ev9_charging_complete
+  alias: 'EV9: Charging Complete Notification'
+  description: Notify when EV9 finishes charging
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    from: 'on'
+    to: 'off'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_charging_complete
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_plug
+    state: 'on'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      new_event: '{{ now().strftime(''%H:%M'') }} - CHARGING_COMPLETE: Battery at
+        {{ states(''sensor.ev9_ev_battery_level'') }}%'
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Charging Complete
+      message: 'Battery at {{ states(''sensor.ev9_ev_battery_level'') }}% Range: {{
+        states(''sensor.ev9_ev_range'') }} miles
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: active
+  mode: single
+- id: ev9_low_battery_alert
+  alias: 'EV9: Low Battery Alert'
+  description: Notify when battery drops below threshold
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.ev9_ev_battery_level
+    below: input_number.ev9_low_battery_threshold
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_low_battery
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    state: 'off'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - LOW_BATTERY: {{ states(''sensor.ev9_ev_battery_level'')
+        }}% (threshold: {{ states(''input_number.ev9_low_battery_threshold'') }}%)'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Low Battery
+      message: 'Battery at {{ states(''sensor.ev9_ev_battery_level'') }}% Range: {{
+        states(''sensor.ev9_ev_range'') }} miles Consider charging soon.
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: time-sensitive
+  mode: single
+- id: ev9_charging_interrupted
+  alias: 'EV9: Charging Interrupted Alert'
+  description: Alert if charging stops unexpectedly while plugged in (overnight only)
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    from: 'on'
+    to: 'off'
+    for:
+      minutes: '{{ states(''input_number.ev9_charge_interrupt_check_delay'') | int(10)
+        }}'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_charging_interrupted
+    state: 'on'
+  - condition: state
+    entity_id: input_boolean.ev9_overnight_charge_monitor
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_plug
+    state: 'on'
+  - condition: numeric_state
+    entity_id: sensor.ev9_ev_battery_level
+    below: 95
+  - condition: time
+    after: '20:00:00'
+    before: 07:00:00
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - CHARGING_INTERRUPTED: Stopped
+        at {{ states(''sensor.ev9_ev_battery_level'') }}%, power was {{ states(''sensor.ev9_ev_charging_power'')
+        }} kW'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Charging Stopped!
+      message: 'Charging interrupted at {{ states(''sensor.ev9_ev_battery_level'')
+        }}% Car is still plugged in but not charging. Last power: {{ states(''sensor.ev9_ev_charging_power'')
+        }} kW
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: time-sensitive
+        actions:
+        - action: EV9_RESTART_CHARGE
+          title: Restart Charging
+        - action: EV9_FORCE_UPDATE
+          title: Refresh Status
+  mode: single
+- id: ev9_restart_charge_from_notification
+  alias: 'EV9: Restart Charge from Notification'
+  description: Handle restart charging action from notification
+  trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: EV9_RESTART_CHARGE
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - RESTART_CHARGE: User initiated
+        from notification'
+  - service: kia_uvo.stop_charge
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - delay:
+      seconds: 30
+  - service: kia_uvo.start_charge
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Charging Restarted
+      message: Sent command to restart charging. Check status in a few minutes.
+  mode: single
+- id: ev9_low_charging_power
+  alias: 'EV9: Low Charging Power Alert'
+  description: Alert if charging power drops below expected threshold
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.ev9_ev_charging_power
+    below: input_number.ev9_low_power_threshold
+    for:
+      minutes: 5
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_low_charging_power
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    state: 'on'
+  - condition: numeric_state
+    entity_id: sensor.ev9_ev_battery_level
+    below: 80
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - LOW_POWER: Charging at {{ states(''sensor.ev9_ev_charging_power'')
+        }} kW (expected {{ states(''input_number.ev9_expected_charge_power'') }} kW)'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Low Charging Power
+      message: 'Charging at {{ states(''sensor.ev9_ev_charging_power'') }} kW Expected:
+        {{ states(''input_number.ev9_expected_charge_power'') }} kW Battery: {{ states(''sensor.ev9_ev_battery_level'')
+        }}% Possible causes: Temperature, EVSE issue, or car limiting charge.
+
+        '
+      data:
+        push:
+          sound: default
+        actions:
+        - action: EV9_RESTART_CHARGE
+          title: Restart Charging
+  mode: single
+- id: ev9_unlocked_at_home
+  alias: 'EV9: Unlocked at Home Alert'
+  description: Notify if car is unlocked at home for too long (informational, not
+    auto-lock)
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_locked
+    to: 'off'
+    for:
+      minutes: '{{ states(''input_number.ev9_unlocked_alert_delay'') | int(10) }}'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_unlocked_at_home
+    state: 'on'
+  - condition: zone
+    entity_id: device_tracker.ev9_location
+    zone: zone.home
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - UNLOCKED_ALERT: At home for {{
+        states(''input_number.ev9_unlocked_alert_delay'') | int }} min'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Unlocked
+      message: 'Your EV9 has been unlocked at home for {{ states(''input_number.ev9_unlocked_alert_delay'')
+        | int }} minutes.
+
+        '
+      data:
+        push:
+          sound: default
+        actions:
+        - action: LOCK_EV9
+          title: Lock Now
+          destructive: false
+  mode: single
+- id: ev9_lock_from_notification
+  alias: 'EV9: Lock from Notification Action'
+  description: Lock car when notification action is tapped
+  trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: LOCK_EV9
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - MANUAL_LOCK: User initiated from
+        notification'
+  - service: lock.lock
+    target:
+      entity_id: lock.ev9_door_lock
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Locked
+      message: Your EV9 has been locked.
+  mode: single
+- id: ev9_auto_close_windows
+  alias: 'EV9: Auto-Close Windows on Leave'
+  description: Auto-close windows when leaving home zone
+  trigger:
+  - platform: zone
+    entity_id: device_tracker.ev9_location
+    zone: zone.home
+    event: leave
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_auto_close_windows_enabled
+    state: 'on'
+  action:
+  - delay:
+      minutes: '{{ states(''input_number.ev9_auto_close_windows_delay'') | int(2)
+        }}'
+  - condition: not
+    conditions:
+    - condition: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - AUTO_CLOSE_WINDOWS: Triggered
+        after leaving home zone'
+  - service: kia_uvo.set_windows
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+      close_all: true
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Windows Closed
+      message: Auto-close windows activated after leaving home.
+  mode: single
+- id: ev9_trunk_left_open
+  alias: 'EV9: Trunk Left Open Alert'
+  description: Alert when trunk is left open for too long
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_trunk
+    to: 'on'
+    for:
+      minutes: '{{ states(''input_number.ev9_trunk_open_delay'') | int(5) }}'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_trunk_open
+    state: 'on'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - TRUNK_OPEN: Alert after {{ states(''input_number.ev9_trunk_open_delay'')
+        | int }}min'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Trunk Open
+      message: 'Your EV9 trunk has been open for {{ states(''input_number.ev9_trunk_open_delay'')
+        | int }} minutes.
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: time-sensitive
+  mode: single
+- id: ev9_climate_timer_stop
+  alias: 'EV9: Climate Timer Auto-Stop'
+  description: Stop climate control when timer finishes
+  trigger:
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.ev9_climate_timer
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - CLIMATE_STOP: Timer expired, stopping
+        climate control'
+  - service: kia_uvo.stop_climate
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Climate Timer Finished
+      message: Climate control stopped automatically after timer expired.
+  mode: single
+- id: ev9_precondition_schedule
+  alias: 'EV9: Scheduled Pre-conditioning'
+  description: Start climate control before scheduled departure using 5 flexible schedules
+    with individual temperatures
+  trigger:
+  - platform: time_pattern
+    minutes: /1
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_precondition_enabled
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_air_conditioner
+    state: 'off'
+  - condition: template
+    value_template: "{# Get current day abbreviation #} {% set day_map = {'Monday':\
+      \ 'mon', 'Tuesday': 'tue', 'Wednesday': 'wed',\n                  'Thursday':\
+      \ 'thu', 'Friday': 'fri', 'Saturday': 'sat', 'Sunday': 'sun'} %}\n{% set today\
+      \ = day_map[now().strftime('%A')] %} {# Get settings #} {% set base_lead = states('input_number.ev9_precondition_lead_time')\
+      \ | int(10) %} {% set smart_mode = is_state('input_boolean.ev9_smart_precondition',\
+      \ 'on') %} {% set global_temp = states('input_number.ev9_target_temperature')\
+      \ | float(72) %} {% set current_temp = state_attr('weather.forecast_home', 'temperature')\
+      \ | float(72) %} {# Check each schedule (1-5) for a match #} {% set ns = namespace(should_trigger=false,\
+      \ matched_schedule=0, target_temp=global_temp) %} {% for sched_num in range(1,\
+      \ 6) %}\n  {% if not ns.should_trigger %}\n    {% set enabled = is_state('input_boolean.ev9_schedule_'\
+      \ ~ sched_num ~ '_enabled', 'on') %}\n    {% set day_enabled = is_state('input_boolean.ev9_schedule_'\
+      \ ~ sched_num ~ '_' ~ today, 'on') %}\n    {% set departure = states('input_datetime.ev9_schedule_'\
+      \ ~ sched_num ~ '_time') %}\n    {% if enabled and day_enabled and departure\
+      \ not in ['unknown', 'unavailable', ''] %}\n      {# Get per-schedule temperature\
+      \ #}\n      {% set sched_temp = states('input_number.ev9_schedule_' ~ sched_num\
+      \ ~ '_temperature') | float(global_temp) %}\n      {# Calculate smart lead time\
+      \ if enabled - FIXED: changed /3 to *0.5 #}\n      {% if smart_mode %}\n   \
+      \     {% set temp_diff = (sched_temp - current_temp) | abs %}\n        {% set\
+      \ extra_time = [[(temp_diff * 0.5) | round(0) | int, 20] | min, 0] | max %}\n\
+      \        {% set lead_time = base_lead + extra_time %}\n      {% else %}\n  \
+      \      {% set lead_time = base_lead %}\n      {% endif %}\n      {% set dep_time\
+      \ = today_at(departure) %}\n      {% set start_time = dep_time - timedelta(minutes=lead_time)\
+      \ %}\n      {% if start_time <= now() < start_time + timedelta(minutes=1) %}\n\
+      \        {% set ns.should_trigger = true %}\n        {% set ns.matched_schedule\
+      \ = sched_num %}\n        {% set ns.target_temp = sched_temp %}\n      {% endif\
+      \ %}\n    {% endif %}\n  {% endif %}\n{% endfor %} {{ ns.should_trigger }}\n"
+  action:
+  - variables:
+      day_map: "{{ {'Monday': 'mon', 'Tuesday': 'tue', 'Wednesday': 'wed',\n    'Thursday':\
+        \ 'thu', 'Friday': 'fri', 'Saturday': 'sat', 'Sunday': 'sun'} }}\n"
+      today: '{{ day_map[now().strftime(''%A'')] }}'
+      global_temp: '{{ states(''input_number.ev9_target_temperature'') | float(72)
+        }}'
+      current_temp: '{{ state_attr(''weather.forecast_home'', ''temperature'') | float(72)
+        }}'
+      smart_mode: '{{ is_state(''input_boolean.ev9_smart_precondition'', ''on'') }}'
+      base_lead: '{{ states(''input_number.ev9_precondition_lead_time'') | int(10)
+        }}'
+      matched_schedule: "{% set ns = namespace(matched=0) %} {% for sched_num in range(1,\
+        \ 6) %}\n  {% if ns.matched == 0 %}\n    {% set enabled = is_state('input_boolean.ev9_schedule_'\
+        \ ~ sched_num ~ '_enabled', 'on') %}\n    {% set day_enabled = is_state('input_boolean.ev9_schedule_'\
+        \ ~ sched_num ~ '_' ~ today, 'on') %}\n    {% if enabled and day_enabled %}\n\
+        \      {% set ns.matched = sched_num %}\n    {% endif %}\n  {% endif %}\n\
+        {% endfor %} {{ ns.matched }}\n"
+      target_temp: "{% set matched = 0 %} {% for sched_num in range(1, 6) %}\n  {%\
+        \ if matched == 0 %}\n    {% set enabled = is_state('input_boolean.ev9_schedule_'\
+        \ ~ sched_num ~ '_enabled', 'on') %}\n    {% set day_enabled = is_state('input_boolean.ev9_schedule_'\
+        \ ~ sched_num ~ '_' ~ today, 'on') %}\n    {% if enabled and day_enabled %}\n\
+        \      {% set matched = sched_num %}\n    {% endif %}\n  {% endif %}\n{% endfor\
+        \ %} {% if matched > 0 %}\n  {{ states('input_number.ev9_schedule_' ~ matched\
+        \ ~ '_temperature') | float(global_temp) }}\n{% else %}\n  {{ global_temp\
+        \ }}\n{% endif %}\n"
+      temp_diff: '{{ (target_temp | float - current_temp | float) | abs }}'
+      extra_time: '{{ [[((target_temp | float - current_temp | float) | abs * 0.5)
+        | round(0) | int, 20] | min, 0] | max if smart_mode else 0 }}'
+      actual_lead: '{{ base_lead | int + extra_time | int }}'
+      climate_mode: "{% if current_temp | float > target_temp | float %}\n  cooling\n\
+        {% else %}\n  heating\n{% endif %}\n"
+  - service: kia_uvo.start_climate
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+      climate: true
+      temperature: '{{ target_temp | int }}'
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_precondition_result
+    data:
+      value: '{{ now().strftime(''%H:%M'') }} - SUCCESS: Schedule {{ matched_schedule
+        }}, {{ target_temp }}°F, {{ climate_mode }}'
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - PRECONDITION: Schedule {{ matched_schedule
+        }} triggered - Target {{ target_temp }}°F ({{ climate_mode }}), lead time
+        {{ actual_lead }}min'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Pre-conditioning Started
+      message: 'Schedule {{ matched_schedule }} triggered. {% if smart_mode %} Smart
+        mode: Started {{ actual_lead }} min early (base: {{ base_lead }} + {{ extra_time
+        }} for {{ temp_diff | round(0) }}°F difference) Outside: {{ current_temp }}°F
+        -> Target: {{ target_temp }}°F ({{ climate_mode }}) {% else %} Climate control
+        started. Target: {{ target_temp }}°F {% endif %} Departure in {{ actual_lead
+        }} minutes.
+
+        '
+  mode: single
+- id: ev9_force_update_on_plug
+  alias: 'EV9: Force Update When Plugged In'
+  description: Refresh data when charging cable is connected
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_ev_battery_plug
+    to: 'on'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - PLUG_DETECTED: Forcing data refresh'
+  - delay:
+      seconds: 30
+  - service: kia_uvo.force_update
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  mode: single
+- id: ev9_force_update_from_notification
+  alias: 'EV9: Force Update from Notification'
+  description: Handle force update action from notification
+  trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: EV9_FORCE_UPDATE
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - FORCE_UPDATE: User initiated from
+        notification'
+  - service: kia_uvo.force_update
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Status Refreshing
+      message: Requested fresh data from vehicle. Check back in 1-2 minutes.
+  mode: single
+- id: netalertx_new_device_alert
+  alias: '[NetAlertX] New Unknown Device Detected'
+  description: Alert when new/unknown device appears on network
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.netalertx_new
+    above: 0
+  condition: []
+  action:
+  - service: persistent_notification.create
+    data:
+      title: 🚨 New Unknown Device on Network
+      message: NetAlertX detected {{ states('sensor.netalertx_new') }} new/unknown
+        device(s). Check NetAlertX for details.
+      notification_id: netalertx_new_device
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: New Network Device
+      message: '{{ states(''sensor.netalertx_new'') }} unknown device(s) detected.
+        Check NetAlertX.'
+- id: netalertx_device_down_alert
+  alias: '[NetAlertX] Device Down'
+  description: Alert when devices go offline
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.netalertx_down
+    above: 0
+  condition: []
+  action:
+  - service: persistent_notification.create
+    data:
+      title: ⚠️ Network Device Offline
+      message: '{{ states(''sensor.netalertx_down'') }} device(s) are offline. Check
+        NetAlertX.'
+      notification_id: netalertx_device_down
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Device Offline
+      message: '{{ states(''sensor.netalertx_down'') }} device(s) down'
+- id: ev9_update_last_location
+  alias: 'EV9: Update Last Known Location'
+  description: Store vehicle location when engine turns off (parked)
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_engine
+    from: 'on'
+    to: 'off'
+  action:
+  - variables:
+      lat: '{{ state_attr(''device_tracker.ev9_location'', ''latitude'') }}'
+      lon: '{{ state_attr(''device_tracker.ev9_location'', ''longitude'') }}'
+  - condition: template
+    value_template: '{{ lat is not none and lon is not none }}'
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_known_location
+    data:
+      value: '{{ lat }},{{ lon }}'
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - PARKED: Location saved ({{ lat
+        | round(4) }}, {{ lon | round(4) }})'
+  mode: single
+- id: ev9_theft_alert
+  alias: 'EV9: Theft/Movement Alert'
+  description: Alert if vehicle moves while you're away (AUT-05)
+  trigger:
+  - platform: state
+    entity_id: device_tracker.ev9_location
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_theft_alert_enabled
+    state: 'on'
+  - condition: numeric_state
+    entity_id: sensor.ev9_movement_distance
+    above: input_number.ev9_theft_distance_threshold
+  - condition: numeric_state
+    entity_id: sensor.ev9_phone_distance
+    above: input_number.ev9_theft_phone_distance_threshold
+  - condition: template
+    value_template: "{% set last_alert = states('input_text.ev9_last_theft_alert')\
+      \ %} {% if last_alert in ['unknown', 'unavailable', ''] %}\n  true\n{% else\
+      \ %}\n  {% set last_time = as_timestamp(strptime(last_alert, '%Y-%m-%d %H:%M:%S'))\
+      \ | default(0) %}\n  {{ (as_timestamp(now()) - last_time) > 900 }}\n{% endif\
+      \ %}\n"
+  action:
+  - variables:
+      movement_dist: '{{ states(''sensor.ev9_movement_distance'') | int(0) }}'
+      phone_dist: '{{ states(''sensor.ev9_phone_distance'') | int(0) }}'
+      curr_lat: '{{ state_attr(''device_tracker.ev9_location'', ''latitude'') }}'
+      curr_lon: '{{ state_attr(''device_tracker.ev9_location'', ''longitude'') }}'
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_theft_alert
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_known_location
+    data:
+      value: '{{ curr_lat }},{{ curr_lon }}'
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_theft_result
+    data:
+      value: '{{ now().strftime(''%H:%M'') }} - ALERT: Moved {{ movement_dist }}m
+        while phone {{ phone_dist }}m away'
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - THEFT_ALERT: Vehicle moved {{
+        movement_dist }}m while phone {{ phone_dist }}m away'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 MOVEMENT DETECTED
+      message: 'Your EV9 has moved {{ movement_dist }}m from its parked location!
+        Your phone is {{ phone_dist }}m away from the vehicle.
+
+        Location: {{ curr_lat | round(4) }}, {{ curr_lon | round(4) }}
+
+        If this wasn''t you, lock the vehicle immediately!
+
+        '
+      data:
+        push:
+          sound:
+            name: default
+            critical: 1
+            volume: 1.0
+          interruption-level: critical
+        actions:
+        - action: EV9_LOCK_NOW
+          title: Lock Vehicle
+          destructive: false
+        - action: EV9_FORCE_UPDATE
+          title: Refresh Status
+        url: https://www.google.com/maps?q={{ curr_lat }},{{ curr_lon }}
+  mode: single
+- id: ev9_lock_from_theft_notification
+  alias: 'EV9: Lock from Theft Alert'
+  description: Lock vehicle when theft alert notification action is tapped
+  trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: EV9_LOCK_NOW
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - EMERGENCY_LOCK: User initiated
+        from theft alert'
+  - service: lock.lock
+    target:
+      entity_id: lock.ev9_door_lock
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Emergency Locked
+      message: Your EV9 has been locked via theft alert action.
+      data:
+        push:
+          sound: default
+          interruption-level: time-sensitive
+  mode: single
+- id: ev9_walkaway_lock
+  alias: 'EV9: Walk-Away Auto Lock'
+  description: Auto-lock when phone moves beyond configured distance from vehicle
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.ev9_phone_distance
+    above: input_number.ev9_walkaway_distance
+    for:
+      minutes: 1
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_walk_away_lock_enabled
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_engine
+    state: 'off'
+  action:
+  - variables:
+      current_distance: '{{ states(''sensor.ev9_phone_distance'') | float(0) }}'
+      threshold: '{{ states(''input_number.ev9_walkaway_distance'') | float(5) }}'
+      is_already_locked: '{{ is_state(''lock.ev9_door_lock'', ''locked'') }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ is_already_locked }}'
+      sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_last_walkaway_result
+        data:
+          value: '{{ now().strftime(''%H:%M'') }} - SKIPPED: Already locked at {{
+            current_distance | round(0) }}m'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - WALKAWAY_LOCK: SKIPPED - Vehicle
+            already locked at {{ current_distance | round(0) }}m'
+    default:
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+      continue_on_error: true
+    - delay:
+        seconds: 10
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: lock.ev9_door_lock
+          state: locked
+        sequence:
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_last_walkaway_result
+          data:
+            value: '{{ now().strftime(''%H:%M'') }} - SUCCESS: Locked at {{ current_distance
+              | round(0) }}m (threshold: {{ threshold | round(0) }}m)'
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: '{{ now().strftime(''%H:%M'') }} - WALKAWAY_LOCK: SUCCESS -
+              Distance {{ current_distance | round(0) }}m > {{ threshold | round(0)
+              }}m threshold'
+        - service: notify.mobile_app_andre_iphone
+          data:
+            title: EV9 Walk-Away Locked
+            message: 'Auto-locked when you moved {{ current_distance | round(0) }}m
+              away from vehicle. (Threshold: {{ threshold | round(0) }}m)
+
+              '
+            data:
+              push:
+                sound: default
+      default:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_last_walkaway_result
+        data:
+          value: '{{ now().strftime(''%H:%M'') }} - FAILED: Lock command sent at {{
+            current_distance | round(0) }}m but vehicle may not have locked'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - WALKAWAY_LOCK: FAILED - API
+            error or timeout at {{ current_distance | round(0) }}m'
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: ⚠️ EV9 Walk-Away Lock FAILED
+          message: 'Tried to auto-lock at {{ current_distance | round(0) }}m but command
+            may have failed. Please verify vehicle is locked.
+
+            '
+          data:
+            push:
+              sound: default
+              interruption-level: time-sensitive
+  mode: single
+- id: ev9_timeout_lock
+  alias: 'EV9: Timeout Failsafe Lock'
+  description: Auto-lock if vehicle remains unlocked for configured time
+  trigger:
+  - platform: state
+    entity_id: lock.ev9_door_lock
+    to: unlocked
+    for:
+      minutes: '{{ states(''input_number.ev9_unlock_timeout'') | int(30) }}'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_timeout_lock_enabled
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_engine
+    state: 'off'
+  action:
+  - variables:
+      timeout_minutes: '{{ states(''input_number.ev9_unlock_timeout'') | int(30) }}'
+      is_already_locked: '{{ is_state(''lock.ev9_door_lock'', ''locked'') }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ is_already_locked }}'
+      sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_last_timeout_lock_result
+        data:
+          value: '{{ now().strftime(''%H:%M'') }} - SKIPPED: Already locked (timeout
+            was {{ timeout_minutes }}min)'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - TIMEOUT_LOCK: SKIPPED - Vehicle
+            already locked'
+    default:
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+      continue_on_error: true
+    - delay:
+        seconds: 10
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: lock.ev9_door_lock
+          state: locked
+        sequence:
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_last_timeout_lock_result
+          data:
+            value: '{{ now().strftime(''%H:%M'') }} - SUCCESS: Locked after {{ timeout_minutes
+              }}min timeout'
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: '{{ now().strftime(''%H:%M'') }} - TIMEOUT_LOCK: SUCCESS -
+              Unlocked for {{ timeout_minutes }}min exceeded timeout'
+        - service: notify.mobile_app_andre_iphone
+          data:
+            title: EV9 Timeout Locked
+            message: 'Auto-locked after being unlocked for {{ timeout_minutes }} minutes.
+              (Failsafe timeout triggered)
+
+              '
+            data:
+              push:
+                sound: default
+      default:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_last_timeout_lock_result
+        data:
+          value: '{{ now().strftime(''%H:%M'') }} - FAILED: Lock command sent after
+            {{ timeout_minutes }}min but vehicle may not have locked'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - TIMEOUT_LOCK: FAILED - API
+            error or timeout'
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: ⚠️ EV9 Timeout Lock FAILED
+          message: 'Tried to auto-lock after {{ timeout_minutes }}min timeout but
+            command may have failed. Please verify vehicle is locked.
+
+            '
+          data:
+            push:
+              sound: default
+              interruption-level: time-sensitive
+  mode: single
+- id: patio_ac_heat_guard_on
+  alias: Patio AC - Heat Guard ON
+  description: Activate cooling when temperature exceeds threshold
+  mode: single
+  initial_state: true
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.patio_temp_sensor_temperature
+    above: input_number.patio_ac_heat_threshold
+  - platform: time_pattern
+    minutes: /5
+  - platform: state
+    entity_id: input_boolean.patio_ac_heat_guard_enabled
+    to: 'on'
+  - platform: state
+    entity_id:
+    - input_number.patio_ac_heat_threshold
+    - input_number.patio_ac_heat_target
+  condition:
+  - condition: state
+    entity_id: input_select.patio_ac_reason
+    state: idle
+  - condition: state
+    entity_id: input_boolean.patio_ac_heat_guard_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{% set auto_hours = states(''sensor.patio_ac_runtime_total_automation'')
+      | float(0) %} {% set auto_minutes = auto_hours * 60 %} {{ auto_minutes < states(''input_number.patio_ac_daily_limit'')
+      | float(0) }}
+
+      '
+  action:
+  - variables:
+      heat_trigger: '{{ states(''input_number.patio_ac_heat_threshold'') | float(default=none)
+        }}'
+      heat_target: '{{ states(''input_number.patio_ac_heat_target'') | float(default=none)
+        }}'
+      heat_invalid: '{{ heat_trigger is none or heat_target is none or heat_target
+        >= heat_trigger }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ heat_invalid }}'
+      sequence:
+      - action: persistent_notification.create
+        data:
+          title: Patio AC Heat Guard
+          message: 'Invalid Heat Guard target/trigger configuration. Target must be
+            lower than Trigger.
+
+            '
+          notification_id: patio_ac_heat_guard_invalid_config
+    - conditions:
+      - condition: template
+        value_template: '{{ not heat_invalid }}'
+      sequence:
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: patio_ac_heat_guard_invalid_config
+      - action: script.patio_ac_control
+        data:
+          action: 'on'
+          mode: cool
+          temperature: '{{ states(''input_number.patio_ac_heat_target'')|int }}'
+          reason: heat_guard
+          duration: '{{ states(''input_number.patio_ac_heat_duration'')|int }}'
+- id: patio_ac_heat_guard_off
+  alias: Patio AC - Heat Guard OFF (Early Stop)
+  description: Stop cooling when temperature drops
+  mode: single
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.patio_temp_sensor_temperature
+    below: input_number.patio_ac_heat_target
+  condition:
+  - condition: state
+    entity_id: input_select.patio_ac_reason
+    state: heat_guard
+  action:
+  - action: script.patio_ac_control
+    data:
+      action: 'off'
+      reason: heat_guard
+- id: patio_ac_humidity_night_on
+  alias: Patio AC - Humidity Night ON
+  description: Start DRY at night based on dew point trigger
+  mode: single
+  initial_state: true
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.patio_dew_point
+    above: input_number.patio_ac_dewpoint_night_start
+  - platform: time
+    at: input_datetime.patio_ac_night_start
+  - platform: time_pattern
+    minutes: /5
+  - platform: state
+    entity_id: input_boolean.patio_ac_night_humidity_enabled
+    to: 'on'
+  - platform: state
+    entity_id:
+    - input_number.patio_ac_dewpoint_night_start
+    - input_number.patio_ac_dewpoint_night_stop
+  condition:
+  - condition: state
+    entity_id: input_select.patio_ac_reason
+    state: idle
+  - condition: state
+    entity_id: input_boolean.patio_ac_night_humidity_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{% set auto_hours = states(''sensor.patio_ac_runtime_total_automation'')
+      | float(0) %} {% set auto_minutes = auto_hours * 60 %} {{ auto_minutes < states(''input_number.patio_ac_daily_limit'')
+      | float(0) }}
+
+      '
+  - condition: time
+    after: input_datetime.patio_ac_night_start
+    before: input_datetime.patio_ac_day_start
+  - condition: template
+    value_template: '{% set dp = states(''sensor.patio_dew_point'') | float(default=none)
+      %} {% set trigger = states(''input_number.patio_ac_dewpoint_night_start'') |
+      float(default=none) %} {{ dp is not none and trigger is not none and dp >= trigger
+      }}
+
+      '
+  action:
+  - variables:
+      dp_trigger: '{{ states(''input_number.patio_ac_dewpoint_night_start'') | float(default=none)
+        }}'
+      dp_target: '{{ states(''input_number.patio_ac_dewpoint_night_stop'') | float(default=none)
+        }}'
+      dp_invalid: '{{ dp_trigger is none or dp_target is none or dp_target >= dp_trigger
+        }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ dp_invalid }}'
+      sequence:
+      - action: persistent_notification.create
+        data:
+          title: Patio AC Night Humidity
+          message: 'Invalid Night Humidity dew point configuration. Target must be
+            lower than Trigger.
+
+            '
+          notification_id: patio_ac_night_humidity_invalid_config
+    - conditions:
+      - condition: template
+        value_template: '{{ not dp_invalid }}'
+      sequence:
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: patio_ac_night_humidity_invalid_config
+      - action: script.patio_ac_control
+        data:
+          action: 'on'
+          mode: dry
+          temperature: '{{ states(''input_number.patio_ac_default_dry_temp'') | int
+            }}'
+          reason: humidity_night
+- id: patio_ac_humidity_day_on
+  alias: Patio AC - Humidity Day ON
+  description: Start DRY during the day based on dew point trigger
+  mode: single
+  initial_state: true
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.patio_dew_point
+    above: input_number.patio_ac_dewpoint_start
+  - platform: time
+    at: input_datetime.patio_ac_day_start
+  - platform: time_pattern
+    minutes: /5
+  - platform: state
+    entity_id: input_boolean.patio_ac_day_humidity_enabled
+    to: 'on'
+  - platform: state
+    entity_id:
+    - input_number.patio_ac_dewpoint_start
+    - input_number.patio_ac_dewpoint_day_stop
+  condition:
+  - condition: state
+    entity_id: input_select.patio_ac_reason
+    state: idle
+  - condition: state
+    entity_id: input_boolean.patio_ac_day_humidity_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{% set auto_hours = states(''sensor.patio_ac_runtime_total_automation'')
+      | float(0) %} {% set auto_minutes = auto_hours * 60 %} {{ auto_minutes < states(''input_number.patio_ac_daily_limit'')
+      | float(0) }}
+
+      '
+  - condition: time
+    after: input_datetime.patio_ac_day_start
+    before: input_datetime.patio_ac_night_start
+  - condition: template
+    value_template: '{% set dp = states(''sensor.patio_dew_point'') | float(default=none)
+      %} {% set trigger = states(''input_number.patio_ac_dewpoint_start'') | float(default=none)
+      %} {{ dp is not none and trigger is not none and dp >= trigger }}
+
+      '
+  action:
+  - variables:
+      dp_trigger: '{{ states(''input_number.patio_ac_dewpoint_start'') | float(default=none)
+        }}'
+      dp_target: '{{ states(''input_number.patio_ac_dewpoint_day_stop'') | float(default=none)
+        }}'
+      dp_invalid: '{{ dp_trigger is none or dp_target is none or dp_target >= dp_trigger
+        }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ dp_invalid }}'
+      sequence:
+      - action: persistent_notification.create
+        data:
+          title: Patio AC Day Humidity
+          message: 'Invalid Day Humidity dew point configuration. Target must be lower
+            than Trigger.
+
+            '
+          notification_id: patio_ac_day_humidity_invalid_config
+    - conditions:
+      - condition: template
+        value_template: '{{ not dp_invalid }}'
+      sequence:
+      - action: persistent_notification.dismiss
+        data:
+          notification_id: patio_ac_day_humidity_invalid_config
+      - action: script.patio_ac_control
+        data:
+          action: 'on'
+          mode: dry
+          temperature: '{{ states(''input_number.patio_ac_default_dry_temp'') | int
+            }}'
+          reason: humidity_day
+- id: patio_ac_humidity_emergency_on
+  alias: Patio AC - Emergency RH Stop
+  description: Emergency stop when RH exceeds ceiling
+  mode: single
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.patio_temp_sensor_humidity
+    above: input_number.patio_ac_rh_emergency
+  action:
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''climate.150633095083490_climate'') != ''off''
+          }}'
+      sequence:
+      - action: script.patio_ac_control
+        data:
+          action: 'off'
+          reason: safety_lock
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.patio_ac_reason
+    data:
+      option: humidity_emergency
+  - action: persistent_notification.create
+    data:
+      title: Patio AC Emergency RH Stop
+      message: 'RH exceeded {{ states(''input_number.patio_ac_rh_emergency'')|int
+        }}%. AC forced off.
+
+        '
+      notification_id: patio_ac_emergency_rh_stop
+- id: patio_ac_humidity_day_stop_dewpoint
+  alias: Patio AC - Day Humidity Stop (Dew Point)
+  description: Stop day humidity control when dew point drops to day target
+  mode: single
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.patio_dew_point
+    below: input_number.patio_ac_dewpoint_day_stop
+  condition:
+  - condition: state
+    entity_id: input_select.patio_ac_reason
+    state: humidity_day
+  action:
+  - action: script.patio_ac_control
+    data:
+      action: 'off'
+      reason: humidity_day
+- id: patio_ac_humidity_night_stop_dewpoint
+  alias: Patio AC - Night Humidity Stop (Dew Point)
+  description: Stop night humidity control when dew point drops to night target
+  mode: single
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.patio_dew_point
+    below: input_number.patio_ac_dewpoint_night_stop
+  condition:
+  - condition: state
+    entity_id: input_select.patio_ac_reason
+    state: humidity_night
+  action:
+  - action: script.patio_ac_control
+    data:
+      action: 'off'
+      reason: humidity_night
+- id: patio_ac_timer_expired
+  alias: Patio AC - Timer Expiration Handler
+  description: Turn off AC when duration timer expires
+  mode: single
+  trigger:
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.patio_ac_heat_spike
+  condition:
+  - condition: template
+    value_template: "{{ trigger.event.data.entity_id == 'timer.patio_ac_heat_spike'\
+      \ and\n   states('input_select.patio_ac_reason') == 'heat_guard' }}\n"
+  action:
+  - action: script.patio_ac_control
+    data:
+      action: 'off'
+      reason: heat_guard
+- id: patio_ac_manual_override_detect
+  alias: Patio AC - Manual Override Detector
+  description: Detect manual state changes via user context or expected signature
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: climate.150633095083490_climate
+  action:
+  - variables:
+      user_id: '{{ trigger.to_state.context.user_id }}'
+      user_change: '{{ user_id is not none }}'
+      ttl_active: '{{ now().timestamp() <= as_timestamp(states(''input_datetime.patio_ac_expecting_change_until''),
+        0) }}'
+      expected_sig: '{{ states(''input_text.patio_ac_expected_signature'') }}'
+      sig_parts: '{{ expected_sig.split(''|'') if expected_sig else [] }}'
+      exp_mode: '{{ sig_parts[0] if sig_parts|length > 0 else '''' }}'
+      exp_temp: '{{ sig_parts[1] if sig_parts|length > 1 else ''none'' }}'
+      actual_mode: '{{ trigger.to_state.state }}'
+      actual_temp_raw: '{{ trigger.to_state.attributes.temperature if trigger.to_state.attributes.temperature
+        is not none else none }}'
+      actual_temp_known: '{{ actual_temp_raw is not none }}'
+      actual_temp: '{{ actual_temp_raw | int(0) }}'
+      mode_changed: '{{ trigger.from_state is not none and trigger.from_state.state
+        != trigger.to_state.state }}'
+      temp_changed: '{% set from_temp = trigger.from_state.attributes.temperature
+        if trigger.from_state is not none else none %} {% set to_temp = trigger.to_state.attributes.temperature
+        if trigger.to_state is not none else none %} {{ (from_temp is not none and
+        to_temp is not none and (from_temp | int) != (to_temp | int)) or (from_temp
+        is none and to_temp is not none) or (from_temp is not none and to_temp is
+        none) }}
+
+        '
+      signature_known: '{{ exp_mode not in ['''', ''unknown'', ''none'', ''unavailable'']
+        }}'
+      temp_match: '{{ exp_mode == ''dry'' or exp_temp == ''none'' or (not actual_temp_known)
+        or actual_temp == exp_temp|int }}'
+      sig_match: '{{ signature_known and actual_mode == exp_mode and temp_match }}'
+      ignore_user_change: '{{ user_change and ttl_active and sig_match }}'
+      actual_off: '{{ actual_mode == ''off'' }}'
+      mismatch: '{{ signature_known and (actual_mode != exp_mode or not temp_match)
+        }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ user_change and not ignore_user_change }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ actual_off }}'
+          sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.patio_ac_reason
+            data:
+              option: idle
+          - action: timer.cancel
+            target:
+              entity_id: timer.patio_ac_manual_safety
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.patio_ac_manual_until
+            data:
+              timestamp: '{{ now().timestamp() }}'
+        default:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: manual
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.patio_ac_manual_until
+          data:
+            timestamp: '{{ now().timestamp() }}'
+        - action: timer.start
+          target:
+            entity_id: timer.patio_ac_manual_safety
+    - conditions:
+      - condition: template
+        value_template: '{{ (not user_change) and (not ttl_active) and mismatch and
+          (mode_changed or temp_changed) }}'
+      sequence:
+      - delay: '{{ states(''input_number.patio_ac_poll_settle_seconds'')|int }}'
+      - condition: template
+        value_template: '{% set ttl_active = now().timestamp() <= as_timestamp(states(''input_datetime.patio_ac_expecting_change_until''),
+          0) %} {% set expected_sig = states(''input_text.patio_ac_expected_signature'')
+          %} {% set parts = expected_sig.split(''|'') if expected_sig else [] %} {%
+          set exp_mode = parts[0] if parts|length > 0 else '''' %} {% set exp_temp
+          = parts[1] if parts|length > 1 else ''none'' %} {% set actual_mode = states(''climate.150633095083490_climate'')
+          %} {% set actual_temp_raw = state_attr(''climate.150633095083490_climate'',
+          ''temperature'') %} {% set actual_temp_known = actual_temp_raw is not none
+          %} {% set actual_temp = actual_temp_raw | int(0) %} {% set signature_known
+          = exp_mode not in ['''', ''unknown'', ''none'', ''unavailable''] %} {% set
+          temp_match = exp_mode == ''dry'' or exp_temp == ''none'' or (not actual_temp_known)
+          or actual_temp == exp_temp|int %} {% set mismatch = signature_known and
+          (actual_mode != exp_mode or not temp_match) %} {{ (not ttl_active) and mismatch
+          }}
+
+          '
+      - variables:
+          actual_mode: '{{ states(''climate.150633095083490_climate'') }}'
+          actual_off: '{{ states(''climate.150633095083490_climate'') == ''off'' }}'
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ actual_off }}'
+          sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.patio_ac_reason
+            data:
+              option: idle
+          - action: timer.cancel
+            target:
+              entity_id: timer.patio_ac_manual_safety
+          - action: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.patio_ac_manual_until
+            data:
+              timestamp: '{{ now().timestamp() }}'
+        default:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: manual
+        - action: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.patio_ac_manual_until
+          data:
+            timestamp: '{{ now().timestamp() }}'
+        - action: timer.start
+          target:
+            entity_id: timer.patio_ac_manual_safety
+- id: patio_ac_reason_reset_when_off
+  alias: Patio AC - Reset Reason When AC Is Off
+  description: Return to Idle if an automation reason is set but the AC is OFF
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: climate.150633095083490_climate
+    to: 'off'
+  condition:
+  - condition: template
+    value_template: '{{ states(''input_select.patio_ac_reason'') in [''humidity_day'',''humidity_night'',''heat_guard'']
+      }}'
+  action:
+  - delay: '{{ states(''input_number.patio_ac_poll_settle_seconds'')|int(0) + 2 }}'
+  - condition: state
+    entity_id: climate.150633095083490_climate
+    state: 'off'
+  - condition: template
+    value_template: '{{ now().timestamp() > as_timestamp(states(''input_datetime.patio_ac_expecting_change_until''),
+      0) }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''input_select.patio_ac_reason'') == ''heat_guard''
+          }}'
+      sequence:
+      - action: timer.cancel
+        target:
+          entity_id: timer.patio_ac_heat_spike
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.patio_ac_reason
+    data:
+      option: idle
+- id: patio_ac_manual_override_reset
+  alias: Patio AC - Resume Automation
+  description: Explicitly clear manual authority so automation can run
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_button.patio_ac_resume_automation
+  action:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.patio_ac_reason
+    data:
+      option: idle
+  - action: timer.cancel
+    target:
+      entity_id:
+      - timer.patio_ac_manual_override
+      - timer.patio_ac_manual_safety
+  - action: input_datetime.set_datetime
+    target:
+      entity_id:
+      - input_datetime.patio_ac_manual_until
+      - input_datetime.patio_ac_expecting_change_until
+    data:
+      timestamp: '{{ now().timestamp() }}'
+- id: patio_ac_safety_monitor
+  alias: Patio AC - Safety Monitor
+  description: Prevent dangerous configurations (HEAT mode, etc.)
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: climate.150633095083490_climate
+    attribute: hvac_mode
+    to: heat
+  action:
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.patio_ac_reason
+    data:
+      option: safety_lock
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: climate.150633095083490_climate
+    data:
+      hvac_mode: 'off'
+  - action: persistent_notification.create
+    data:
+      title: Patio AC Safety Lock
+      message: AC was set to HEAT mode and has been disabled. Manual reset required.
+      notification_id: patio_ac_safety_lock
+- id: patio_ac_daily_limit_enforcer
+  alias: Patio AC - Automation Runtime Cap
+  description: Stop automation runs when the daily automation cap is reached
+  mode: single
+  trigger:
+  - platform: template
+    value_template: '{% set auto_hours = states(''sensor.patio_ac_runtime_total_automation'')
+      | float(0) %} {% set auto_minutes = auto_hours * 60 %} {{ auto_minutes >= states(''input_number.patio_ac_daily_limit'')
+      | float(0) }}
+
+      '
+  condition:
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') != ''off'' }}'
+  - condition: template
+    value_template: '{{ states(''input_select.patio_ac_reason'') in [''heat_guard'',
+      ''humidity_day'', ''humidity_night''] }}'
+  action:
+  - action: script.patio_ac_control
+    data:
+      action: 'off'
+      reason: '{{ states(''input_select.patio_ac_reason'') }}'
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.patio_ac_reason
+    data:
+      option: safety_lock
+  - action: persistent_notification.create
+    data:
+      title: Patio AC Automation Cap Reached
+      message: 'Automation cap of {{ states(''input_number.patio_ac_daily_limit'')|int
+        }} minutes reached. Automations disabled until midnight. Manual control still
+        works.
+
+        '
+      notification_id: patio_ac_daily_limit
+- id: patio_ac_midnight_reset
+  alias: Patio AC - Midnight Runtime Reset
+  description: Reset daily runtime counters at midnight
+  mode: single
+  trigger:
+  - platform: time
+    at: 00:00:00
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_daily_runtime
+    data:
+      value: 0
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_humidity_runtime
+    data:
+      value: 0
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.patio_ac_humidity_emergency_only
+  - action: persistent_notification.dismiss
+    data:
+      notification_id: patio_ac_humidity_soft_cap
+  - if:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: safety_lock
+    then:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: idle
+    - action: persistent_notification.dismiss
+      data:
+        notification_id: patio_ac_daily_limit
+- id: patio_ac_startup_recovery
+  alias: Patio AC - Startup Recovery
+  description: Accumulate runtime and reconstruct visual timers from _until helpers
+  mode: single
+  trigger:
+  - platform: homeassistant
+    event: start
+  action:
+  - if:
+    - condition: template
+      value_template: '{{ states(''climate.150633095083490_climate'') != ''off'' }}'
+    then:
+    - variables:
+        elapsed: "{% set start = states('input_datetime.patio_ac_runtime_start') %}\
+          \ {% if start not in ['unknown', '', 'unavailable'] %}\n  {{ (now().timestamp()\
+          \ - as_timestamp(start)) / 60 }}\n{% else %}\n  0\n{% endif %}\n"
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_daily_runtime
+      data:
+        value: '{{ (states(''input_number.patio_ac_daily_runtime'')|float + (elapsed|float))|round(1)
+          }}'
+    - if:
+      - condition: template
+        value_template: '{{ states(''input_select.patio_ac_reason'') in [''humidity_night'',''humidity_day'']
+          }}'
+      then:
+      - action: input_number.set_value
+        target:
+          entity_id: input_number.patio_ac_humidity_runtime
+        data:
+          value: '{{ (states(''input_number.patio_ac_humidity_runtime'')|float + (elapsed|float))|round(1)
+            }}'
+  - repeat:
+      for_each:
+      - timer: timer.patio_ac_manual_override
+        until: input_datetime.patio_ac_manual_until
+      - timer: timer.patio_ac_compressor_protection
+        until: input_datetime.patio_ac_compressor_protection_until
+      - timer: timer.patio_ac_humidity_min_on
+        until: input_datetime.patio_ac_humidity_min_on_until
+      - timer: timer.patio_ac_humidity_min_off
+        until: input_datetime.patio_ac_humidity_min_off_until
+      - timer: timer.patio_ac_heat_spike
+        until: input_datetime.patio_ac_heat_spike_until
+      - timer: timer.patio_ac_command_throttle
+        until: input_datetime.patio_ac_command_throttle_until
+      sequence:
+      - variables:
+          remaining: '{{ as_timestamp(states(repeat.item.until), 0) - now().timestamp()
+            }}'
+      - if:
+        - condition: template
+          value_template: '{{ remaining > 0 }}'
+        then:
+        - action: timer.start
+          target:
+            entity_id: '{{ repeat.item.timer }}'
+          data:
+            duration: '{{ remaining | int }}'
+- id: patio_ac_manual_safety_timeout
+  alias: Patio AC - Manual Safety Timeout (8 hours)
+  description: Auto-stop AC after 8 hours of continuous manual use (safety net)
+  mode: single
+  trigger:
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.patio_ac_manual_safety
+  condition:
+  - condition: state
+    entity_id: input_select.patio_ac_reason
+    state: manual
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') != ''off'' }}'
+  action:
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: climate.150633095083490_climate
+    data:
+      hvac_mode: 'off'
+  - action: input_select.select_option
+    target:
+      entity_id: input_select.patio_ac_reason
+    data:
+      option: idle
+  - action: persistent_notification.create
+    data:
+      title: Patio AC Manual Safety Stop
+      message: 'AC has been running for 8 hours continuously in manual mode. Auto-stopped
+        as a safety measure. Turn it back on if still needed.
+
+        '
+      notification_id: patio_ac_manual_safety
+- id: patio_ac_boundary_handoff
+  alias: Patio AC - Schedule Cutover
+  description: Stop or hand off between day/night humidity at schedule boundaries
+  mode: single
+  initial_state: true
+  trigger:
+  - platform: time
+    id: day_start
+    at: input_datetime.patio_ac_day_start
+  - platform: time
+    id: night_start
+    at: input_datetime.patio_ac_night_start
+  - platform: time_pattern
+    id: periodic
+    minutes: /5
+  action:
+  - variables:
+      current_reason: '{{ states(''input_select.patio_ac_reason'') }}'
+      allow_seamless: '{{ is_state(''input_boolean.patio_ac_allow_seamless_handoff'',
+        ''on'') }}'
+      ac_off: '{{ states(''climate.150633095083490_climate'') == ''off'' }}'
+      dp_value: '{{ states(''sensor.patio_dew_point'') | float(default=none) }}'
+      day_trigger: '{{ states(''input_number.patio_ac_dewpoint_start'') | float(default=none)
+        }}'
+      night_trigger: '{{ states(''input_number.patio_ac_dewpoint_night_start'') |
+        float(default=none) }}'
+      day_dp_target: '{{ states(''input_number.patio_ac_dewpoint_day_stop'') | float(default=none)
+        }}'
+      night_dp_target: '{{ states(''input_number.patio_ac_dewpoint_night_stop'') |
+        float(default=none) }}'
+      day_config_ok: '{{ day_trigger is not none and day_dp_target is not none and
+        day_dp_target < day_trigger }}'
+      night_config_ok: '{{ night_trigger is not none and night_dp_target is not none
+        and night_dp_target < night_trigger }}'
+      day_enabled: '{{ is_state(''input_boolean.patio_ac_day_humidity_enabled'', ''on'')
+        }}'
+      night_enabled: '{{ is_state(''input_boolean.patio_ac_night_humidity_enabled'',
+        ''on'') }}'
+      is_night: "{% set day_time = today_at(states('input_datetime.patio_ac_day_start'))\
+        \ %} {% set night_time = today_at(states('input_datetime.patio_ac_night_start'))\
+        \ %} {% if night_time > day_time %}\n  {{ now() >= night_time or now() < day_time\
+        \ }}\n{% else %}\n  {{ now() >= night_time and now() < day_time }}\n{% endif\
+        \ %}\n"
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.id == ''night_start'' or (trigger.id == ''periodic''
+          and is_night) }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ current_reason == 'humidity_day' and allow_seamless\
+              \ and night_enabled and\n   night_config_ok and dp_value is not none\
+              \ and dp_value >= night_trigger }}\n"
+          sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.patio_ac_reason
+            data:
+              option: humidity_night
+        - conditions:
+          - condition: template
+            value_template: "{{ current_reason == 'humidity_day' and\n   (not allow_seamless\
+              \ or not night_enabled or not night_config_ok or\n    dp_value is none\
+              \ or dp_value < night_trigger) }}\n"
+          sequence:
+          - action: script.patio_ac_control
+            data:
+              action: 'off'
+              reason: humidity_day
+      - if:
+        - condition: template
+          value_template: '{{ current_reason == ''humidity_day'' and ac_off }}'
+        then:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: idle
+      - if:
+        - condition: template
+          value_template: "{{ (not allow_seamless) and night_enabled and night_config_ok\
+            \ and\n   dp_value is not none and dp_value >= night_trigger }}\n"
+        then:
+        - wait_template: '{{ is_state(''timer.patio_ac_compressor_protection'', ''idle'')
+            }}'
+          timeout: 00:15:00
+        - condition: template
+          value_template: "{{ states('input_select.patio_ac_reason') == 'idle' and\n\
+            \   states('climate.150633095083490_climate') == 'off' }}\n"
+        - action: script.patio_ac_control
+          data:
+            action: 'on'
+            mode: dry
+            temperature: '{{ states(''input_number.patio_ac_default_dry_temp'') |
+              int }}'
+            reason: humidity_night
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.id == ''day_start'' or (trigger.id == ''periodic''
+          and not is_night) }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: "{{ current_reason == 'humidity_night' and allow_seamless\
+              \ and day_enabled and\n   day_config_ok and dp_value is not none and\
+              \ dp_value >= day_trigger }}\n"
+          sequence:
+          - action: input_select.select_option
+            target:
+              entity_id: input_select.patio_ac_reason
+            data:
+              option: humidity_day
+        - conditions:
+          - condition: template
+            value_template: "{{ current_reason == 'humidity_night' and\n   (not allow_seamless\
+              \ or not day_enabled or not day_config_ok or\n    dp_value is none or\
+              \ dp_value < day_trigger) }}\n"
+          sequence:
+          - action: script.patio_ac_control
+            data:
+              action: 'off'
+              reason: humidity_night
+      - if:
+        - condition: template
+          value_template: '{{ current_reason == ''humidity_night'' and ac_off }}'
+        then:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: idle
+      - if:
+        - condition: template
+          value_template: "{{ (not allow_seamless) and day_enabled and day_config_ok\
+            \ and\n   dp_value is not none and dp_value >= day_trigger }}\n"
+        then:
+        - wait_template: '{{ is_state(''timer.patio_ac_compressor_protection'', ''idle'')
+            }}'
+          timeout: 00:15:00
+        - condition: template
+          value_template: "{{ states('input_select.patio_ac_reason') == 'idle' and\n\
+            \   states('climate.150633095083490_climate') == 'off' }}\n"
+        - action: script.patio_ac_control
+          data:
+            action: 'on'
+            mode: dry
+            temperature: '{{ states(''input_number.patio_ac_default_dry_temp'') |
+              int }}'
+            reason: humidity_day
+- id: patio_ac_evaluation_logic
+  alias: Patio AC - Evaluation Logic
+  description: Regular evaluation of patio AC conditions (every 5 minutes)
+  mode: restart
+  trigger:
+  - platform: time_pattern
+    minutes: /5
+  action:
+  - service: homeassistant.update_entity
+    target:
+      entity_id:
+      - sensor.patio_ac_last_evaluated
+      - sensor.patio_ac_next_evaluation
+- id: patio_ac_event_logger
+  alias: Patio AC - Event Logger
+  description: Log AC state or reason changes to activity log (only actual changes)
+  mode: queued
+  trigger:
+  - platform: state
+    entity_id:
+    - climate.150633095083490_climate
+    - input_select.patio_ac_reason
+  condition:
+  - condition: template
+    value_template: '{{ trigger.from_state is not none }}'
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') not in [''unknown'',
+      ''unavailable''] }}'
+  action:
+  - variables:
+      reason: '{{ states(''input_select.patio_ac_reason'') }}'
+      reason_label: "{% set mapping = {\n  'idle': 'Idle',\n  'manual': 'Manual',\n\
+        \  'heat_guard': 'Heat Guard',\n  'humidity_day': 'Day Humidity',\n  'humidity_night':\
+        \ 'Night Humidity',\n  'humidity_emergency': 'Safety/Emergency',\n  'safety_lock':\
+        \ 'Safety/Emergency'\n} %} {{ mapping.get(reason, reason | replace('_', '\
+        \ ') | title) }}\n"
+      ac_state: '{{ states(''climate.150633095083490_climate'') }}'
+      ac_mode_label: "{% if ac_state == 'fan_only' %}\n  FAN\n{% else %}\n  {{ ac_state\
+        \ | upper }}\n{% endif %}\n"
+      timestamp: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      event_text: "{% if ac_state == 'off' %}\n  AC OFF — {{ reason_label }}\n{% else\
+        \ %}\n  AC ON ({{ ac_mode_label }}) — {{ reason_label }}\n{% endif %}\n"
+      last_event: '{{ states(''input_text.patio_ac_event_1'') }}'
+      last_event_text: "{% if last_event and ' - ' in last_event %}\n  {{ last_event.split('\
+        \ - ', 1)[1] }}\n{% else %}\n  {{ last_event }}\n{% endif %}\n"
+      is_duplicate: '{{ event_text == last_event_text }}'
+  - condition: template
+    value_template: '{{ not is_duplicate }}'
+  - service: python_script.shift_event_log
+    data:
+      new_event: '{{ timestamp }} - {{ event_text }}'
+      entity_prefix: input_text.patio_ac_event
+      max_events: 10
+- id: patio_ac_activity_clear
+  alias: Patio AC - Clear Activity Log
+  description: Clear Activity log entries
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_button.patio_ac_activity_clear
+  action:
+  - service: input_text.set_value
+    data:
+      value: ''
+    target:
+      entity_id:
+      - input_text.patio_ac_event_1
+      - input_text.patio_ac_event_2
+      - input_text.patio_ac_event_3
+      - input_text.patio_ac_event_4
+      - input_text.patio_ac_event_5
+      - input_text.patio_ac_event_6
+      - input_text.patio_ac_event_7
+      - input_text.patio_ac_event_8
+      - input_text.patio_ac_event_9
+      - input_text.patio_ac_event_10
+- id: patio_ac_validate_day_humidity_trigger
+  alias: Patio AC - Validate Day Humidity Trigger
+  description: When day trigger changes, ensure day target is at least 1 below
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_number.patio_ac_dewpoint_start
+  condition:
+  - condition: template
+    value_template: "{{ states('input_number.patio_ac_dewpoint_day_stop') | float(0)\
+      \ >=\n   states('input_number.patio_ac_dewpoint_start') | float(0) }}\n"
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_dewpoint_day_stop
+    data:
+      value: '{{ (states(''input_number.patio_ac_dewpoint_start'') | float(0) - 1)
+        | round(0) }}'
+- id: patio_ac_validate_day_dewpoint_target
+  alias: Patio AC - Validate Day Dew Point Target
+  description: When day target changes, ensure day trigger is at least 1 above
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_number.patio_ac_dewpoint_day_stop
+  condition:
+  - condition: template
+    value_template: "{{ states('input_number.patio_ac_dewpoint_day_stop') | float(0)\
+      \ >=\n   states('input_number.patio_ac_dewpoint_start') | float(0) }}\n"
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_dewpoint_start
+    data:
+      value: '{{ (states(''input_number.patio_ac_dewpoint_day_stop'') | float(0) +
+        1) | round(0) }}'
+- id: patio_ac_validate_night_humidity_trigger
+  alias: Patio AC - Validate Night Humidity Trigger
+  description: When night trigger changes, ensure night target is at least 1 below
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_number.patio_ac_dewpoint_night_start
+  condition:
+  - condition: template
+    value_template: "{{ states('input_number.patio_ac_dewpoint_night_stop') | float(0)\
+      \ >=\n   states('input_number.patio_ac_dewpoint_night_start') | float(0) }}\n"
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_dewpoint_night_stop
+    data:
+      value: '{{ (states(''input_number.patio_ac_dewpoint_night_start'') | float(0)
+        - 1) | round(0) }}'
+- id: patio_ac_validate_night_dewpoint_target
+  alias: Patio AC - Validate Night Dew Point Target
+  description: When night target changes, ensure night trigger is at least 1 above
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_number.patio_ac_dewpoint_night_stop
+  condition:
+  - condition: template
+    value_template: "{{ states('input_number.patio_ac_dewpoint_night_stop') | float(0)\
+      \ >=\n   states('input_number.patio_ac_dewpoint_night_start') | float(0) }}\n"
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_dewpoint_night_start
+    data:
+      value: '{{ (states(''input_number.patio_ac_dewpoint_night_stop'') | float(0)
+        + 1) | round(0) }}'
+- id: patio_ac_validate_heat_guard_trigger
+  alias: Patio AC - Validate Heat Guard Trigger
+  description: When heat trigger changes, ensure target is at least 1 below (min 61°F)
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_number.patio_ac_heat_threshold
+  condition:
+  - condition: template
+    value_template: "{{ states('input_number.patio_ac_heat_target') | float(0) >=\n\
+      \   states('input_number.patio_ac_heat_threshold') | float(0) }}\n"
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_heat_target
+    data:
+      value: '{% set new_target = states(''input_number.patio_ac_heat_threshold'')
+        | float(0) - 1 %} {% set ac_min = 61 %} {{ [new_target, ac_min] | max | round(0)
+        }}
+
+        '
+- id: patio_ac_validate_heat_guard_target
+  alias: Patio AC - Validate Heat Guard Target
+  description: When heat target changes, ensure trigger is at least 1 above (max 86°F)
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: input_number.patio_ac_heat_target
+  condition:
+  - condition: template
+    value_template: "{{ states('input_number.patio_ac_heat_threshold') | float(0)\
+      \ <=\n   states('input_number.patio_ac_heat_target') | float(0) }}\n"
+  action:
+  - action: input_number.set_value
+    target:
+      entity_id: input_number.patio_ac_heat_threshold
+    data:
+      value: '{{ (states(''input_number.patio_ac_heat_target'') | float(0) + 1) |
+        round(0) }}'
+- id: wyze_bridge_recover_offline
+  alias: Wyze Bridge - Recover Offline Cameras
+  description: Restart Wyze Bridge camera connections when any camera is offline or
+    stale
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.wyze_any_camera_problem
+    from: 'off'
+    to: 'on'
+    for:
+      minutes: 5
+  action:
+  - service: rest_command.wyze_bridge_restart
+    data:
+      restart_cmd: cam_data
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Wyze Bridge Recovery
+      message: 'Restarted camera connections (cam_data). Offline: {{ states(''sensor.wyze_offline_cameras'')
+        }}. Stale: {{ states(''sensor.wyze_stale_cameras'') }}.
+
+        '
+      data:
+        tag: wyze_bridge_recovery
+- id: wyze_bridge_recover_persistent
+  alias: Wyze Bridge - Restart All After Persistent Problem
+  description: Restart all Wyze Bridge services if cameras remain offline or stale
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.wyze_any_camera_problem
+    from: 'off'
+    to: 'on'
+    for:
+      minutes: 15
+  condition:
+  - condition: state
+    entity_id: binary_sensor.wyze_any_camera_problem
+    state: 'on'
+  action:
+  - service: rest_command.wyze_bridge_restart
+    data:
+      restart_cmd: all
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Wyze Bridge Escalation
+      message: 'Restarted all Wyze Bridge services. Offline: {{ states(''sensor.wyze_offline_cameras'')
+        }}. Stale: {{ states(''sensor.wyze_stale_cameras'') }}.
+
+        '
+      data:
+        tag: wyze_bridge_recovery
+- id: frigate_person_snapshot_notify
+  alias: Frigate - Person Snapshot
+  description: Send a snapshot when a new person event starts
+  mode: single
+  trigger:
+  - platform: mqtt
+    topic: frigate/events
+  condition:
+  - condition: template
+    value_template: >
+      {{ trigger.payload_json.type == 'new'
+         and trigger.payload_json.after.label == 'person'
+         and trigger.payload_json.after.has_snapshot }}
+  action:
+  - variables:
+      event_id: "{{ trigger.payload_json.after.id }}"
+  - wait_for_trigger:
+    - platform: mqtt
+      topic: frigate/events
+      value_template: >
+        {% set after = trigger.payload_json.after %}
+        {{ trigger.payload_json.type == 'update'
+           and after.id == event_id
+           and (after.sub_label | default('')) != '' }}
+    timeout: "00:00:15"
+    continue_on_timeout: true
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: "{{ wait.trigger is none }}"
+      sequence:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Frigate: Person detected"
+          message: "{{ trigger.payload_json.after.camera | replace('-', ' ') | title }}"
+          data:
+            image: "http://192.168.1.11:5001/api/events/{{ event_id }}/snapshot.jpg?bbox=1&crop=1"
+            url: "http://192.168.1.11:5001/#/events?event={{ event_id }}"
+            tag: "frigate-event-{{ event_id }}"
+- id: frigate_face_recognition_notify
+  alias: Frigate - Face Recognition
+  description: Notify when a recognized face updates a Frigate person event
+  mode: single
+  trigger:
+  - platform: mqtt
+    topic: frigate/events
+  condition:
+  - condition: template
+    value_template: >
+      {% set after = trigger.payload_json.after %}
+      {% set before = trigger.payload_json.before or {} %}
+      {{ trigger.payload_json.type == 'update'
+         and after.label == 'person'
+         and (after.sub_label | default('')) != ''
+         and (before.sub_label | default('')) != (after.sub_label | default(''))
+         and after.has_snapshot }}
+  action:
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: "Frigate: {{ trigger.payload_json.after.sub_label }} spotted"
+      message: "{{ trigger.payload_json.after.camera | replace('-', ' ') | title }}"
+      data:
+        image: "http://192.168.1.11:5001/api/events/{{ trigger.payload_json.after.id }}/snapshot.jpg?bbox=1&crop=1"
+        url: "http://192.168.1.11:5001/#/events?event={{ trigger.payload_json.after.id }}"
+        tag: "frigate-event-{{ trigger.payload_json.after.id }}"
+- id: ev9_connection_watchdog
+  alias: "EV9: Connection Watchdog"
+  description: "Auto-recover kia_uvo integration with email OTP"
+  trigger:
+    # Trigger 1: Sensor becomes unavailable for 2 hours
+    - platform: state
+      entity_id: sensor.ev9_ev_battery_level
+      to: "unavailable"
+      for:
+        hours: 2
+      id: unavailable_trigger
+    # Trigger 2: Periodic check every 8 hours for missing integration
+    - platform: time_pattern
+      hours: "/8"
+      id: periodic_trigger
+  condition:
+    # Feature must be enabled
+    - condition: state
+      entity_id: input_boolean.ev9_connection_watchdog_enabled
+      state: "on"
+    # Must not already be in recovery state
+    - condition: template
+      value_template: "{{ states('input_text.ev9_recovery_state') in ['idle', 'unknown', 'unavailable', ''] }}"
+    # For periodic trigger: only proceed if sensor doesn't exist or is unavailable
+    - condition: or
+      conditions:
+        - condition: trigger
+          id: unavailable_trigger
+        - condition: and
+          conditions:
+            - condition: trigger
+              id: periodic_trigger
+            - condition: template
+              value_template: "{{ states('sensor.ev9_ev_battery_level') in ['unknown', 'unavailable'] or state_attr('sensor.ev9_ev_battery_level', 'friendly_name') is none }}"
+    # 8-hour cooldown between recovery attempts
+    - condition: template
+      value_template: >
+        {% set last_attempt = states('input_text.ev9_last_recovery_attempt') %}
+        {% if last_attempt in ['unknown', 'unavailable', ''] %}
+          true
+        {% else %}
+          {% set last_time = as_timestamp(strptime(last_attempt, '%Y-%m-%d %H:%M:%S')) | default(0) %}
+          {{ (as_timestamp(now()) - last_time) > 28800 }}
+        {% endif %}
+  action:
+    # Set state to starting
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_recovery_state
+      data:
+        value: "starting"
+    # Update last attempt timestamp
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_recovery_attempt
+      data:
+        value: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+    # Log start
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_START: Beginning auto-recovery with OTP"
+    # Notify user
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Recovery Started"
+        message: "Kia integration unavailable. Starting auto-recovery with email OTP..."
+    # Run recovery script (deletes old, starts flow, requests OTP) - token passed as empty, script reads from secrets.yaml
+    - service: shell_command.ev9_recovery_start
+      data:
+        token: ""
+      response_variable: recovery_result
+    # Check if script succeeded and returned flow_id
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ recovery_result.returncode == 0 }}"
+          sequence:
+            # Store flow_id
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_recovery_flow_id
+              data:
+                value: "{{ recovery_result.stdout | trim }}"
+            # Set state to awaiting_otp
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_recovery_state
+              data:
+                value: "awaiting_otp"
+            # Record OTP request time
+            - service: input_datetime.set_datetime
+              target:
+                entity_id: input_datetime.ev9_otp_requested_at
+              data:
+                datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+            # Log
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_OTP_REQUESTED: Waiting for email (flow: {{ recovery_result.stdout | trim }})"
+      default:
+        # Script failed
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_recovery_state
+          data:
+            value: "failed"
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_last_recovery_result
+          data:
+            value: "{{ now().strftime('%H:%M') }} - FAILED: Recovery script error"
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_FAILED: Recovery script error"
+        - service: notify.mobile_app_andre_iphone
+          data:
+            title: "EV9 Recovery FAILED"
+            message: "Recovery script failed. Manual intervention required."
+            data:
+              push:
+                interruption-level: critical
+  mode: single
+
+# ============================================================
+# OTP EMAIL RECEIVED (v2.4)
+# Triggers when IMAP detects new Kia email, extracts OTP, completes flow
+# ============================================================
+
+- id: ev9_otp_received
+  alias: "EV9: OTP Email Received"
+  description: "Extract OTP from Kia email and complete config flow"
+  trigger:
+    - platform: event
+      event_type: imap_content
+      event_data:
+        sender: "no-reply@notification.kiausa.com"
+  condition:
+    # Must be awaiting OTP
+    - condition: template
+      value_template: "{{ states('input_text.ev9_recovery_state') == 'awaiting_otp' }}"
+    # Must have a flow_id
+    - condition: template
+    # Email must be received AFTER OTP was requested (v2.4.1 fix)
+    - condition: template
+      value_template: >
+        {% set email_date = trigger.event.data.date | as_datetime %}
+        {% set otp_requested = states("input_datetime.ev9_otp_requested_at") | as_datetime %}
+        {{ email_date > otp_requested if email_date and otp_requested else false }}
+      value_template: "{{ states('input_text.ev9_recovery_flow_id') not in ['', 'unknown', 'unavailable'] }}"
+  action:
+    # Debug: Log raw email content for troubleshooting
+    - service: system_log.write
+      data:
+        message: "EV9 OTP Email received. Subject: {{ trigger.event.data.subject }}. Text preview: {{ trigger.event.data.text[:500] if trigger.event.data.text else 'NO TEXT' }}"
+        level: warning
+    # Extract OTP from email body - try multiple patterns
+    - variables:
+        email_text: "{{ trigger.event.data.text | default('') }}"
+        email_subject: "{{ trigger.event.data.subject | default('') }}"
+        # Try multiple regex patterns for OTP extraction
+        otp_pattern1: "{{ email_text | regex_findall('Verification code is[:\\s]*([0-9]{6})') }}"
+        otp_pattern2: "{{ email_text | regex_findall('verification code[:\\s]+([0-9]{6})') }}"
+        otp_pattern3: "{{ email_text | regex_findall('Your.*?code.*?([0-9]{6})') }}"
+        otp_pattern4: "{{ email_text | regex_findall('([0-9]{6})') }}"
+        otp_code: "{% if otp_pattern1 %}{{ otp_pattern1[0] }}{% elif otp_pattern2 %}{{ otp_pattern2[0] }}{% elif otp_pattern3 %}{{ otp_pattern3[0] }}{% elif otp_pattern4 %}{{ otp_pattern4[0] }}{% endif %}"
+        flow_id: "{{ states('input_text.ev9_recovery_flow_id') }}"
+    # Debug: Log extraction results
+    - service: system_log.write
+      data:
+        message: "EV9 OTP extraction results - Pattern1: {{ otp_pattern1 }}, Pattern2: {{ otp_pattern2 }}, Pattern3: {{ otp_pattern3 }}, Pattern4: {{ otp_pattern4 }}, Final OTP: {{ otp_code }}"
+        level: warning
+    # Debug: Log the actual OTP code
+    - service: system_log.write
+      data:
+        message: "EV9 OTP code check - Code: '{{ otp_code }}', AsString: '{{ otp_code | string }}', Length: {{ (otp_code | string) | length }}"
+        level: warning
+    # Check if we got an OTP (convert to string first since regex returns integers)
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ (otp_code | string) | length == 6 }}"
+          sequence:
+            # Set state to completing
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_recovery_state
+              data:
+                value: "completing"
+            # Log OTP received
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_OTP_RECEIVED: Got code {{ otp_code }}"
+            # Store OTP in helper for shell script to read
+            - service: input_text.set_value
+              target:
+                entity_id: input_text.ev9_otp_code
+              data:
+                value: "{{ otp_code | string }}"
+            # Submit OTP via shell command (reads flow_id and otp from helpers)
+            - service: shell_command.ev9_submit_otp
+              response_variable: submit_result
+            # Wait for integration to initialize
+            - delay:
+                minutes: 2
+            # Check if sensor is now available
+            - choose:
+                - conditions:
+                    - condition: template
+                      value_template: "{{ states('sensor.ev9_ev_battery_level') not in ['unavailable', 'unknown'] }}"
+                  sequence:
+                    # SUCCESS!
+                    - service: input_text.set_value
+                      target:
+                        entity_id: input_text.ev9_recovery_state
+                      data:
+                        value: "idle"
+                    - service: input_text.set_value
+                      target:
+                        entity_id: input_text.ev9_recovery_flow_id
+                      data:
+                        value: ""
+                    - service: input_text.set_value
+                      target:
+                        entity_id: input_text.ev9_last_recovery_result
+                      data:
+                        value: "{{ now().strftime('%H:%M') }} - SUCCESS: Auto-recovered with OTP"
+                    - service: python_script.shift_event_log
+                      data:
+                        entity_prefix: input_text.ev9_event
+                        max_events: 10
+                        new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_SUCCESS: Integration restored! Battery {{ states('sensor.ev9_ev_battery_level') }}%"
+                    - service: notify.mobile_app_andre_iphone
+                      data:
+                        title: "EV9 Connection Restored!"
+                        message: >
+                          Auto-recovery completed successfully!
+                          Battery: {{ states('sensor.ev9_ev_battery_level') }}%
+              default:
+                # OTP submitted but integration still not working
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.ev9_recovery_state
+                  data:
+                    value: "failed"
+                - service: input_text.set_value
+                  target:
+                    entity_id: input_text.ev9_last_recovery_result
+                  data:
+                    value: "{{ now().strftime('%H:%M') }} - FAILED: OTP submitted but integration not working"
+                - service: python_script.shift_event_log
+                  data:
+                    entity_prefix: input_text.ev9_event
+                    max_events: 10
+                    new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_FAILED: OTP submitted but sensor still unavailable"
+                - service: notify.mobile_app_andre_iphone
+                  data:
+                    title: "EV9 Recovery Partial Failure"
+                    message: "OTP was submitted but integration didn't initialize. Manual check needed."
+                    data:
+                      push:
+                        interruption-level: time-sensitive
+      default:
+        # Couldn't extract OTP from email
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_ERROR: Could not extract OTP from email"
+  mode: single
+
+# ============================================================
+# OTP TIMEOUT (v2.4)
+# If OTP email doesn't arrive within 5 minutes, reset and notify
+# ============================================================
+
+- id: ev9_otp_timeout
+  alias: "EV9: OTP Timeout"
+  description: "Handle timeout if OTP email doesn't arrive"
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  condition:
+    # Must be awaiting OTP
+    - condition: template
+      value_template: "{{ states('input_text.ev9_recovery_state') == 'awaiting_otp' }}"
+    # Must be more than 5 minutes since OTP was requested
+    - condition: template
+      value_template: >
+        {% set requested = states('input_datetime.ev9_otp_requested_at') %}
+        {% if requested in ['unknown', 'unavailable', ''] %}
+          false
+        {% else %}
+          {% set req_time = as_timestamp(requested) %}
+          {{ (as_timestamp(now()) - req_time) > 300 }}
+        {% endif %}
+  action:
+    # Reset state
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_recovery_state
+      data:
+        value: "failed"
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_recovery_flow_id
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_recovery_result
+      data:
+        value: "{{ now().strftime('%H:%M') }} - TIMEOUT: OTP email not received in 5 min"
+    # Log
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_TIMEOUT: No OTP email received within 5 minutes"
+    # Notify
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Recovery Timeout"
+        message: >
+          OTP email was not received within 5 minutes.
+          Recovery failed. Manual intervention may be needed.
+
+          Check spam folder or try again later.
+        data:
+          push:
+            interruption-level: time-sensitive
+  mode: single

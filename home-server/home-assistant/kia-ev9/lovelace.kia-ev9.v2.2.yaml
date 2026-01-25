@@ -1,0 +1,1894 @@
+# Kia EV9 Dashboard
+# Version: 2.2
+# Last Updated: 2026-01-20
+#
+# CHANGES from v2.1:
+# - Added Theft Detection card on Config tab with enable/disable and distance thresholds
+# - Added Theft/Movement Alert documentation to Logic & Info tab
+# - Shows last theft alert result in Automation Health section
+#
+# CHANGES from v2.0:
+# - Removed global enable toggle from Pre-conditioning UI (per-schedule enables sufficient)
+# - Fixed Smart Mode formula display: shows correct *0.5 calculation
+# - Added 4th tab "Logic & Info" with consolidated documentation
+# - Removed all inline <details> sections from Main, Config, and Logs tabs
+# - Cleaner card layouts without embedded help text
+# - Consolidated Security + Vehicle Status into unified "Vehicle Security" card:
+#   - Lock/Unlock buttons + current lock state in one row
+#   - Compact inline door status (FL/FR/BL/BR/Trunk/Hood) with color indicators
+#   - Walk-Away status with threshold and last run
+#   - Timeout status with duration and last run
+# - Separate "Vehicle Info" card for Odometer and Last Update
+#
+# CHANGES from v2.1 cleanup (Task 5):
+# - Removed Start/Stop/Refresh charging buttons (auto-charge on plug-in sufficient)
+# - Consolidated all alert toggles into single "Alerts & Notifications" card
+# - Converted Automation Health from entities to markdown template display
+#
+# REQUIREMENTS:
+# - ApexCharts Card (HACS)
+# - Button Card (HACS)
+# - Stack-in-Card (HACS, optional)
+#
+# DEPLOYMENT:
+# 1. Create new dashboard: Settings -> Dashboards -> Add Dashboard
+# 2. Edit dashboard -> Raw configuration editor
+# 3. Paste this entire file
+
+views:
+  # ============================================================
+  # VIEW 1: MAIN (Operations Only - DSH-18)
+  # ============================================================
+  - title: Main
+    path: main
+    icon: mdi:car-electric
+    cards:
+
+      # ============================================================
+      # BATTERY CARD
+      # ============================================================
+      - type: vertical-stack
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: gauge
+                entity: sensor.ev9_ev_battery_level
+                name: Battery
+                min: 0
+                max: 100
+                severity:
+                  green: 50
+                  yellow: 20
+                  red: 10
+                needle: true
+
+              - type: vertical-stack
+                cards:
+                  - type: entity
+                    entity: sensor.ev9_ev_range
+                    name: Range
+                    icon: mdi:road-variant
+
+                  - type: entity
+                    entity: sensor.ev9_car_battery_level
+                    name: 12V Battery
+                    icon: mdi:car-battery
+
+      # ============================================================
+      # CHARGING CARD (Read-only on Main - DSH-21, DSH-22, DSH-23)
+      # ============================================================
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: binary_sensor.ev9_ev_battery_plug
+            state: "on"
+        card:
+          type: vertical-stack
+          cards:
+            - type: markdown
+              content: "## Charging Status"
+
+            - type: horizontal-stack
+              cards:
+                - type: entity
+                  entity: sensor.ev9_ev_charging_power
+                  name: Power
+                  icon: mdi:flash
+                  unit: kW
+
+                - type: custom:button-card
+                  entity: sensor.ev9_estimated_charge_duration
+                  name: Time Left
+                  icon: mdi:timer-outline
+                  show_state: true
+                  show_icon: true
+                  show_name: true
+                  layout: vertical
+                  styles:
+                    card:
+                      - padding: 12px
+                    state:
+                      - font-size: 18px
+                      - font-weight: bold
+                  state_display: |
+                    [[[
+                      var mins = parseInt(entity.state) || 0;
+                      var h = Math.floor(mins / 60);
+                      var m = mins % 60;
+                      return (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+                    ]]]
+
+            - type: entities
+              entities:
+                - entity: binary_sensor.ev9_ev_battery_charge
+                  name: Charging Active
+                - entity: number.ev9_ac_charging_limit
+                  name: AC Limit
+                - entity: number.ev9_dc_charging_limit
+                  name: DC Limit
+
+            # Charging History Graph (350px height, 0-1.5kW L1 scale)
+            - type: custom:apexcharts-card
+              header:
+                title: Charging History (7 Days)
+                show: true
+              graph_span: 7d
+              apex_config:
+                chart:
+                  height: 350
+                tooltip:
+                  x:
+                    format: "ddd MMM d, HH:mm"
+                legend:
+                  show: true
+                  position: top
+              yaxis:
+                - id: battery
+                  min: 0
+                  max: 100
+                  decimals: 0
+                  apex_config:
+                    title:
+                      text: "Battery %"
+                    labels:
+                      style:
+                        colors: "#4CAF50"
+                - id: power
+                  opposite: true
+                  min: 0
+                  max: 1.5
+                  decimals: 2
+                  apex_config:
+                    title:
+                      text: "Power (kW)"
+                    labels:
+                      style:
+                        colors: "#FF9800"
+              series:
+                - entity: sensor.ev9_ev_battery_level
+                  name: Battery Level
+                  yaxis_id: battery
+                  color: "#4CAF50"
+                  stroke_width: 2
+                  group_by:
+                    func: avg
+                    duration: 30min
+                - entity: sensor.ev9_l2_charging_power
+                  name: Charging Power
+                  yaxis_id: power
+                  color: "#FF9800"
+                  stroke_width: 2
+                  group_by:
+                    func: avg
+                    duration: 30min
+
+      # ============================================================
+      # CLIMATE CARD
+      # ============================================================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## Climate Control"
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                name: Start Climate
+                icon: mdi:air-conditioner
+                tap_action:
+                  action: call-service
+                  service: script.ev9_start_climate_with_timer
+                styles:
+                  card:
+                    - background-color: var(--primary-color)
+                    - color: white
+                  icon:
+                    - color: white
+
+              - type: custom:button-card
+                name: Stop Climate
+                icon: mdi:fan-off
+                tap_action:
+                  action: call-service
+                  service: script.ev9_stop_climate_cancel_timer
+                styles:
+                  card:
+                    - background-color: var(--error-color)
+                    - color: white
+                  icon:
+                    - color: white
+
+          - type: entities
+            entities:
+              - entity: binary_sensor.ev9_air_conditioner
+                name: Climate Active
+              - entity: timer.ev9_climate_timer
+                name: Auto-Stop Timer
+              - entity: input_number.ev9_climate_duration
+                name: Duration
+
+      # ============================================================
+      # VEHICLE SECURITY CARD (Unified - Lock, Doors, Walk-Away, Timeout)
+      # ============================================================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## Vehicle Security"
+
+          # Row 1: Lock Controls + Status
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: lock.ev9_door_lock
+                name: Lock
+                icon: mdi:lock
+                tap_action:
+                  action: call-service
+                  service: lock.lock
+                  service_data:
+                    entity_id: lock.ev9_door_lock
+                styles:
+                  card:
+                    - background-color: var(--success-color)
+                    - color: white
+                    - flex: 1
+                  icon:
+                    - color: white
+
+              - type: custom:button-card
+                entity: lock.ev9_door_lock
+                name: Unlock
+                icon: mdi:lock-open
+                tap_action:
+                  action: call-service
+                  service: lock.unlock
+                  service_data:
+                    entity_id: lock.ev9_door_lock
+                  confirmation:
+                    text: "Unlock the vehicle?"
+                styles:
+                  card:
+                    - background-color: var(--warning-color)
+                    - color: white
+                    - flex: 1
+                  icon:
+                    - color: white
+
+              - type: custom:button-card
+                entity: lock.ev9_door_lock
+                show_name: false
+                show_icon: true
+                show_state: true
+                icon: |
+                  [[[
+                    return entity.state === 'locked' ? 'mdi:shield-lock' : 'mdi:shield-lock-open-outline';
+                  ]]]
+                styles:
+                  card:
+                    - flex: 1.5
+                    - padding: 8px
+                  state:
+                    - font-size: 14px
+                    - font-weight: bold
+                    - text-transform: capitalize
+                  icon:
+                    - color: |
+                        [[[
+                          return entity.state === 'locked' ? 'var(--success-color)' : 'var(--warning-color)';
+                        ]]]
+
+          # Row 2: Doors & Openings (Compact Inline)
+          - type: markdown
+            content: |
+              **Doors:**
+              {% set doors = [
+                ('FL', states('binary_sensor.ev9_front_left_door')),
+                ('FR', states('binary_sensor.ev9_front_right_door')),
+                ('BL', states('binary_sensor.ev9_back_left_door')),
+                ('BR', states('binary_sensor.ev9_back_right_door')),
+                ('Trunk', states('binary_sensor.ev9_trunk')),
+                ('Hood', states('binary_sensor.ev9_hood'))
+              ] %}
+              {% for name, state in doors %}{% if state == 'off' %}<font color="green">{{ name }}✓</font>{% else %}<font color="red">{{ name }}⚠</font>{% endif %}  {% endfor %}
+
+          # Row 3 & 4: Walk-Away and Timeout Status
+          - type: markdown
+            content: |
+              **Walk-Away:** {% if is_state('input_boolean.ev9_walk_away_lock_enabled', 'on') %}<font color="green">ON</font>{% else %}<font color="gray">OFF</font>{% endif %} ({{ states('input_number.ev9_walkaway_distance') | int }}m threshold)
+              *Last: {{ states('input_text.ev9_last_walkaway_result') | default('unknown', true) }}*
+
+              **Timeout:** {% if is_state('input_boolean.ev9_timeout_lock_enabled', 'on') %}<font color="green">ON</font>{% else %}<font color="gray">OFF</font>{% endif %} ({{ states('input_number.ev9_unlock_timeout') | int }}min)
+              *Last: {{ states('input_text.ev9_last_timeout_lock_result') | default('unknown', true) }}*
+
+      # ============================================================
+      # VEHICLE INFO CARD (Odometer & Last Update)
+      # ============================================================
+      - type: entities
+        title: Vehicle Info
+        entities:
+          - entity: sensor.ev9_odometer
+            name: Odometer
+          - entity: sensor.ev9_last_updated_at
+            name: Last Update
+            format: relative
+
+      # ============================================================
+      # MAP CARD
+      # ============================================================
+      - type: map
+        entities:
+          - entity: device_tracker.ev9_location
+        dark_mode: true
+        default_zoom: 15
+        aspect_ratio: 16:9
+
+  # ============================================================
+  # VIEW 2: CONFIG (All Settings - DSH-13)
+  # ============================================================
+  - title: Config
+    path: config
+    icon: mdi:cog
+    cards:
+
+      # ============================================================
+      # PROXIMITY SECURITY CARD (DSH-20)
+      # ============================================================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## Proximity Security"
+
+          - type: entities
+            title: Walk-Away Lock
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.ev9_walk_away_lock_enabled
+                name: Enabled
+              - entity: input_number.ev9_walkaway_distance
+                name: Distance Threshold
+              - entity: sensor.ev9_phone_distance
+                name: Current Phone Distance
+
+          - type: entities
+            title: Timeout Failsafe
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.ev9_timeout_lock_enabled
+                name: Enabled
+              - entity: input_number.ev9_unlock_timeout
+                name: Timeout Duration
+
+      # ============================================================
+      # THEFT DETECTION CARD (v2.2 - AUT-05)
+      # ============================================================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## Theft Detection"
+
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.ev9_theft_alert_enabled
+                name: Enabled
+              - entity: input_number.ev9_theft_distance_threshold
+                name: Movement Threshold
+              - entity: input_number.ev9_theft_phone_distance_threshold
+                name: Phone Away Distance
+              - entity: sensor.ev9_movement_distance
+                name: Current Movement
+
+          - type: markdown
+            content: |
+              **Last Alert**: {{ states('input_text.ev9_last_theft_result') | default('No alerts yet', true) }}
+
+      # ============================================================
+      # PRECONDITIONING CARD (DSH-24)
+      # ============================================================
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: "## Pre-conditioning"
+
+          - type: entities
+            show_header_toggle: false
+            entities:
+              - entity: input_boolean.ev9_smart_precondition
+                name: Smart Mode (Weather-Based)
+
+          - type: markdown
+            content: |
+              **Outside Temp**: {{ state_attr('weather.forecast_home', 'temperature') | default('--') }}F
+              {% set outside = state_attr('weather.forecast_home', 'temperature') | float(72) %}
+              {% set target = states('input_number.ev9_target_temperature') | float(72) %}
+              {% set lead = ((outside - target) | abs * 0.5) | round(0) %}
+              **Calculated Lead Time**: {{ lead }} min (based on temp difference)
+
+          # Schedule 1
+          - type: markdown
+            content: "### Schedule 1"
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_enabled
+                show_name: false
+                show_state: false
+                icon: mdi:power
+                styles:
+                  card:
+                    - width: 40px
+                    - height: 40px
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      icon:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: var(--disabled-color)
+                tap_action:
+                  action: toggle
+
+              - type: entity
+                entity: input_datetime.ev9_schedule_1_time
+                name: Time
+
+              - type: entity
+                entity: input_number.ev9_schedule_1_temperature
+                name: Temp
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_mon
+                name: M
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_tue
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_wed
+                name: W
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_thu
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_fri
+                name: F
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_sat
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_1_sun
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+
+          # Schedule 2
+          - type: markdown
+            content: "### Schedule 2"
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_enabled
+                show_name: false
+                show_state: false
+                icon: mdi:power
+                styles:
+                  card:
+                    - width: 40px
+                    - height: 40px
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      icon:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: var(--disabled-color)
+                tap_action:
+                  action: toggle
+
+              - type: entity
+                entity: input_datetime.ev9_schedule_2_time
+                name: Time
+
+              - type: entity
+                entity: input_number.ev9_schedule_2_temperature
+                name: Temp
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_mon
+                name: M
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_tue
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_wed
+                name: W
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_thu
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_fri
+                name: F
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_sat
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_2_sun
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+
+          # Schedule 3
+          - type: markdown
+            content: "### Schedule 3"
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_enabled
+                show_name: false
+                show_state: false
+                icon: mdi:power
+                styles:
+                  card:
+                    - width: 40px
+                    - height: 40px
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      icon:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: var(--disabled-color)
+                tap_action:
+                  action: toggle
+
+              - type: entity
+                entity: input_datetime.ev9_schedule_3_time
+                name: Time
+
+              - type: entity
+                entity: input_number.ev9_schedule_3_temperature
+                name: Temp
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_mon
+                name: M
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_tue
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_wed
+                name: W
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_thu
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_fri
+                name: F
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_sat
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_3_sun
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+
+          # Schedule 4
+          - type: markdown
+            content: "### Schedule 4"
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_enabled
+                show_name: false
+                show_state: false
+                icon: mdi:power
+                styles:
+                  card:
+                    - width: 40px
+                    - height: 40px
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      icon:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: var(--disabled-color)
+                tap_action:
+                  action: toggle
+
+              - type: entity
+                entity: input_datetime.ev9_schedule_4_time
+                name: Time
+
+              - type: entity
+                entity: input_number.ev9_schedule_4_temperature
+                name: Temp
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_mon
+                name: M
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_tue
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_wed
+                name: W
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_thu
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_fri
+                name: F
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_sat
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_4_sun
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+
+          # Schedule 5
+          - type: markdown
+            content: "### Schedule 5"
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_enabled
+                show_name: false
+                show_state: false
+                icon: mdi:power
+                styles:
+                  card:
+                    - width: 40px
+                    - height: 40px
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      icon:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: var(--disabled-color)
+                tap_action:
+                  action: toggle
+
+              - type: entity
+                entity: input_datetime.ev9_schedule_5_time
+                name: Time
+
+              - type: entity
+                entity: input_number.ev9_schedule_5_temperature
+                name: Temp
+
+          - type: horizontal-stack
+            cards:
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_mon
+                name: M
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_tue
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_wed
+                name: W
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_thu
+                name: T
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_fri
+                name: F
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_sat
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+              - type: custom:button-card
+                entity: input_boolean.ev9_schedule_5_sun
+                name: S
+                show_state: false
+                styles:
+                  card:
+                    - width: 32px
+                    - height: 32px
+                    - border-radius: 50%
+                    - font-size: 12px
+                  name:
+                    - font-weight: bold
+                state:
+                  - value: "on"
+                    styles:
+                      card:
+                        - background-color: var(--primary-color)
+                      name:
+                        - color: white
+                  - value: "off"
+                    styles:
+                      card:
+                        - background-color: transparent
+                        - border: 1px solid var(--disabled-color)
+                      name:
+                        - color: var(--disabled-text-color)
+                tap_action:
+                  action: toggle
+
+      # ============================================================
+      # CHARGE SETTINGS CARD (Buttons removed - auto-charge on plug-in)
+      # ============================================================
+      - type: entities
+        title: Charge Settings
+        show_header_toggle: false
+        entities:
+          - entity: number.ev9_ac_charging_limit
+            name: AC Charge Limit
+          - entity: number.ev9_dc_charging_limit
+            name: DC Charge Limit
+          - entity: input_number.ev9_expected_charge_power
+            name: Expected Power (kW)
+          - entity: input_number.ev9_low_power_threshold
+            name: Low Power Threshold
+
+      # ============================================================
+      # ALERTS & NOTIFICATIONS (Consolidated - DSH-25)
+      # ============================================================
+      - type: entities
+        title: "Alerts & Notifications"
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.ev9_notify_charging_complete
+            name: Charging Complete
+          - entity: input_boolean.ev9_notify_low_battery
+            name: Low Battery
+          - entity: input_boolean.ev9_notify_charging_interrupted
+            name: Charging Interrupted
+          - entity: input_boolean.ev9_notify_low_charging_power
+            name: Low Charging Power
+          - entity: input_boolean.ev9_notify_trunk_open
+            name: Trunk Left Open
+          - entity: input_boolean.ev9_notify_unlocked_at_home
+            name: Unlocked at Home
+          - entity: input_boolean.ev9_overnight_charge_monitor
+            name: Overnight Charge Monitor
+          - entity: input_boolean.ev9_auto_close_windows_enabled
+            name: Window Open Alert
+
+      # ============================================================
+      # ALERT THRESHOLDS (Grouped settings)
+      # ============================================================
+      - type: entities
+        title: "Alert Thresholds"
+        show_header_toggle: false
+        entities:
+          - entity: input_number.ev9_low_battery_threshold
+            name: Low Battery Threshold
+          - entity: input_number.ev9_charge_interrupt_check_delay
+            name: Interrupt Check Delay
+          - entity: input_number.ev9_unlocked_alert_delay
+            name: Unlocked Alert Delay
+          - entity: input_number.ev9_trunk_open_delay
+            name: Trunk Alert Delay
+          - entity: input_number.ev9_auto_close_windows_delay
+            name: Window Alert Delay
+
+      # ============================================================
+      # AUTOMATION HEALTH CARD (DSH-26) - Markdown template display
+      # ============================================================
+      - type: markdown
+        title: "Automation Health"
+        content: |
+          **Walk-Away Lock**
+          {{ states('input_text.ev9_last_walkaway_result') | default('No events yet', true) }}
+
+          **Timeout Failsafe**
+          {{ states('input_text.ev9_last_timeout_lock_result') | default('No events yet', true) }}
+
+          **Pre-conditioning**
+          {{ states('input_text.ev9_last_precondition_result') | default('No events yet', true) }}
+
+          **Theft Detection**
+          {{ states('input_text.ev9_last_theft_result') | default('No events yet', true) }}
+
+  # ============================================================
+  # VIEW 3: LOGS (Read-only Event History - DSH-19)
+  # ============================================================
+  - title: Logs
+    path: logs
+    icon: mdi:text-box-multiple-outline
+    cards:
+
+      # ============================================================
+      # LAST RUN SUMMARY
+      # ============================================================
+      - type: markdown
+        title: Last Run Summary
+        content: |
+          **Walk-Away Lock**: {{ states('input_text.ev9_last_walkaway_result') or 'No events yet' }}
+
+          **Timeout Lock**: {{ states('input_text.ev9_last_timeout_lock_result') or 'No events yet' }}
+
+          **Precondition**: {{ states('input_text.ev9_last_precondition_result') or 'No events yet' }}
+
+      # ============================================================
+      # RECENT EVENTS (10 most recent)
+      # ============================================================
+      - type: markdown
+        title: Recent Events
+        content: |
+          {% set events = [
+            states('input_text.ev9_event_1'),
+            states('input_text.ev9_event_2'),
+            states('input_text.ev9_event_3'),
+            states('input_text.ev9_event_4'),
+            states('input_text.ev9_event_5'),
+            states('input_text.ev9_event_6'),
+            states('input_text.ev9_event_7'),
+            states('input_text.ev9_event_8'),
+            states('input_text.ev9_event_9'),
+            states('input_text.ev9_event_10')
+          ] %}
+          {% set filtered = events | reject('eq', '') | reject('eq', 'unknown') | reject('eq', 'unavailable') | list %}
+          {% if filtered | length == 0 %}
+          *No events logged yet.*
+          {% else %}
+          {% for event in filtered %}
+          - {{ event }}
+          {% endfor %}
+          {% endif %}
+
+      # ============================================================
+      # CLEAR LOG BUTTON
+      # ============================================================
+      - type: custom:button-card
+        name: Clear Event Log
+        icon: mdi:delete-outline
+        tap_action:
+          action: call-service
+          service: script.ev9_clear_event_log
+          confirmation:
+            text: "Clear all event log entries?"
+        styles:
+          card:
+            - background-color: var(--error-color)
+            - color: white
+          icon:
+            - color: white
+
+  # ============================================================
+  # VIEW 4: LOGIC & INFO (Documentation - DSH-27)
+  # ============================================================
+  - title: Logic & Info
+    path: logic-info
+    icon: mdi:book-open-variant
+    cards:
+
+      # ============================================================
+      # DOCUMENTATION CARD
+      # ============================================================
+      - type: markdown
+        title: Documentation
+        content: |
+          ## Walk-Away Auto-Lock
+
+          Automatically locks the vehicle when you walk away from it.
+
+          **How it works:**
+          - Triggers when your phone's GPS distance exceeds the configurable threshold (1-20m, default 5m)
+          - Must meet ALL conditions: vehicle unlocked AND engine off AND walk-away enabled
+          - 1-minute delay before triggering to prevent false positives from GPS jitter
+          - GPS updates may lag 30-60 seconds behind actual position
+
+          **Configuration:**
+          - Enable/disable in Config tab under "Proximity Security"
+          - Distance threshold adjustable from 1-20 meters
+          - Note: GPS accuracy is typically 3-10m, so very low thresholds may cause false triggers
+
+          ---
+
+          ## Timeout Failsafe Lock
+
+          Backup auto-lock that triggers if the vehicle stays unlocked too long.
+
+          **How it works:**
+          - Triggers when vehicle remains unlocked longer than the timeout period (5-120 min, default 30 min)
+          - Acts as a safety net if walk-away lock doesn't trigger (e.g., phone left in car)
+          - Only fires if vehicle is unlocked AND engine off AND timeout lock enabled
+          - Timer resets whenever the lock state changes
+
+          **Configuration:**
+          - Enable/disable in Config tab under "Timeout Failsafe"
+          - Timeout duration adjustable from 5-120 minutes
+
+          **Interaction with Walk-Away:**
+          - Either automation can lock the vehicle independently
+          - Both log their actions to the Logs tab
+          - Neither will lock if the engine is running (you're driving)
+
+          ---
+
+          ## Theft/Movement Alert (AUT-05)
+
+          Monitors for suspicious vehicle movement when you're not with the car.
+
+          **How it works:**
+          - Triggers when ALL conditions are met:
+            1. Feature is enabled
+            2. Vehicle has moved more than the "Movement Threshold" (default 100m) from its parked location
+            3. Your phone is more than "Phone Away Distance" (default 200m) from the vehicle
+            4. At least 15 minutes since the last alert (cooldown to prevent spam)
+
+          **Configuration:**
+          - **Enabled**: Master toggle for the feature
+          - **Movement Threshold** (50-500m): How far the vehicle must move from its parked location to trigger
+          - **Phone Away Distance** (100-1000m): How far your phone must be from the vehicle to trigger
+            - If your phone is close to the vehicle, it assumes you're driving (no alert)
+
+          **Parked Location:**
+          - Automatically saved when the engine turns off
+          - Displayed in Logs tab as "PARKED" event
+          - Used as reference point for movement detection
+
+          **Notification:**
+          - Sends a CRITICAL priority notification that bypasses Do Not Disturb
+          - Includes current vehicle coordinates and a map link
+          - Provides "Lock Vehicle" and "Refresh Status" action buttons
+
+          **Limitations:**
+          - GPS accuracy affects detection (typical 3-10m variance)
+          - Kia API updates location every ~30 minutes, so real-time tracking isn't possible
+          - False positives may occur if GPS drifts while parked
+
+          ---
+
+          ## Pre-Conditioning Smart Mode
+
+          Weather-based climate pre-conditioning that starts earlier when temperatures are extreme.
+
+          **Formula:**
+          ```
+          Lead Time = |Outside Temp - Target Temp| x 0.5 minutes
+          ```
+
+          **Example:**
+          - Outside temperature: 52F
+          - Target temperature: 72F
+          - Temperature difference: |52 - 72| = 20F
+          - Lead time: 20 x 0.5 = 10 minutes
+          - Result: Climate starts 10 minutes before scheduled departure
+
+          **Configuration:**
+          - Enable "Smart Mode (Weather-Based)" in Config tab
+          - Each schedule has its own target temperature
+          - Per-schedule enable toggles control each day independently
+          - Maximum lead time is capped at 20 minutes
+
+          **Schedule Priority:**
+          1. Automation checks every minute
+          2. Loops through schedules 1-5 in order
+          3. Checks: Is schedule enabled? Is today selected? Is it time?
+          4. First matching schedule wins
+
+          **Safety checks:**
+          - Won't start if engine is already running
+          - Won't start if 12V battery is low
+
+          ---
+
+          ## Event Log Reference
+
+          **Event format:** `HH:MM - EVENT_TYPE: Details`
+
+          **Event types:**
+          - `CHARGING_COMPLETE` - Charge finished while plugged in
+          - `LOW_BATTERY` - Battery below threshold and not charging
+          - `CHARGING_INTERRUPTED` - Charging stopped unexpectedly overnight
+          - `LOW_POWER` - Charging power below expected level
+          - `WALKAWAY_LOCK` - Auto-locked via walk-away
+          - `TIMEOUT_LOCK` - Auto-locked via timeout failsafe
+          - `PRECONDITION` - Climate pre-conditioning started
+          - `CLIMATE_START` - Manual climate start
+          - `CLIMATE_STOP` - Climate stopped (manual or timer)
+          - `MANUAL_LOCK` - Vehicle locked via dashboard button
+          - `PLUG_DETECTED` - Charger plugged in
+          - `FORCE_UPDATE` - Manual data refresh requested
+          - `TRUNK_OPEN` - Trunk left open alert
+          - `UNLOCKED_ALERT` - Vehicle unlocked at home alert
+          - `PARKED` - Location saved when engine turned off
+          - `THEFT_ALERT` - Vehicle moved while you're away
+          - `EMERGENCY_LOCK` - Vehicle locked from theft alert notification
+
+          **Log behavior:**
+          - Rolling log: Newest events at top
+          - Oldest entries pushed out after 10 entries
+          - Clear Log button removes all entries

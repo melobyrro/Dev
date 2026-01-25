@@ -1,0 +1,1639 @@
+title: Homelab
+views:
+  - title: Overview
+    path: overview
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: System Status
+            subtitle: Overview
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: gauge
+                entity: sensor.proxmox_cpu_usage
+                name: Proxmox CPU
+                severity:
+                  green: 0
+                  yellow: 60
+                  red: 80
+              - type: gauge
+                entity: sensor.vm_cpu_usage
+                name: VM CPU
+                severity:
+                  green: 0
+                  yellow: 60
+                  red: 80
+              - type: gauge
+                entity: sensor.proxmox_memory_usage
+                name: PVE RAM
+                severity:
+                  green: 0
+                  yellow: 70
+                  red: 85
+              - type: gauge
+                entity: sensor.vm_memory_usage
+                name: VM RAM
+                severity:
+                  green: 0
+                  yellow: 70
+                  red: 85
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: gauge
+                entity: sensor.vm_root_fs_usage
+                name: VM Root
+                severity:
+                  green: 0
+                  yellow: 70
+                  red: 85
+              - type: gauge
+                entity: sensor.byrroserver_usage
+                name: NAS
+                severity:
+                  green: 0
+                  yellow: 80
+                  red: 90
+          - type: entities
+            entities:
+              - entity: sensor.byrroserver_free_tb
+                name: NAS Free Space
+                icon: mdi:harddisk
+          - type: custom:mini-graph-card
+            name: Disk I/O (VM)
+            hours_to_show: 6
+            points_per_hour: 12
+            show:
+              labels: true
+              points: false
+              legend: true
+            entities:
+              - sensor.vm_disk_read_mb_s
+              - sensor.vm_disk_write_mb_s
+          - type: entities
+            title: Quick Stats
+            entities:
+              - sensor.running_containers
+              - sensor.proxmox_uptime_days
+              - sensor.vm_uptime_days
+  - title: Proxmox
+    path: proxmox
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: Proxmox Host
+            subtitle: 192.168.1.10
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: gauge
+                entity: sensor.proxmox_cpu_usage
+                severity:
+                  green: 0
+                  yellow: 60
+                  red: 80
+              - type: gauge
+                entity: sensor.proxmox_memory_usage
+                severity:
+                  green: 0
+                  yellow: 70
+                  red: 85
+          - type: entities
+            entities:
+              - sensor.proxmox_memory_used_gb
+              - sensor.proxmox_uptime_days
+          - type: custom:mushroom-title-card
+            title: VM Summary
+            subtitle: qemu/100
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: gauge
+                entity: sensor.vm_cpu_from_proxmox
+                severity:
+                  green: 0
+                  yellow: 60
+                  red: 80
+              - type: entities
+                entities:
+                  - sensor.vm_memory_from_proxmox_gb
+          - type: markdown
+            content: |-
+              **Legend**
+
+              QEMU/100 = Proxmox VM ID for Docker host
+  - title: Docker VM
+    path: vm
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: custom:mushroom-title-card
+            title: VM Resources
+            subtitle: 192.168.1.11
+          - type: grid
+            columns: 3
+            square: false
+            cards:
+              - type: gauge
+                entity: sensor.vm_cpu_usage
+                severity:
+                  green: 0
+                  yellow: 60
+                  red: 80
+              - type: gauge
+                entity: sensor.vm_memory_usage
+                severity:
+                  green: 0
+                  yellow: 70
+                  red: 85
+              - type: gauge
+                entity: sensor.vm_root_fs_usage
+                severity:
+                  green: 0
+                  yellow: 70
+                  red: 85
+          - type: entities
+            entities:
+              - sensor.vm_memory_used_gb
+              - sensor.vm_memory_total_gb
+              - sensor.vm_uptime_days
+          - type: custom:mini-graph-card
+            name: CPU History
+            hours_to_show: 24
+            points_per_hour: 4
+            show:
+              labels: true
+              legend: true
+            entities:
+              - sensor.vm_cpu_usage
+          - type: custom:mini-graph-card
+            name: Memory History
+            hours_to_show: 24
+            points_per_hour: 4
+            show:
+              labels: true
+              legend: true
+            entities:
+              - sensor.vm_memory_usage
+          - type: custom:stack-in-card
+            title: Intel GPU
+            cards:
+              - type: grid
+                columns: 2
+                square: false
+                cards:
+                  - type: entity
+                    entity: sensor.intel_gpu_render
+                  - type: entity
+                    entity: sensor.intel_gpu_video
+              - type: entities
+                entities:
+                  - sensor.intel_gpu_frequency_mhz
+                  - sensor.intel_gpu_power_w
+          - type: custom:mini-graph-card
+            name: Network I/O
+            hours_to_show: 6
+            points_per_hour: 12
+            show:
+              labels: true
+              legend: true
+            entities:
+              - entity: sensor.vm_network_rx_mb_s
+                name: RX
+              - entity: sensor.vm_network_tx_mb_s
+                name: TX
+  - title: Containers
+    path: containers
+    cards:
+      - type: markdown
+        title: All Containers Summary
+        content: |2
+
+          | Metric | Value |
+          | :--- | :--- |
+          | **CPU %** | {{ states('sensor.containers_cpu_usage') }}% |
+          | **Cores** | {{ states('sensor.containers_cpu_cores') }} |
+          | **Memory** | {{ states.sensor | selectattr('entity_id', 'search', '_memory_mb$') | map(attribute='state') | map('float', 0) | sum | round(1) }} MB |
+          | **Storage** | {{ states.sensor | selectattr('entity_id', 'search', '_storage_gb$') | map(attribute='state') | map('float', 0) | sum | round(1) }} GB |
+          | **I/O** | {{ states.sensor | selectattr('entity_id', 'search', '_storage_io_mb_s$') | map(attribute='state') | map('float', 0) | sum | round(1) }} MB/s |
+      - type: custom:stack-in-card
+        title: Actualbudget
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.actualbudget_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.actualbudget_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.actualbudget_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.actualbudget_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Adguardhome
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.adguardhome_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.adguardhome_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.adguardhome_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.adguardhome_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Authelia
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Authelia Redis
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_redis_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_redis_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_redis_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.authelia_redis_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Blackbox Exporter
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.blackbox_exporter_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.blackbox_exporter_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.blackbox_exporter_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.blackbox_exporter_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Caddy
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.caddy_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.caddy_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.caddy_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.caddy_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Cadvisor
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.cadvisor_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.cadvisor_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.cadvisor_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.cadvisor_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Culto Caddy
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_caddy_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_caddy_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_caddy_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_caddy_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Culto DB
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_db_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_db_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_db_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_db_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Culto Redis
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_redis_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_redis_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_redis_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_redis_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Culto Scheduler
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_scheduler_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_scheduler_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_scheduler_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_scheduler_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Culto Web
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_web_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_web_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_web_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_web_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Culto Worker
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_worker_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_worker_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_worker_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.culto_worker_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Dawarich App
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_app_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_app_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_app_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_app_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Dawarich DB
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_db_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_db_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_db_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_db_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Dawarich Redis
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_redis_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_redis_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_redis_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_redis_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Dawarich Sidekiq
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_sidekiq_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_sidekiq_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_sidekiq_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.dawarich_sidekiq_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Falco
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Falco HA Bridge
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_ha_bridge_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_ha_bridge_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_ha_bridge_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.falco_ha_bridge_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Falcosidekick
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.falcosidekick_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.falcosidekick_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.falcosidekick_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.falcosidekick_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Flaresolverr
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.flaresolverr_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.flaresolverr_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.flaresolverr_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.flaresolverr_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Gluetun
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.gluetun_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.gluetun_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.gluetun_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.gluetun_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Home Assistant
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.ha_container_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.ha_container_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.ha_container_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.ha_container_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Immich ML
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_ml_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_ml_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_ml_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_ml_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Immich Postgres
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_postgres_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_postgres_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_postgres_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_postgres_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Immich Redis
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_redis_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_redis_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_redis_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_redis_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Immich Server
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_server_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_server_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_server_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_server_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Immich Typesense
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_typesense_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_typesense_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_typesense_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.immich_typesense_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Intel GPU Exporter
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.intel_gpu_exporter_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.intel_gpu_exporter_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.intel_gpu_exporter_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.intel_gpu_exporter_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Jellyseerr
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.jellyseerr_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.jellyseerr_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.jellyseerr_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.jellyseerr_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Loki
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.loki_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.loki_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.loki_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.loki_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Node Exporter
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.node_exporter_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.node_exporter_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.node_exporter_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.node_exporter_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Paperless
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Paperless DB
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_db_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_db_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_db_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_db_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Paperless Gotenberg
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_gotenberg_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_gotenberg_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_gotenberg_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_gotenberg_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Paperless Redis
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_redis_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_redis_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_redis_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_redis_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Paperless Tika
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_tika_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_tika_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_tika_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.paperless_tika_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Plex
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.intel_gpu_render
+                name: iGPU Render
+              - type: custom:mushroom-entity-card
+                entity: sensor.intel_gpu_video
+                name: iGPU Video
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.plex_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.plex_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.plex_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.plex_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Portainer
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.portainer_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.portainer_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.portainer_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.portainer_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Process Exporter
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.process_exporter_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.process_exporter_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.process_exporter_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.process_exporter_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Prometheus
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.prometheus_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.prometheus_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.prometheus_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.prometheus_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Promtail
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.promtail_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.promtail_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.promtail_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.promtail_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Prowlarr
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.prowlarr_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.prowlarr_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.prowlarr_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.prowlarr_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Pushgateway
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.pushgateway_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.pushgateway_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.pushgateway_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.pushgateway_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: PVE Exporter
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.pve_exporter_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.pve_exporter_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.pve_exporter_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.pve_exporter_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: QB Port Sync
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.qb_port_sync_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.qb_port_sync_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.qb_port_sync_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.qb_port_sync_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: QBit Safety Cleaner
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbit_safety_cleaner_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbit_safety_cleaner_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbit_safety_cleaner_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbit_safety_cleaner_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: QBittorrent
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbittorrent_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbittorrent_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbittorrent_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.qbittorrent_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Radarr
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.radarr_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.radarr_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.radarr_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.radarr_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: SNMP Exporter
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.snmp_exporter_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.snmp_exporter_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.snmp_exporter_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.snmp_exporter_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Sonarr
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.sonarr_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.sonarr_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.sonarr_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.sonarr_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Tautulli
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.tautulli_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.tautulli_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.tautulli_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.tautulli_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Telemetrygen
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.telemetrygen_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.telemetrygen_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.telemetrygen_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.telemetrygen_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Tempo
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.tempo_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.tempo_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.tempo_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.tempo_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Tracker Monitor
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.tracker_monitor_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.tracker_monitor_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.tracker_monitor_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.tracker_monitor_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Trivy API
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_api_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_api_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_api_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_api_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Trivy Runner
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_runner_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_runner_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_runner_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.trivy_runner_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Unpackerr
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.unpackerr_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.unpackerr_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.unpackerr_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.unpackerr_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Uptime Kuma
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.uptime_kuma_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.uptime_kuma_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.uptime_kuma_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.uptime_kuma_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Vaultwarden
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.vaultwarden_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.vaultwarden_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.vaultwarden_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.vaultwarden_storage_io_mb_s
+                name: I/O
+      - type: custom:stack-in-card
+        title: Wireguard
+        cards:
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.wireguard_cpu
+                name: CPU
+              - type: custom:mushroom-entity-card
+                entity: sensor.wireguard_memory_mb
+                name: Mem
+          - type: grid
+            columns: 2
+            square: false
+            cards:
+              - type: custom:mushroom-entity-card
+                entity: sensor.wireguard_storage_gb
+                name: Stor
+              - type: custom:mushroom-entity-card
+                entity: sensor.wireguard_storage_io_mb_s
+                name: I/O
+

@@ -1,0 +1,332 @@
+# Daikin Fit HVAC Dashboard - Version 2.0
+# Features: Fahrenheit temps, expandable explanations, FPL energy costs
+# Deployed: 2026-01-19
+# Dashboard: dashboard-daikn
+
+views:
+  - title: HVAC
+    icon: mdi:hvac
+    path: hvac
+    cards:
+      - type: thermostat
+        entity: climate.daikin
+        name: Daikin Fit
+
+      - type: horizontal-stack
+        cards:
+          - type: gauge
+            entity: sensor.daikin_indoor_temperature
+            name: Indoor
+            min: 60
+            max: 85
+            needle: true
+            severity:
+              green: 68
+              yellow: 76
+              red: 80
+          - type: gauge
+            entity: sensor.daikin_total_power
+            name: Power
+            min: 0
+            max: 3500
+            needle: true
+            severity:
+              green: 0
+              yellow: 2000
+              red: 2500
+          - type: gauge
+            entity: sensor.daikin_compressor_load
+            name: Compressor
+            min: 0
+            max: 100
+            needle: true
+            severity:
+              green: 0
+              yellow: 50
+              red: 80
+
+      - type: glance
+        title: Current Status
+        show_name: true
+        show_state: true
+        entities:
+          - entity: sensor.daikin_system_status
+            name: Status
+          - entity: sensor.daikin_setpoint
+            name: Setpoint
+          - entity: sensor.main_room_indoor_humidity
+            name: Humidity
+          - entity: sensor.daikin_cost_per_hour
+            name: Cost/hr
+
+      - type: glance
+        title: Runtime Statistics
+        show_name: true
+        show_state: true
+        entities:
+          - entity: sensor.daikin_runtime_today
+            name: Today
+          - entity: sensor.daikin_cooling_today
+            name: Cooling
+          - entity: sensor.daikin_energy_daily
+            name: Energy
+          - entity: sensor.daikin_runtime_this_month
+            name: Month
+
+      - type: history-graph
+        title: Temperature History (24h)
+        hours_to_show: 24
+        refresh_interval: 300
+        entities:
+          - entity: sensor.daikin_indoor_temperature
+            name: Indoor
+          - entity: sensor.daikin_setpoint
+            name: Setpoint
+          - entity: sensor.daikin_outdoor_temperature
+            name: Outdoor
+
+      - type: history-graph
+        title: Power & Compressor (24h)
+        hours_to_show: 24
+        refresh_interval: 300
+        entities:
+          - entity: sensor.daikin_total_power
+            name: Power (W)
+          - entity: sensor.daikin_compressor_load
+            name: Compressor %
+
+      - type: history-graph
+        title: Demand Metrics (24h)
+        hours_to_show: 24
+        refresh_interval: 300
+        entities:
+          - entity: sensor.daikin_cooling_demand
+            name: Cooling
+          - entity: sensor.daikin_fan_demand
+            name: Fan
+          - entity: sensor.main_room_outdoor_frequency_in_percent
+            name: Frequency
+
+      - type: entities
+        title: System Details
+        show_header_toggle: false
+        entities:
+          - entity: sensor.daikin_indoor_temperature
+            name: Indoor Temperature
+          - entity: sensor.main_room_indoor_humidity
+            name: Indoor Humidity
+          - entity: sensor.daikin_temperature_delta
+            name: Delta from Setpoint
+          - type: divider
+          - entity: sensor.daikin_outdoor_temperature
+            name: Outdoor Temperature
+          - entity: sensor.main_room_outdoor_humidity
+            name: Outdoor Humidity
+          - type: divider
+          - entity: sensor.main_room_outdoor_power
+            name: Outdoor Unit Power
+          - entity: sensor.main_room_indoor_power
+            name: Indoor Unit Power
+          - entity: sensor.daikin_total_power
+            name: Total Power
+
+      # Performance Card with Explanation Toggle
+      - type: entities
+        title: Performance
+        show_header_toggle: false
+        entities:
+          - entity: sensor.daikin_compressor_load
+            name: Compressor Load
+          - entity: sensor.daikin_cooling_demand
+            name: Cooling Demand
+          - entity: sensor.daikin_fan_demand
+            name: Fan Demand
+          - entity: sensor.daikin_blower_cfm
+            name: Blower Airflow
+          - type: divider
+          - entity: input_boolean.daikin_show_explain_performance
+            name: What do these mean?
+            icon: mdi:help-circle-outline
+
+      - type: conditional
+        conditions:
+          - entity: input_boolean.daikin_show_explain_performance
+            state: "on"
+        card:
+          type: markdown
+          content: |
+            **Performance Metrics Explained**
+
+            - **Compressor Load**: How hard the inverter compressor is working (0-100%). Lower is more efficient. The Daikin Fit's inverter adjusts speed to match demand rather than cycling on/off.
+
+            - **Cooling Demand**: The system's calculated need for cooling based on temperature difference. Higher values mean more cooling power needed.
+
+            - **Fan Demand**: Airflow demand percentage. Higher when more air movement is needed.
+
+            - **Blower Airflow (CFM)**: Actual cubic feet per minute of air being moved by the indoor blower. Typical range is 400-800 CFM.
+
+      # Runtime Summary with Explanation
+      - type: entities
+        title: Runtime Summary
+        show_header_toggle: false
+        entities:
+          - entity: sensor.daikin_runtime_today
+            name: Runtime Today
+          - entity: sensor.daikin_runtime_yesterday
+            name: Runtime Yesterday
+          - entity: sensor.daikin_runtime_this_week
+            name: Runtime This Week
+          - entity: sensor.daikin_runtime_this_month
+            name: Runtime This Month
+          - entity: sensor.daikin_runtime_percentage_today
+            name: Runtime % Today
+          - type: divider
+          - entity: input_boolean.daikin_show_explain_runtime
+            name: What do these mean?
+            icon: mdi:help-circle-outline
+
+      - type: conditional
+        conditions:
+          - entity: input_boolean.daikin_show_explain_runtime
+            state: "on"
+        card:
+          type: markdown
+          content: |
+            **Runtime Metrics Explained**
+
+            - **Runtime**: Total time the system has been actively cooling or heating (not idle/fan-only).
+
+            - **Runtime % Today**: Percentage of time since midnight that the system has been running.
+
+            With inverter technology like the Daikin Fit, longer runtimes at lower power are actually more efficient than short high-power cycles. The system gradually adjusts to maintain temperature.
+
+      # Energy & Cost Card with Explanation
+      - type: entities
+        title: Energy & Cost (FPL)
+        show_header_toggle: false
+        entities:
+          - entity: sensor.daikin_energy_daily
+            name: Energy Today
+          - entity: sensor.daikin_cost_today
+            name: Cost Today
+          - type: divider
+          - entity: sensor.daikin_energy_weekly
+            name: Energy This Week
+          - entity: sensor.daikin_cost_this_week
+            name: Cost This Week
+          - type: divider
+          - entity: sensor.daikin_energy_monthly
+            name: Energy This Month
+          - entity: sensor.daikin_cost_this_month
+            name: Cost This Month
+          - type: divider
+          - entity: sensor.daikin_energy_yearly
+            name: Energy This Year
+          - entity: sensor.daikin_cost_this_year
+            name: Cost This Year
+          - type: divider
+          - entity: input_boolean.daikin_show_explain_energy
+            name: How is cost calculated?
+            icon: mdi:help-circle-outline
+
+      - type: conditional
+        conditions:
+          - entity: input_boolean.daikin_show_explain_energy
+            state: "on"
+        card:
+          type: markdown
+          content: |
+            **Energy Cost Calculation**
+
+            Costs are calculated using FPL's 2026 residential rate of **$0.137/kWh** (approximately $136.64 per 1,000 kWh).
+
+            This is an all-in rate that includes:
+            - Base energy charge (~$0.079/kWh)
+            - Fuel charge (~$0.040/kWh)
+            - Capacity, conservation, storm, and environmental charges
+
+            **Current Rate**: The Daikin Fit draws {{ states('sensor.daikin_total_power') }}W when running, costing about **${{ states('sensor.daikin_cost_per_hour') }}/hour**.
+
+            *Rate source: [FPL Residential Rates Jan 2026](https://www.fpl.com/rates.html)*
+
+      # Air Quality Card with Explanation
+      - type: glance
+        title: Air Quality
+        entities:
+          - entity: sensor.main_room_outdoor_aqi
+            name: AQI
+          - entity: sensor.main_room_outdoor_pm1
+            name: PM1
+          - entity: sensor.main_room_outdoor_ozone
+            name: Ozone
+
+      - type: entities
+        title: Air Quality Details
+        show_header_toggle: false
+        entities:
+          - entity: input_boolean.daikin_show_explain_air_quality
+            name: What do these mean?
+            icon: mdi:help-circle-outline
+
+      - type: conditional
+        conditions:
+          - entity: input_boolean.daikin_show_explain_air_quality
+            state: "on"
+        card:
+          type: markdown
+          content: |
+            **Air Quality Metrics Explained**
+
+            - **AQI (Air Quality Index)**: Overall air quality score (0-500).
+              - 0-50: Good (green)
+              - 51-100: Moderate (yellow)
+              - 101-150: Unhealthy for sensitive groups (orange)
+              - 151+: Unhealthy (red)
+
+            - **PM1 (Particulate Matter 1.0)**: Ultra-fine particles smaller than 1 micron. These can penetrate deep into lungs. Measured in micrograms per cubic meter (ug/m3). Lower is better.
+
+            - **Ozone**: Ground-level ozone concentration. High ozone can irritate airways. Typically measured in ppb (parts per billion). Under 50 ppb is good.
+
+            These readings come from the Daikin One+ thermostat's outdoor air quality sensor (IQ Zone sensor).
+
+      # Filter & Maintenance with Explanation
+      - type: entities
+        title: Maintenance & Faults
+        show_header_toggle: false
+        entities:
+          - entity: sensor.daikin_filter_days
+            name: Filter Days Remaining
+          - entity: binary_sensor.daikin_filter_alert
+            name: Filter Alert
+          - type: divider
+          - entity: input_boolean.daikin_show_explain_filter
+            name: About filter days
+            icon: mdi:help-circle-outline
+          - type: divider
+          - entity: sensor.main_room_air_handler_critical_fault_code
+            name: Air Handler Fault
+          - entity: sensor.main_room_outdoor_critical_fault_code
+            name: Outdoor Unit Fault
+          - entity: sensor.main_room_thermostat_critical_fault_code
+            name: Thermostat Fault
+
+      - type: conditional
+        conditions:
+          - entity: input_boolean.daikin_show_explain_filter
+            state: "on"
+        card:
+          type: markdown
+          content: |
+            **Filter Days Explained**
+
+            "Filter Days Remaining" shows the **days until Daikin recommends replacing the filter**, NOT days since you installed it.
+
+            This countdown is tracked by the Daikin thermostat itself. After you replace the filter, you need to **reset the counter on the thermostat**:
+
+            1. Go to your Daikin One+ thermostat
+            2. Menu > Equipment > Air Handler > Filter
+            3. Select "Reset Filter Timer"
+
+            The filter alert triggers when fewer than 7 days remain.
+
+            **Current Status**: {{ states('sensor.daikin_filter_days') }} days until replacement recommended.

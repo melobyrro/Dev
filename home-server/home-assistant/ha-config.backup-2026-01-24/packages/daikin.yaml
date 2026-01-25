@@ -1,0 +1,403 @@
+# Daikin Fit Enhanced Monitoring Package - Version 2.0
+# Enhancements: Fahrenheit temps, FPL energy costs, explanation toggles
+# Location: packages/daikin.yaml
+
+# ============================================
+# Input Boolean Helpers (Explanation Toggles)
+# ============================================
+input_boolean:
+  daikin_show_explain_air_quality:
+    name: "Daikin Show Air Quality Explanation"
+    icon: mdi:help-circle-outline
+
+  daikin_show_explain_filter:
+    name: "Daikin Show Filter Explanation"
+    icon: mdi:help-circle-outline
+
+  daikin_show_explain_energy:
+    name: "Daikin Show Energy Explanation"
+    icon: mdi:help-circle-outline
+
+  daikin_show_explain_performance:
+    name: "Daikin Show Performance Explanation"
+    icon: mdi:help-circle-outline
+
+  daikin_show_explain_runtime:
+    name: "Daikin Show Runtime Explanation"
+    icon: mdi:help-circle-outline
+
+# ============================================
+# Template Sensors
+# ============================================
+template:
+  - sensor:
+      # HVAC Action as separate entity (for history_stats)
+      - name: "Daikin HVAC Action"
+        unique_id: daikin_hvac_action
+        state: "{{ state_attr('climate.daikin', 'hvac_action') }}"
+        icon: >
+          {% set action = state_attr('climate.daikin', 'hvac_action') %}
+          {% if action == 'cooling' %}mdi:snowflake
+          {% elif action == 'heating' %}mdi:fire
+          {% elif action == 'idle' %}mdi:power-sleep
+          {% else %}mdi:hvac
+          {% endif %}
+
+      # Indoor Temperature in Fahrenheit
+      - name: "Daikin Indoor Temperature"
+        unique_id: daikin_indoor_temp_f
+        state: >
+          {% set temp_c = states('sensor.main_room_indoor_temperature') | float(0) %}
+          {{ ((temp_c * 9/5) + 32) | round(1) }}
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer
+
+      # Outdoor Temperature in Fahrenheit
+      - name: "Daikin Outdoor Temperature"
+        unique_id: daikin_outdoor_temp_f
+        state: >
+          {% set temp_c = states('sensor.main_room_outdoor_temperature') | float(0) %}
+          {{ ((temp_c * 9/5) + 32) | round(1) }}
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermometer
+
+      # Total Power (Indoor + Outdoor)
+      - name: "Daikin Total Power"
+        unique_id: daikin_total_power
+        state: >
+          {% set outdoor = states('sensor.main_room_outdoor_power') | float(0) %}
+          {% set indoor = states('sensor.main_room_indoor_power') | float(0) %}
+          {{ (outdoor + indoor) | round(0) }}
+        unit_of_measurement: "W"
+        device_class: power
+        state_class: measurement
+        icon: mdi:lightning-bolt
+
+      # Temperature Delta (Setpoint vs Actual)
+      - name: "Daikin Temperature Delta"
+        unique_id: daikin_temp_delta
+        state: >
+          {% set current = state_attr('climate.daikin', 'current_temperature') | float(0) %}
+          {% set target = state_attr('climate.daikin', 'temperature') | float(0) %}
+          {{ (current - target) | round(1) }}
+        unit_of_measurement: "°F"
+        device_class: temperature
+        icon: mdi:thermometer-lines
+
+      # Current Setpoint (easier to graph)
+      - name: "Daikin Setpoint"
+        unique_id: daikin_setpoint
+        state: "{{ state_attr('climate.daikin', 'temperature') | float(0) | round(1) }}"
+        unit_of_measurement: "°F"
+        device_class: temperature
+        state_class: measurement
+        icon: mdi:thermostat
+
+      # System Status (human readable)
+      - name: "Daikin System Status"
+        unique_id: daikin_system_status
+        state: >
+          {% set action = state_attr('climate.daikin', 'hvac_action') %}
+          {% set mode = states('climate.daikin') %}
+          {% if mode == 'off' %}
+            Off
+          {% elif action == 'cooling' %}
+            Cooling
+          {% elif action == 'heating' %}
+            Heating
+          {% elif action == 'idle' %}
+            Idle ({{ mode | title }} mode)
+          {% else %}
+            {{ action | title }}
+          {% endif %}
+        icon: >
+          {% set action = state_attr('climate.daikin', 'hvac_action') %}
+          {% if action == 'cooling' %}mdi:snowflake
+          {% elif action == 'heating' %}mdi:fire
+          {% elif action == 'idle' %}mdi:fan
+          {% else %}mdi:hvac-off
+          {% endif %}
+
+      # Compressor Efficiency Indicator
+      - name: "Daikin Compressor Load"
+        unique_id: daikin_compressor_load
+        state: "{{ states('sensor.main_room_outdoor_frequency_in_percent') | float(0) | round(1) }}"
+        unit_of_measurement: "%"
+        icon: >
+          {% set freq = states('sensor.main_room_outdoor_frequency_in_percent') | float(0) %}
+          {% if freq > 80 %}mdi:speedometer
+          {% elif freq > 50 %}mdi:speedometer-medium
+          {% else %}mdi:speedometer-slow
+          {% endif %}
+
+      # Power per Degree (Efficiency metric)
+      - name: "Daikin Efficiency"
+        unique_id: daikin_efficiency
+        state: >
+          {% set power = states('sensor.daikin_total_power') | float(0) %}
+          {% set delta = states('sensor.daikin_temperature_delta') | float(0) | abs %}
+          {% if power > 100 and delta > 0.5 %}
+            {{ (power / delta) | round(0) }}
+          {% else %}
+            0
+          {% endif %}
+        unit_of_measurement: "W/°F"
+        icon: mdi:chart-line
+
+      # Filter Days Remaining (from Daikin API - days UNTIL replacement needed)
+      - name: "Daikin Filter Days"
+        unique_id: daikin_filter_days
+        state: "{{ state_attr('climate.daikin', 'media_filter_days') | int(0) }}"
+        unit_of_measurement: "days"
+        icon: >
+          {% set days = state_attr('climate.daikin', 'media_filter_days') | int(0) %}
+          {% if days < 7 %}mdi:air-filter-alert
+          {% elif days < 30 %}mdi:air-filter
+          {% else %}mdi:air-filter
+          {% endif %}
+
+      # Cooling Demand (from climate attributes)
+      - name: "Daikin Cooling Demand"
+        unique_id: daikin_cooling_demand
+        state: "{{ state_attr('climate.daikin', 'cooling_demand') | float(0) | round(1) }}"
+        unit_of_measurement: "%"
+        icon: mdi:snowflake
+
+      # Heating Demand (from climate attributes)
+      - name: "Daikin Heating Demand"
+        unique_id: daikin_heating_demand
+        state: "{{ state_attr('climate.daikin', 'heating_demand') | float(0) | round(1) }}"
+        unit_of_measurement: "%"
+        icon: mdi:fire
+
+      # Fan Demand (from climate attributes)
+      - name: "Daikin Fan Demand"
+        unique_id: daikin_fan_demand
+        state: "{{ state_attr('climate.daikin', 'fan_demand') | float(0) | round(1) }}"
+        unit_of_measurement: "%"
+        icon: mdi:fan
+
+      # Blower Airflow (from climate attributes)
+      - name: "Daikin Blower CFM"
+        unique_id: daikin_blower_cfm
+        state: "{{ state_attr('climate.daikin', 'fan_cfm') | int(0) }}"
+        unit_of_measurement: "CFM"
+        icon: mdi:weather-windy
+
+      # Is Running Binary (for automations)
+      - name: "Daikin Is Running"
+        unique_id: daikin_is_running
+        state: >
+          {% set action = state_attr('climate.daikin', 'hvac_action') %}
+          {{ 'on' if action in ['cooling', 'heating'] else 'off' }}
+        icon: >
+          {% set action = state_attr('climate.daikin', 'hvac_action') %}
+          {{ 'mdi:power' if action in ['cooling', 'heating'] else 'mdi:power-off' }}
+
+      # ============================================
+      # FPL Energy Cost Sensors (2026 Rates)
+      # Effective rate: ~$0.137/kWh (based on $136.64/1000kWh)
+      # ============================================
+
+      # Current cost rate (can be adjusted via input_number if needed)
+      - name: "Daikin Energy Rate"
+        unique_id: daikin_energy_rate
+        state: "0.137"
+        unit_of_measurement: "$/kWh"
+        icon: mdi:currency-usd
+
+      # Daily energy cost
+      - name: "Daikin Cost Today"
+        unique_id: daikin_cost_today
+        state: >
+          {% set kwh = states('sensor.daikin_energy_daily') | float(0) %}
+          {% set rate = 0.137 %}
+          {{ (kwh * rate) | round(2) }}
+        unit_of_measurement: "$"
+        device_class: monetary
+        icon: mdi:cash
+
+      # Weekly energy cost
+      - name: "Daikin Cost This Week"
+        unique_id: daikin_cost_weekly
+        state: >
+          {% set kwh = states('sensor.daikin_energy_weekly') | float(0) %}
+          {% set rate = 0.137 %}
+          {{ (kwh * rate) | round(2) }}
+        unit_of_measurement: "$"
+        device_class: monetary
+        icon: mdi:cash
+
+      # Monthly energy cost
+      - name: "Daikin Cost This Month"
+        unique_id: daikin_cost_monthly
+        state: >
+          {% set kwh = states('sensor.daikin_energy_monthly') | float(0) %}
+          {% set rate = 0.137 %}
+          {{ (kwh * rate) | round(2) }}
+        unit_of_measurement: "$"
+        device_class: monetary
+        icon: mdi:cash
+
+      # Yearly energy cost
+      - name: "Daikin Cost This Year"
+        unique_id: daikin_cost_yearly
+        state: >
+          {% set kwh = states('sensor.daikin_energy_yearly') | float(0) %}
+          {% set rate = 0.137 %}
+          {{ (kwh * rate) | round(2) }}
+        unit_of_measurement: "$"
+        device_class: monetary
+        icon: mdi:cash
+
+      # Current cost per hour (when running)
+      - name: "Daikin Cost Per Hour"
+        unique_id: daikin_cost_per_hour
+        state: >
+          {% set watts = states('sensor.daikin_total_power') | float(0) %}
+          {% set kwh = watts / 1000 %}
+          {% set rate = 0.137 %}
+          {{ (kwh * rate) | round(3) }}
+        unit_of_measurement: "$/hr"
+        icon: mdi:cash-clock
+
+  # Binary sensors for runtime tracking
+  - binary_sensor:
+      - name: "Daikin Running"
+        unique_id: daikin_running
+        state: "{{ state_attr('climate.daikin', 'hvac_action') in ['cooling', 'heating'] }}"
+        device_class: running
+
+      - name: "Daikin Cooling"
+        unique_id: daikin_cooling
+        state: "{{ state_attr('climate.daikin', 'hvac_action') == 'cooling' }}"
+
+      - name: "Daikin Heating"
+        unique_id: daikin_heating
+        state: "{{ state_attr('climate.daikin', 'hvac_action') == 'heating' }}"
+
+      - name: "Daikin Filter Alert"
+        unique_id: daikin_filter_alert
+        state: "{{ state_attr('climate.daikin', 'media_filter_days') | int(0) < 7 }}"
+        device_class: problem
+
+# ============================================
+# History Stats for Runtime Tracking
+# ============================================
+sensor:
+  - platform: history_stats
+    name: Daikin Cooling Today
+    entity_id: binary_sensor.daikin_cooling
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Daikin Heating Today
+    entity_id: binary_sensor.daikin_heating
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Daikin Runtime Today
+    entity_id: binary_sensor.daikin_running
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Daikin Cooling Yesterday
+    entity_id: binary_sensor.daikin_cooling
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') - timedelta(days=1) }}"
+    end: "{{ today_at('00:00') }}"
+
+  - platform: history_stats
+    name: Daikin Runtime Yesterday
+    entity_id: binary_sensor.daikin_running
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') - timedelta(days=1) }}"
+    end: "{{ today_at('00:00') }}"
+
+  - platform: history_stats
+    name: Daikin Cooling This Week
+    entity_id: binary_sensor.daikin_cooling
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') - timedelta(days=now().weekday()) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Daikin Runtime This Week
+    entity_id: binary_sensor.daikin_running
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00') - timedelta(days=now().weekday()) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Daikin Cooling This Month
+    entity_id: binary_sensor.daikin_cooling
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00').replace(day=1) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Daikin Runtime This Month
+    entity_id: binary_sensor.daikin_running
+    state: "on"
+    type: time
+    start: "{{ today_at('00:00').replace(day=1) }}"
+    end: "{{ now() }}"
+
+  - platform: history_stats
+    name: Daikin Runtime Percentage Today
+    entity_id: binary_sensor.daikin_running
+    state: "on"
+    type: ratio
+    start: "{{ today_at('00:00') }}"
+    end: "{{ now() }}"
+
+  # Energy Integration sensor
+  - platform: integration
+    source: sensor.daikin_total_power
+    name: Daikin Energy
+    unique_id: daikin_energy
+    unit_prefix: k
+    round: 3
+    method: left
+
+# ============================================
+# Utility Meters for Energy Tracking
+# ============================================
+utility_meter:
+  daikin_energy_daily:
+    source: sensor.daikin_energy
+    name: Daikin Energy Daily
+    cycle: daily
+
+  daikin_energy_weekly:
+    source: sensor.daikin_energy
+    name: Daikin Energy Weekly
+    cycle: weekly
+
+  daikin_energy_monthly:
+    source: sensor.daikin_energy
+    name: Daikin Energy Monthly
+    cycle: monthly
+
+  daikin_energy_yearly:
+    source: sensor.daikin_energy
+    name: Daikin Energy Yearly
+    cycle: yearly

@@ -1,0 +1,115 @@
+# Kia EV9 v2.0 Package - New Helpers
+# Deployed: 2026-01-19
+#
+# This package adds v2.0 features:
+# - Walk-away distance (1-20m range, replaces proximity lock)
+# - Unlock timeout for failsafe lock
+# - Timeout lock enable toggle
+# - Event log entities (ev9_event_1 through ev9_event_10)
+# - Last run result tracking for walk-away, timeout, precondition
+
+# ============================================================
+# INPUT NUMBERS (v2.0)
+# ============================================================
+
+input_number:
+  # v2.0: Walk-away distance (1-20m, default 5m)
+  ev9_walkaway_distance:
+    name: "EV9 Walk-Away Distance"
+    min: 1
+    max: 20
+    step: 1
+    unit_of_measurement: "m"
+    icon: mdi:map-marker-distance
+    mode: slider
+
+  # v2.0: Timeout failsafe duration (5-120 min, default 30 min)
+  ev9_unlock_timeout:
+    name: "EV9 Unlock Timeout"
+    min: 5
+    max: 120
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer-lock
+    mode: slider
+
+# ============================================================
+# INPUT BOOLEANS (v2.0)
+# ============================================================
+
+input_boolean:
+  # v2.0: Timeout failsafe lock toggle
+  ev9_timeout_lock_enabled:
+    name: "EV9 Timeout Lock Enabled"
+    icon: mdi:timer-lock
+
+# ============================================================
+# INPUT TEXT - EVENT LOG (v2.0)
+# ============================================================
+
+input_text:
+  ev9_event_1:
+    name: "EV9 Event 1"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_2:
+    name: "EV9 Event 2"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_3:
+    name: "EV9 Event 3"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_4:
+    name: "EV9 Event 4"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_5:
+    name: "EV9 Event 5"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_6:
+    name: "EV9 Event 6"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_7:
+    name: "EV9 Event 7"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_8:
+    name: "EV9 Event 8"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_9:
+    name: "EV9 Event 9"
+    max: 255
+    icon: mdi:text-box-outline
+
+  ev9_event_10:
+    name: "EV9 Event 10"
+    max: 255
+    icon: mdi:text-box-outline
+
+  # Last run status helpers
+  ev9_last_walkaway_result:
+    name: "EV9 Last Walk-Away Result"
+    max: 255
+    icon: mdi:lock-check
+
+  ev9_last_timeout_lock_result:
+    name: "EV9 Last Timeout Lock Result"
+    max: 255
+    icon: mdi:timer-check
+
+  ev9_last_precondition_result:
+    name: "EV9 Last Precondition Result"
+    max: 255
+    icon: mdi:air-conditioner

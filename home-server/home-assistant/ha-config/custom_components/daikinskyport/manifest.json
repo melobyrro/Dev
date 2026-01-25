@@ -1,0 +1,12 @@
+{
+  "domain": "daikinskyport",
+  "name": "Daikin Skyport",
+  "documentation": "https://github.com/apetrycki/daikinskyport",
+  "issue_tracker": "https://github.com/apetrycki/daikinskyport/issues",
+  "iot_class": "cloud_polling",
+  "config_flow": true,
+  "requirements": [],
+  "dependencies": ["configurator"],
+  "codeowners": ["@apetrycki"],
+  "version": "1.1.2"
+}

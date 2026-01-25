@@ -1,0 +1,287 @@
+# Kia EV9 Dashboard Cards
+# Version: 1.0
+# Last Updated: 2025-01-19
+#
+# DEPLOYMENT:
+# 1. Create a new dashboard or add to existing
+# 2. Edit dashboard → Raw configuration editor
+# 3. Add these cards to your views
+#
+# REQUIREMENTS:
+# - card-mod (optional, for styling)
+# - mushroom cards (recommended)
+# - auto-entities (optional)
+
+# ============================================================
+# MAIN VEHICLE STATUS CARD
+# ============================================================
+
+# Option 1: Simple Entity Card Layout
+type: vertical-stack
+cards:
+  # --- HEADER ---
+  - type: markdown
+    content: |
+      # 🚗 Kia EV9
+      Last updated: {{ states('sensor.ev9_last_updated_at') | as_timestamp | timestamp_custom('%b %d, %I:%M %p') }}
+
+  # --- BATTERY & RANGE ROW ---
+  - type: horizontal-stack
+    cards:
+      - type: gauge
+        entity: sensor.ev9_ev_battery_level
+        name: Battery
+        min: 0
+        max: 100
+        severity:
+          green: 50
+          yellow: 20
+          red: 10
+        needle: true
+
+      - type: entity
+        entity: sensor.ev9_ev_range
+        name: Range
+        icon: mdi:road-variant
+        unit: mi
+
+  # --- CHARGING STATUS ---
+  - type: conditional
+    conditions:
+      - condition: state
+        entity: binary_sensor.ev9_ev_battery_plug
+        state: "on"
+    card:
+      type: entities
+      title: Charging Status
+      entities:
+        - entity: binary_sensor.ev9_ev_battery_charge
+          name: Charging
+        - entity: sensor.ev9_ev_charging_power
+          name: Charging Power
+        - entity: sensor.ev9_estimated_charge_duration
+          name: Time Remaining
+        - entity: number.ev9_ac_charging_limit
+          name: AC Charge Limit
+        - entity: number.ev9_dc_charging_limit
+          name: DC Charge Limit
+
+  # --- QUICK ACTIONS ---
+  - type: horizontal-stack
+    cards:
+      - type: button
+        entity: lock.ev9_door_lock
+        name: Lock
+        icon: mdi:lock
+        tap_action:
+          action: call-service
+          service: lock.lock
+          target:
+            entity_id: lock.ev9_door_lock
+
+      - type: button
+        entity: lock.ev9_door_lock
+        name: Unlock
+        icon: mdi:lock-open
+        tap_action:
+          action: call-service
+          service: lock.unlock
+          target:
+            entity_id: lock.ev9_door_lock
+
+      - type: button
+        name: Climate On
+        icon: mdi:air-conditioner
+        tap_action:
+          action: call-service
+          service: kia_uvo.start_climate
+          data:
+            device_id: 7f6b71f10dc261408a02149c68aa3e23
+            climate: true
+            temperature: 72
+
+      - type: button
+        name: Climate Off
+        icon: mdi:fan-off
+        tap_action:
+          action: call-service
+          service: kia_uvo.stop_climate
+          data:
+            device_id: 7f6b71f10dc261408a02149c68aa3e23
+
+  # --- VEHICLE STATUS ---
+  - type: entities
+    title: Vehicle Status
+    show_header_toggle: false
+    entities:
+      - entity: binary_sensor.ev9_locked
+        name: Lock Status
+        secondary_info: last-changed
+      - entity: binary_sensor.ev9_air_conditioner
+        name: Climate Active
+      - entity: sensor.ev9_car_battery_level
+        name: 12V Battery
+      - entity: sensor.ev9_odometer
+        name: Odometer
+
+  # --- DOORS & OPENINGS ---
+  - type: glance
+    title: Doors & Openings
+    columns: 4
+    show_state: false
+    entities:
+      - entity: binary_sensor.ev9_front_left_door
+        name: FL Door
+      - entity: binary_sensor.ev9_front_right_door
+        name: FR Door
+      - entity: binary_sensor.ev9_back_left_door
+        name: BL Door
+      - entity: binary_sensor.ev9_back_right_door
+        name: BR Door
+      - entity: binary_sensor.ev9_trunk
+        name: Trunk
+      - entity: binary_sensor.ev9_hood
+        name: Hood
+
+  # --- MAP ---
+  - type: map
+    entities:
+      - entity: device_tracker.ev9_location
+    dark_mode: true
+    default_zoom: 15
+    aspect_ratio: 16:9
+
+# ============================================================
+# DEPARTURE SCHEDULE CONFIGURATION CARD
+# ============================================================
+
+---
+type: vertical-stack
+title: Pre-conditioning Schedule
+cards:
+  # Master Toggle
+  - type: entities
+    entities:
+      - entity: input_boolean.ev9_precondition_enabled
+        name: Enable Pre-conditioning
+      - entity: input_number.ev9_precondition_lead_time
+        name: Start Before Departure
+      - entity: input_number.ev9_target_temperature
+        name: Target Temperature
+
+  # Weekly Schedule
+  - type: entities
+    title: Weekly Schedule
+    show_header_toggle: false
+    entities:
+      - type: section
+        label: Monday
+      - entity: input_boolean.ev9_precondition_monday
+        name: Enabled
+      - entity: input_datetime.ev9_departure_monday
+        name: Departure Time
+
+      - type: section
+        label: Tuesday
+      - entity: input_boolean.ev9_precondition_tuesday
+        name: Enabled
+      - entity: input_datetime.ev9_departure_tuesday
+        name: Departure Time
+
+      - type: section
+        label: Wednesday
+      - entity: input_boolean.ev9_precondition_wednesday
+        name: Enabled
+      - entity: input_datetime.ev9_departure_wednesday
+        name: Departure Time
+
+      - type: section
+        label: Thursday
+      - entity: input_boolean.ev9_precondition_thursday
+        name: Enabled
+      - entity: input_datetime.ev9_departure_thursday
+        name: Departure Time
+
+      - type: section
+        label: Friday
+      - entity: input_boolean.ev9_precondition_friday
+        name: Enabled
+      - entity: input_datetime.ev9_departure_friday
+        name: Departure Time
+
+      - type: section
+        label: Saturday
+      - entity: input_boolean.ev9_precondition_saturday
+        name: Enabled
+      - entity: input_datetime.ev9_departure_saturday
+        name: Departure Time
+
+      - type: section
+        label: Sunday
+      - entity: input_boolean.ev9_precondition_sunday
+        name: Enabled
+      - entity: input_datetime.ev9_departure_sunday
+        name: Departure Time
+
+# ============================================================
+# NOTIFICATION SETTINGS CARD
+# ============================================================
+
+---
+type: entities
+title: Notification Settings
+show_header_toggle: false
+entities:
+  - entity: input_boolean.ev9_notify_charging_complete
+    name: Charging Complete
+  - entity: input_boolean.ev9_notify_low_battery
+    name: Low Battery Alert
+  - entity: input_number.ev9_low_battery_threshold
+    name: Low Battery Threshold
+  - entity: input_boolean.ev9_notify_unlocked_at_home
+    name: Unlocked at Home Alert
+  - entity: input_number.ev9_unlocked_alert_delay
+    name: Unlocked Alert Delay
+
+# ============================================================
+# COMPACT BATTERY CARD (for sidebar or small spaces)
+# ============================================================
+
+---
+type: custom:mushroom-entity-card
+entity: sensor.ev9_ev_battery_level
+name: EV9 Battery
+icon: mdi:car-electric
+primary_info: state
+secondary_info: name
+icon_color: |
+  {% set level = states('sensor.ev9_ev_battery_level') | int %}
+  {% if level > 50 %}green
+  {% elif level > 20 %}orange
+  {% else %}red{% endif %}
+
+# ============================================================
+# ALTERNATIVE: PICTURE-ELEMENTS CARD (if you have a vehicle image)
+# ============================================================
+
+# Uncomment and customize if you want to use a vehicle image:
+#
+# ---
+# type: picture-elements
+# image: /local/images/kia-ev9.png
+# elements:
+#   - type: state-label
+#     entity: sensor.ev9_ev_battery_level
+#     style:
+#       top: 20%
+#       left: 50%
+#       color: white
+#       font-size: 24px
+#   - type: state-label
+#     entity: sensor.ev9_ev_range
+#     style:
+#       top: 35%
+#       left: 50%
+#       color: white
+#       font-size: 18px
+#     suffix: " mi"

@@ -1,0 +1,334 @@
+views:
+  - title: Patio AC Control
+    path: patio-ac-control
+    icon: mdi:air-conditioner
+    type: sidebar
+    cards:
+      - type: horizontal-stack
+        cards:
+          - type: vertical-stack
+            cards:
+              - type: tile
+                entity: climate.150633095083490_climate
+                name: Patio AC Unit
+                show_state: false
+                features:
+                  - type: climate-hvac-modes
+                    hvac_modes:
+                      - 'off'
+                      - cool
+                      - dry
+                      - fan_only
+                  - type: target-temperature
+              - type: grid
+                columns: 4
+                square: false
+                cards:
+                  - type: tile
+                    entity: sensor.patio_temp_sensor_temperature
+                    name: Temp
+                  - type: tile
+                    entity: sensor.patio_temp_sensor_humidity
+                    name: Humidity
+                  - type: tile
+                    entity: sensor.patio_dew_point
+                    name: Dew Point
+                  - type: tile
+                    entity: input_boolean.patio_ac_show_explain_dew_point
+                    icon: mdi:help-circle-outline
+                    name: Dew Point Help
+                    show_name: false
+                    show_state: false
+                    tap_action:
+                      action: toggle
+              - type: conditional
+                conditions:
+                  - entity: input_boolean.patio_ac_show_explain_dew_point
+                    state: 'on'
+                card:
+                  type: markdown
+                  content: >
+                    **Dew Point Explained**
+
+                    - Dew point is the temperature where air becomes saturated
+                    and water condenses.
+
+                    - Comfort drops quickly once dew point stays above ~60°F,
+                    and mold risk rises with sustained high dew point.
+
+
+                    **Automation thresholds (dew point only)**
+
+
+                    - Day trigger: {{
+                    states('input_number.patio_ac_dewpoint_start') }}°F
+
+                    - Night trigger: {{
+                    states('input_number.patio_ac_dewpoint_night_start') }}°F
+
+                    - Target (stop): {{
+                    states('input_number.patio_ac_dewpoint_stop') }}°F
+
+
+                    Day/Night humidity starts DRY at the trigger and stops when
+                    dew point reaches the target.
+              - type: entities
+                title: ⚙️ Global Configurations
+                show_header_toggle: false
+                entities:
+                  - type: section
+                    label: Automation Status
+                  - entity: sensor.patio_ac_reason_friendly
+                    name: Active Logic
+                  - entity: sensor.patio_ac_last_evaluated
+                    name: Last Checked
+                  - entity: sensor.patio_ac_next_evaluation
+                    name: Next Check
+                  - entity: sensor.patio_ac_override_state
+                    name: Current State (Override)
+                  - type: section
+                    label: Automation Schedule
+                  - entity: input_datetime.patio_ac_day_start
+                    name: Day Start (Logic Switch)
+                  - entity: input_datetime.patio_ac_night_start
+                    name: Night Start (Logic Switch)
+                  - type: section
+                    label: Runtime & Limits
+                  - entity: sensor.patio_ac_daily_runtime_display
+                    name: Total Automated Today
+                  - entity: sensor.patio_ac_humidity_runtime_display
+                    name: Humidity-Only Runtime
+                  - entity: input_number.patio_ac_daily_limit
+                    name: Total Automation Cap (Cool+Dry)
+                    secondary_info: last-changed
+                  - type: section
+                    label: Protections & Timers
+                  - entity: timer.patio_ac_compressor_protection
+                    name: Compressor Cooldown
+                  - entity: sensor.patio_ac_compressor_wait_time
+                    name: Available In
+                  - entity: input_number.patio_ac_rh_emergency
+                    name: Emergency Stop RH (%)
+                  - type: section
+                    label: Controls
+                  - type: button
+                    name: Resume Automation
+                    icon: mdi:refresh
+                    tap_action:
+                      action: call-service
+                      service: input_select.select_option
+                      target:
+                        entity_id: input_select.patio_ac_reason
+                      data:
+                        option: idle
+                  - entity: input_button.patio_ac_activity_clear
+                    name: Clear Activity
+                    icon: mdi:broom
+                  - type: section
+                    label: Explanations
+                  - entity: input_boolean.patio_ac_show_explain_status
+                    name: Explain Status + Schedule
+                    icon: mdi:help-circle-outline
+                  - entity: input_boolean.patio_ac_show_explain_runtime
+                    name: Explain Runtime & Limits
+                    icon: mdi:help-circle-outline
+                  - entity: input_boolean.patio_ac_show_explain_protections
+                    name: Explain Protections & Timers
+                    icon: mdi:help-circle-outline
+              - type: conditional
+                conditions:
+                  - entity: input_boolean.patio_ac_show_explain_status
+                    state: 'on'
+                card:
+                  type: markdown
+                  content: >
+                    **Automation Status Explained**
+
+
+                    - **Active Logic**: What the state machine is currently
+                    doing.
+
+                    - **Last/Next Check**: Based on the evaluation automation
+                    cadence (expected ~5m).
+
+                    - **Current State (Override)**: Read-only display of the
+                    internal reason/override.
+
+
+                    Use **Resume Automation** above to reset back to idle.
+
+
+                    **Automation Schedule Explained**
+
+
+                    - **Day Start (Logic Switch)**: When the system should apply
+                    the day rule-set.
+
+                    - **Night Start (Logic Switch)**: When the system should
+                    apply the night rule-set.
+
+
+                    These times only switch *which* rules are evaluated; they
+                    don’t force the AC on by themselves.
+              - type: conditional
+                conditions:
+                  - entity: input_boolean.patio_ac_show_explain_runtime
+                    state: 'on'
+                card:
+                  type: markdown
+                  content: >
+                    **Runtime & Limits Explained**
+
+
+                    - **Total Automated Today**: Minutes counted toward the
+                    combined cool+dry cap.
+
+                    - **Humidity-Only Runtime**: Minutes spent in DRY mode.
+
+                    - **Total Automation Cap**: Automation hard stop (resets
+                    nightly). Manual usage does not count.
+              - type: conditional
+                conditions:
+                  - entity: input_boolean.patio_ac_show_explain_protections
+                    state: 'on'
+                card:
+                  type: markdown
+                  content: >
+                    **Protections & Timers Explained**
+
+
+                    - Compressor protection enforces a minimum off-time between
+                    cycles.
+
+                    - Emergency stop turns the AC off if RH exceeds {{
+                    states('input_number.patio_ac_rh_emergency') }}%.
+
+                    - Minimum on/off timers reduce rapid toggles and protect
+                    hardware.
+          - type: vertical-stack
+            cards:
+              - type: entities
+                title: 🔥 Heat Guard Rules
+                show_header_toggle: false
+                entities:
+                  - entity: input_boolean.patio_ac_heat_guard_enabled
+                    name: Enabled
+                  - entity: input_number.patio_ac_heat_threshold
+                    name: Trigger Temp (°F)
+                  - entity: input_number.patio_ac_heat_target
+                    name: Target Temp (°F)
+                  - entity: input_number.patio_ac_heat_duration
+                    name: Max Duration (min)
+              - type: entities
+                title: ☀️ Day Humidity Rules
+                show_header_toggle: false
+                entities:
+                  - entity: input_boolean.patio_ac_day_humidity_enabled
+                    name: Enabled
+                  - entity: input_number.patio_ac_dewpoint_start
+                    name: Trigger Dew Point (°F)
+                  - entity: input_number.patio_ac_dewpoint_stop
+                    name: Target Dew Point (°F)
+                  - entity: input_boolean.patio_ac_show_explain_day_rules
+                    name: Explain Day Rules
+                    icon: mdi:help-circle-outline
+              - type: conditional
+                conditions:
+                  - entity: input_boolean.patio_ac_show_explain_day_rules
+                    state: 'on'
+                card:
+                  type: markdown
+                  content: >
+                    **Day Humidity Logic (DRY mode)**
+
+                    - Trigger dew point: {{
+                    states('input_number.patio_ac_dewpoint_start') }}°F
+
+                    - Target dew point: {{
+                    states('input_number.patio_ac_dewpoint_stop') }}°F
+
+
+                    When enabled, DRY starts at the trigger and stops at the
+                    target.
+              - type: entities
+                title: 🌙 Night Humidity Rules
+                show_header_toggle: false
+                entities:
+                  - entity: input_boolean.patio_ac_night_humidity_enabled
+                    name: Enabled
+                  - entity: input_number.patio_ac_dewpoint_night_start
+                    name: Trigger Dew Point (°F)
+                  - entity: input_number.patio_ac_dewpoint_stop
+                    name: Target Dew Point (°F)
+                  - entity: input_boolean.patio_ac_show_explain_night_rules
+                    name: Explain Night Rules
+                    icon: mdi:help-circle-outline
+              - type: conditional
+                conditions:
+                  - entity: input_boolean.patio_ac_show_explain_night_rules
+                    state: 'on'
+                card:
+                  type: markdown
+                  content: >
+                    **Night Humidity Logic (DRY mode)**
+
+                    - Trigger dew point: {{
+                    states('input_number.patio_ac_dewpoint_night_start') }}°F
+
+                    - Target dew point: {{
+                    states('input_number.patio_ac_dewpoint_stop') }}°F
+
+
+                    When enabled, DRY starts at the trigger and stops at the
+                    target.
+      - type: grid
+        columns: 1
+        square: false
+        cards:
+          - type: history-graph
+            title: 24h Humidity + Dew Point + AC Dry Runtime + AC Cool Runtime
+            hours_to_show: 24
+            entities:
+              - entity: sensor.patio_temp_sensor_humidity
+                name: RH (%)
+              - entity: sensor.patio_dew_point
+                name: Dew Point (°F)
+              - entity: sensor.patio_ac_dry_runtime_24h
+                name: AC Dry Runtime (total)
+              - entity: sensor.patio_ac_cool_runtime_24h
+                name: AC Cool Runtime (total)
+          - type: history-graph
+            title: 24h Temperature + AC Dry Runtime + AC Cool Runtime
+            hours_to_show: 24
+            entities:
+              - entity: sensor.patio_temp_sensor_temperature
+                name: Temperature (°F)
+              - entity: sensor.patio_ac_dry_runtime_24h
+                name: AC Dry Runtime (total)
+              - entity: sensor.patio_ac_cool_runtime_24h
+                name: AC Cool Runtime (total)
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            title: 📜 Activity
+            content: >
+              {% set events = state_attr('sensor.patio_ac_activity', 'events')
+              %}
+
+              {% if events is none or (events | length) == 0 %}
+
+              _No recent activity._
+
+              {% else %}
+
+              | Time | Event |
+
+              |---|---|
+
+              {% for e in events | reverse %}
+
+              | {{ e.ts }} | {{ e.msg }} |
+
+              {% endfor %}
+
+              {% endif %}

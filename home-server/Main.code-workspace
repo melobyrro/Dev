@@ -1,0 +1,16 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../bin"
+		},
+		{
+			"path": "../../Downloads"
+		}
+	],
+	"settings": {
+		"git.ignoreLimitWarning": true
+	}
+}

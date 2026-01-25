@@ -1,0 +1,52 @@
+# Kia EV9 Scripts
+# Version: 1.4
+# Last Updated: 2026-01-19
+#
+# DEPLOYMENT:
+# Add these scripts to your scripts.yaml or create via UI
+# Then reload scripts: Settings -> Automations -> Reload
+
+# ============================================================
+# CLIMATE WITH TIMER (v1.4)
+# ============================================================
+
+ev9_start_climate_with_timer:
+  alias: "EV9: Start Climate with Timer"
+  description: "Start climate control and set auto-stop timer"
+  icon: mdi:air-conditioner
+  mode: single
+  sequence:
+    - variables:
+        target_temp: "{{ states('input_number.ev9_target_temperature') | int(72) }}"
+        duration_min: "{{ states('input_number.ev9_climate_duration') | int(15) }}"
+    - service: kia_uvo.start_climate
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+        climate: true
+        temperature: "{{ target_temp }}"
+    - service: timer.start
+      data:
+        duration: "{{ duration_min * 60 }}"
+      target:
+        entity_id: timer.ev9_climate_timer
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Climate Started"
+        message: "Target: {{ target_temp }}°F, Timer: {{ duration_min }} min"
+
+# ============================================================
+# STOP CLIMATE AND CANCEL TIMER
+# ============================================================
+
+ev9_stop_climate_cancel_timer:
+  alias: "EV9: Stop Climate and Cancel Timer"
+  description: "Stop climate control and cancel any running timer"
+  icon: mdi:fan-off
+  mode: single
+  sequence:
+    - service: kia_uvo.stop_climate
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+    - service: timer.cancel
+      target:
+        entity_id: timer.ev9_climate_timer

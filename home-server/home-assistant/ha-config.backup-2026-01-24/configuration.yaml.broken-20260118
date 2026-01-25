@@ -1,0 +1,121 @@
+homeassistant:
+  name: Home
+  external_url: https://home.byrroserver.com
+  internal_url: http://192.168.1.11:8123
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# HTTP settings for reverse proxy
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+    - 192.168.1.0/24
+    - 172.16.0.0/12
+    - 172.18.0.0/16
+    - 10.0.0.0/8
+
+
+# Logger - Debug Google Assistant commands
+logger:
+  default: warning
+  logs:
+    homeassistant.components.google_assistant: debug
+    homeassistant.components.google_assistant.http: debug
+    homeassistant.components.google_assistant.trait: info
+    custom_components.prometheus_sensor: debug
+
+# Google Assistant Integration
+
+google_assistant:
+  project_id: ha-byrro
+  service_account: !include SERVICE_ACCOUNT.json
+  report_state: true
+  expose_by_default: false
+  exposed_domains:
+    - light
+    - switch
+    - fan
+    - climate
+    - lock
+    - vacuum
+    - script
+    - scene
+  entity_config:
+    # Living Room
+    light.living_room_light_2:
+      name: "Living Room Light"
+      expose: true
+      room: "Living Room"
+    fan.living_room_light:
+      name: "Living Room Fan"
+      expose: true
+      room: "Living Room"
+    switch.cinema_light:
+      name: "Cinema Light"
+      expose: true
+      room: "Living Room"
+
+    # Master Bedroom
+    light.master_light:
+      name: "Bedroom Light"
+      expose: true
+      room: "Master Bedroom"
+    light.master_fan:
+      name: "Bedroom Fan"
+      expose: true
+      room: "Master Bedroom"
+
+    # Office
+    light.office_light:
+      name: "Office Light"
+      expose: true
+      room: "Office"
+
+    # Climate
+    climate.150633095083490_climate:
+      name: "Patio AC"
+      expose: true
+      room: "Patio"
+
+    # Security
+    lock.front_door:
+      name: "Front Door Lock"
+      expose: true
+      room: "Entryway"
+
+    # Vacuum
+    vacuum.jose:
+      name: "Jose"
+      expose: true
+
+
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+
+
+shell_command:
+  update_plex_priority_config: >
+    echo "PLEX_NICENESS={{ states('input_number.plex_niceness') | int }}
+    QBIT_NICENESS={{ states('input_number.qbit_niceness') | int }}
+    PLEX_IONICE_CLASS={{ states('input_select.plex_io_class').split(' ')[0] }}
+    QBIT_IONICE_CLASS={{ states('input_select.qbit_io_class').split(' ')[0] }}
+    ENABLED={{ states('input_boolean.plex_priority_enabled') | lower }}" > /config/plex_priority.conf
+
+command_line:
+  - sensor:
+      name: Plex Priority Status
+      command: 'cat /config/plex_priority.state 2>/dev/null || echo "unknown"'
+      scan_interval: 10
+      unique_id: plex_priority_status
+  - sensor:
+      name: Plex Priority Log
+      command: 'tail -n 15 /config/plex_priority.log 2>/dev/null || echo "No logs found"'
+      scan_interval: 30
+      unique_id: plex_priority_log

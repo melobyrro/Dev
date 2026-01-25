@@ -1,0 +1,213 @@
+# Ecovacs Integration Auto-Recovery Package
+# Monitors vacuum connectivity and automatically reconnects when needed
+# Location: packages/ecovacs_recovery_package.yaml
+#
+# Tiered Recovery Approach:
+#   1. First attempt: Reload config entry (gentle - fixes temporary issues)
+#   2. Second attempt: Delete and recreate integration (aggressive - fixes auth issues)
+
+# Shell commands for integration management
+shell_command:
+  # Delete the ecovacs config entry
+  ecovacs_delete_integration: >
+    curl -s -X DELETE
+    "http://localhost:8123/api/config/config_entries/entry/{{ states('input_text.ecovacs_entry_id') }}"
+    -H "Authorization: Bearer {{ states('input_text.ha_api_token') }}"
+    -H "Content-Type: application/json"
+
+  # Create new ecovacs config flow and complete it
+  ecovacs_create_integration: >
+    /config/scripts/ecovacs_recovery.sh
+
+# Input helpers for tracking
+input_text:
+  ecovacs_entry_id:
+    name: "Ecovacs Entry ID"
+    initial: "01KFHF6055M2FBH4N0ZJWC27TQ"
+    max: 64
+  ha_api_token:
+    name: "HA API Token"
+    max: 255
+    mode: password
+
+input_boolean:
+  ecovacs_recovery_enabled:
+    name: "Ecovacs Auto-Recovery Enabled"
+    icon: mdi:refresh-auto
+
+input_number:
+  ecovacs_recovery_attempts:
+    name: "Ecovacs Recovery Attempts"
+    min: 0
+    max: 10
+    step: 1
+    initial: 0
+    icon: mdi:counter
+
+input_datetime:
+  ecovacs_last_recovery:
+    name: "Ecovacs Last Recovery Attempt"
+    has_date: true
+    has_time: true
+
+# Automation to detect and recover from connection loss
+automation:
+  - alias: "Ecovacs - Monitor Connection"
+    id: ecovacs_monitor_connection
+    mode: single
+    trigger:
+      # Check every 5 minutes
+      - platform: time_pattern
+        minutes: "/5"
+    condition:
+      # Only if auto-recovery is enabled
+      - condition: state
+        entity_id: input_boolean.ecovacs_recovery_enabled
+        state: "on"
+      # Only if vacuum has been unknown/unavailable for more than 10 minutes
+      - condition: template
+        value_template: >
+          {{ states('sensor.jose_battery') in ['unknown', 'unavailable'] and
+             (now() - states.sensor.jose_battery.last_changed).total_seconds() > 600 }}
+      # Don't attempt recovery more than once per hour
+      - condition: template
+        value_template: >
+          {% set last = states('input_datetime.ecovacs_last_recovery') %}
+          {% if last in ['unknown', 'unavailable', ''] %}
+            true
+          {% else %}
+            {{ (now() - last | as_datetime).total_seconds() > 3600 }}
+          {% endif %}
+    action:
+      # Update tracking
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ecovacs_last_recovery
+        data:
+          datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+
+      # Increment attempt counter
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ecovacs_recovery_attempts
+        data:
+          value: "{{ (states('input_number.ecovacs_recovery_attempts') | int) + 1 }}"
+
+      # Determine which tier to use based on attempt count
+      - choose:
+          # TIER 1: First attempt - try gentle reload
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.ecovacs_recovery_attempts') | int == 1 }}"
+            sequence:
+              - service: notify.mobile_app_andre_iphone
+                data:
+                  title: "Jose Vacuum"
+                  message: "Connection lost. Trying reload (attempt 1)..."
+
+              - service: homeassistant.reload_config_entry
+                data:
+                  entry_id: "{{ states('input_text.ecovacs_entry_id') }}"
+
+              - delay:
+                  seconds: 30
+
+              # Check if reload worked
+              - if:
+                  - condition: template
+                    value_template: "{{ states('sensor.jose_battery') not in ['unknown', 'unavailable'] }}"
+                then:
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "Connection restored via reload!"
+                  - service: input_number.set_value
+                    target:
+                      entity_id: input_number.ecovacs_recovery_attempts
+                    data:
+                      value: 0
+                else:
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "Reload didn't work. Will try full recreation in 1 hour."
+
+          # TIER 2: Second attempt - delete and recreate
+          - conditions:
+              - condition: template
+                value_template: "{{ states('input_number.ecovacs_recovery_attempts') | int == 2 }}"
+            sequence:
+              - service: notify.mobile_app_andre_iphone
+                data:
+                  title: "Jose Vacuum"
+                  message: "Reload failed. Trying full recreation (attempt 2)..."
+
+              # Delete integration
+              - service: shell_command.ecovacs_delete_integration
+              - delay:
+                  seconds: 5
+
+              # Recreate integration
+              - service: shell_command.ecovacs_create_integration
+              - delay:
+                  seconds: 30
+
+              # Check if recreation worked
+              - if:
+                  - condition: template
+                    value_template: "{{ states('sensor.jose_battery') not in ['unknown', 'unavailable'] }}"
+                then:
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "Connection restored via recreation!"
+                  - service: input_number.set_value
+                    target:
+                      entity_id: input_number.ecovacs_recovery_attempts
+                    data:
+                      value: 0
+                else:
+                  - service: notify.mobile_app_andre_iphone
+                    data:
+                      title: "Jose Vacuum"
+                      message: "Full recreation failed. Likely Ecovacs cloud issue. Will retry in 1 hour."
+
+        # TIER 3+: Repeated failures - just notify, don't spam recreations
+        default:
+          - service: notify.mobile_app_andre_iphone
+            data:
+              title: "Jose Vacuum"
+              message: "Still offline (attempt {{ states('input_number.ecovacs_recovery_attempts') }}). Ecovacs cloud may be down. Check native app."
+
+  # Reset attempt counter when vacuum comes back online
+  - alias: "Ecovacs - Reset Recovery Counter"
+    id: ecovacs_reset_recovery_counter
+    trigger:
+      - platform: state
+        entity_id: sensor.jose_battery
+        from:
+          - "unknown"
+          - "unavailable"
+    condition:
+      - condition: template
+        value_template: "{{ trigger.to_state.state not in ['unknown', 'unavailable'] }}"
+    action:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.ecovacs_recovery_attempts
+        data:
+          value: 0
+
+  - alias: "Ecovacs - Update Entry ID on Startup"
+    id: ecovacs_update_entry_id
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay:
+          seconds: 60
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ecovacs_entry_id
+        data:
+          value: "{{ device_attr('vacuum.jose', 'config_entry_id') or states('input_text.ecovacs_entry_id') }}"

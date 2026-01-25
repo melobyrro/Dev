@@ -1,0 +1,90 @@
+# Kia EV9 v2.2 Package - Theft Detection Helpers
+# Deployed: 2026-01-20
+#
+# This package adds v2.2 features:
+# - Theft/Movement Alert (AUT-05)
+#   - Enable toggle
+#   - Distance thresholds
+#   - Location and result tracking
+#   - Movement distance sensor
+
+# ============================================================
+# INPUT BOOLEANS (v2.2)
+# ============================================================
+
+input_boolean:
+  ev9_theft_alert_enabled:
+    name: "EV9 Theft Alert Enabled"
+    icon: mdi:shield-alert
+
+# ============================================================
+# INPUT NUMBERS (v2.2)
+# ============================================================
+
+input_number:
+  ev9_theft_distance_threshold:
+    name: "EV9 Theft Detection Distance"
+    min: 50
+    max: 500
+    step: 25
+    unit_of_measurement: "m"
+    icon: mdi:map-marker-distance
+    mode: slider
+
+  ev9_theft_phone_distance_threshold:
+    name: "EV9 Theft Phone Away Distance"
+    min: 100
+    max: 1000
+    step: 50
+    unit_of_measurement: "m"
+    icon: mdi:cellphone-off
+    mode: slider
+
+# ============================================================
+# INPUT TEXT (v2.2)
+# ============================================================
+
+input_text:
+  ev9_last_theft_alert:
+    name: "EV9 Last Theft Alert Timestamp"
+    max: 64
+    icon: mdi:clock-alert
+
+  ev9_last_known_location:
+    name: "EV9 Last Known Location"
+    max: 64
+    icon: mdi:map-marker-check
+
+  ev9_last_theft_result:
+    name: "EV9 Last Theft Alert Result"
+    max: 255
+    icon: mdi:shield-check
+
+# ============================================================
+# TEMPLATE SENSORS (v2.2)
+# ============================================================
+
+template:
+  - sensor:
+      # v2.2: Movement Distance from Parked Location (for theft detection)
+      - name: "EV9 Movement Distance"
+        unique_id: ev9_movement_distance
+        unit_of_measurement: "m"
+        state_class: measurement
+        icon: mdi:map-marker-alert
+        state: >
+          {% set last = states('input_text.ev9_last_known_location') %}
+          {% if last in ['unknown', 'unavailable', ''] %}
+            0
+          {% else %}
+            {% set parts = last.split(',') %}
+            {% if parts | length == 2 %}
+              {% set last_lat = parts[0] | float %}
+              {% set last_lon = parts[1] | float %}
+              {% set curr_lat = state_attr('device_tracker.ev9_location', 'latitude') | float %}
+              {% set curr_lon = state_attr('device_tracker.ev9_location', 'longitude') | float %}
+              {{ (distance(last_lat, last_lon, curr_lat, curr_lon) * 1000) | round(0) }}
+            {% else %}
+              0
+            {% endif %}
+          {% endif %}

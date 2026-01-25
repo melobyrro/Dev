@@ -1,0 +1,142 @@
+# Daikin Fit Enhanced Monitoring - Automations
+# Add to automations.yaml or include separately
+
+# Filter Replacement Reminder
+- id: daikin_filter_reminder
+  alias: "Daikin: Filter Replacement Reminder"
+  description: "Notify when filter needs replacement"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.daikin_filter_days
+      below: 7
+  condition:
+    - condition: time
+      after: "09:00:00"
+      before: "21:00:00"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "HVAC Filter Alert"
+        message: "Daikin filter needs replacement in {{ states('sensor.daikin_filter_days') }} days"
+        data:
+          tag: "daikin-filter"
+          push:
+            sound: default
+  mode: single
+
+# Critical Fault Alert
+- id: daikin_critical_fault_alert
+  alias: "Daikin: Critical Fault Alert"
+  description: "Notify on any critical fault code"
+  trigger:
+    - platform: state
+      entity_id:
+        - sensor.main_room_air_handler_critical_fault_code
+        - sensor.main_room_eev_coil_critical_fault_code
+        - sensor.main_room_indoor_furnace_critical_fault_code
+        - sensor.main_room_outdoor_critical_fault_code
+        - sensor.main_room_thermostat_critical_fault_code
+  condition:
+    - condition: template
+      value_template: "{{ trigger.to_state.state not in ['0', '0.0', 'unknown', 'unavailable'] }}"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "HVAC Critical Fault!"
+        message: "{{ trigger.to_state.attributes.friendly_name }}: {{ trigger.to_state.state }}"
+        data:
+          tag: "daikin-critical-fault"
+          push:
+            sound:
+              name: default
+              critical: 1
+              volume: 1.0
+    - service: persistent_notification.create
+      data:
+        title: "HVAC Critical Fault"
+        message: "{{ trigger.to_state.attributes.friendly_name }}: {{ trigger.to_state.state }}"
+        notification_id: "daikin_critical_fault"
+  mode: parallel
+
+# High Power Usage Alert (potential issue or extreme conditions)
+- id: daikin_high_power_alert
+  alias: "Daikin: High Power Usage Alert"
+  description: "Notify when power draw is unusually high for extended period"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.daikin_total_power
+      above: 3000
+      for:
+        minutes: 30
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "HVAC High Power"
+        message: "Daikin running at {{ states('sensor.daikin_total_power') }}W for 30+ minutes. Outdoor: {{ states('sensor.main_room_outdoor_temperature') }}°F"
+        data:
+          tag: "daikin-high-power"
+  mode: single
+
+# Compressor Running Hot Alert
+- id: daikin_compressor_maxed_alert
+  alias: "Daikin: Compressor Maxed Alert"
+  description: "Notify when compressor running at max for extended period"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.daikin_compressor_load
+      above: 95
+      for:
+        minutes: 60
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "HVAC Struggling"
+        message: "Compressor at {{ states('sensor.daikin_compressor_load') }}% for 1+ hour. Outdoor: {{ states('sensor.main_room_outdoor_temperature') }}°F"
+        data:
+          tag: "daikin-compressor-hot"
+  mode: single
+
+# Daily Runtime Summary (optional - runs at 9 PM)
+- id: daikin_daily_summary
+  alias: "Daikin: Daily Runtime Summary"
+  description: "Send daily summary of HVAC usage"
+  trigger:
+    - platform: time
+      at: "21:00:00"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "HVAC Daily Summary"
+        message: >
+          Runtime: {{ states('sensor.daikin_runtime_today') | float(0) | round(1) }}h
+          Energy: {{ states('sensor.daikin_energy_daily') | float(0) | round(2) }} kWh
+          Cooling: {{ states('sensor.daikin_cooling_today') | float(0) | round(1) }}h
+        data:
+          tag: "daikin-daily-summary"
+  mode: single
+
+# Temperature Not Reaching Setpoint
+- id: daikin_temp_not_reaching
+  alias: "Daikin: Temperature Not Reaching Setpoint"
+  description: "Alert if temperature isn't reaching setpoint after extended runtime"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.daikin_running
+      to: "on"
+      for:
+        hours: 2
+  condition:
+    - condition: template
+      value_template: >
+        {% set delta = states('sensor.daikin_temperature_delta') | float(0) | abs %}
+        {{ delta > 3 }}
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "HVAC Not Reaching Setpoint"
+        message: >
+          Running for 2+ hours but still {{ states('sensor.daikin_temperature_delta') | float(0) | abs | round(1) }}°F from setpoint.
+          Current: {{ states('sensor.main_room_indoor_temperature') }}°F, Target: {{ state_attr('climate.daikin', 'temperature') }}°F
+        data:
+          tag: "daikin-temp-issue"
+  mode: single

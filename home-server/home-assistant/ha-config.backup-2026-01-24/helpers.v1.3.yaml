@@ -1,0 +1,381 @@
+# Kia EV9 Helper Entities
+# Version: 1.3
+# Last Updated: 2026-01-19
+#
+# CHANGES from v1.2:
+# - Redesigned schedule system: 5 flexible schedules instead of 7 fixed day-based times
+# - Each schedule has: time, enabled toggle, and 7 day-of-week toggles
+# - Removed: ev9_departure_* and ev9_precondition_* (day-specific) helpers
+#
+# DEPLOYMENT:
+# Option 1: Add to configuration.yaml and restart HA
+# Option 2: Create via UI (Settings -> Devices & Services -> Helpers)
+
+# ============================================================
+# SCHEDULE 1
+# ============================================================
+
+input_datetime:
+  ev9_schedule_1_time:
+    name: "EV9 Schedule 1 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_2_time:
+    name: "EV9 Schedule 2 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_3_time:
+    name: "EV9 Schedule 3 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_4_time:
+    name: "EV9 Schedule 4 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+  ev9_schedule_5_time:
+    name: "EV9 Schedule 5 Time"
+    has_date: false
+    has_time: true
+    icon: mdi:clock-outline
+
+# ============================================================
+# SCHEDULE ENABLE/DISABLE TOGGLES
+# ============================================================
+
+input_boolean:
+  # Schedule 1
+  ev9_schedule_1_enabled:
+    name: "EV9 Schedule 1 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_1_mon:
+    name: "EV9 Schedule 1 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_tue:
+    name: "EV9 Schedule 1 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_wed:
+    name: "EV9 Schedule 1 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_thu:
+    name: "EV9 Schedule 1 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_fri:
+    name: "EV9 Schedule 1 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_sat:
+    name: "EV9 Schedule 1 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_1_sun:
+    name: "EV9 Schedule 1 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 2
+  ev9_schedule_2_enabled:
+    name: "EV9 Schedule 2 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_2_mon:
+    name: "EV9 Schedule 2 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_tue:
+    name: "EV9 Schedule 2 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_wed:
+    name: "EV9 Schedule 2 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_thu:
+    name: "EV9 Schedule 2 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_fri:
+    name: "EV9 Schedule 2 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_sat:
+    name: "EV9 Schedule 2 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_2_sun:
+    name: "EV9 Schedule 2 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 3
+  ev9_schedule_3_enabled:
+    name: "EV9 Schedule 3 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_3_mon:
+    name: "EV9 Schedule 3 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_tue:
+    name: "EV9 Schedule 3 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_wed:
+    name: "EV9 Schedule 3 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_thu:
+    name: "EV9 Schedule 3 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_fri:
+    name: "EV9 Schedule 3 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_sat:
+    name: "EV9 Schedule 3 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_3_sun:
+    name: "EV9 Schedule 3 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 4
+  ev9_schedule_4_enabled:
+    name: "EV9 Schedule 4 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_4_mon:
+    name: "EV9 Schedule 4 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_tue:
+    name: "EV9 Schedule 4 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_wed:
+    name: "EV9 Schedule 4 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_thu:
+    name: "EV9 Schedule 4 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_fri:
+    name: "EV9 Schedule 4 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_sat:
+    name: "EV9 Schedule 4 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_4_sun:
+    name: "EV9 Schedule 4 Sunday"
+    icon: mdi:calendar
+
+  # Schedule 5
+  ev9_schedule_5_enabled:
+    name: "EV9 Schedule 5 Enabled"
+    icon: mdi:calendar-check
+
+  ev9_schedule_5_mon:
+    name: "EV9 Schedule 5 Monday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_tue:
+    name: "EV9 Schedule 5 Tuesday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_wed:
+    name: "EV9 Schedule 5 Wednesday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_thu:
+    name: "EV9 Schedule 5 Thursday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_fri:
+    name: "EV9 Schedule 5 Friday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_sat:
+    name: "EV9 Schedule 5 Saturday"
+    icon: mdi:calendar
+
+  ev9_schedule_5_sun:
+    name: "EV9 Schedule 5 Sunday"
+    icon: mdi:calendar
+
+  # ============================================================
+  # GLOBAL PRE-CONDITIONING SETTINGS
+  # ============================================================
+
+  # Master enable/disable for all pre-conditioning
+  ev9_precondition_enabled:
+    name: "EV9 Pre-conditioning Enabled"
+    icon: mdi:air-conditioner
+
+  # Smart pre-conditioning (weather-based lead time)
+  ev9_smart_precondition:
+    name: "EV9 Smart Pre-conditioning"
+    icon: mdi:weather-partly-cloudy
+
+  # ============================================================
+  # NOTIFICATION TOGGLES
+  # ============================================================
+
+  ev9_notify_charging_complete:
+    name: "EV9 Notify Charging Complete"
+    icon: mdi:bell-ring
+
+  ev9_notify_low_battery:
+    name: "EV9 Notify Low Battery"
+    icon: mdi:battery-alert
+
+  ev9_notify_unlocked_at_home:
+    name: "EV9 Notify Unlocked at Home"
+    icon: mdi:lock-open-alert
+
+  ev9_notify_charging_interrupted:
+    name: "EV9 Notify Charging Interrupted"
+    icon: mdi:ev-plug-type1
+
+  ev9_notify_low_charging_power:
+    name: "EV9 Notify Low Charging Power"
+    icon: mdi:flash-alert
+
+  # ============================================================
+  # WALK-AWAY LOCK & AUTO-CLOSE WINDOWS
+  # ============================================================
+
+  ev9_walk_away_lock_enabled:
+    name: "EV9 Walk-Away Lock Enabled"
+    icon: mdi:lock-clock
+
+  ev9_auto_close_windows_enabled:
+    name: "EV9 Auto-Close Windows Enabled"
+    icon: mdi:window-closed
+
+  # ============================================================
+  # OVERNIGHT CHARGING MONITOR
+  # ============================================================
+
+  ev9_overnight_charge_monitor:
+    name: "EV9 Overnight Charge Monitor"
+    icon: mdi:weather-night
+
+# ============================================================
+# CONFIGURABLE THRESHOLDS
+# ============================================================
+
+input_number:
+  # Pre-conditioning settings
+  ev9_precondition_lead_time:
+    name: "EV9 Pre-condition Lead Time"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:clock-start
+    mode: slider
+
+  ev9_target_temperature:
+    name: "EV9 Target Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  # Battery alerts
+  ev9_low_battery_threshold:
+    name: "EV9 Low Battery Threshold"
+    min: 10
+    max: 50
+    step: 5
+    unit_of_measurement: "%"
+    icon: mdi:battery-20
+    mode: slider
+
+  # Unlocked alert
+  ev9_unlocked_alert_delay:
+    name: "EV9 Unlocked Alert Delay"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer-outline
+    mode: slider
+
+  # Walk-away lock delay
+  ev9_walk_away_lock_delay:
+    name: "EV9 Walk-Away Lock Delay"
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer-lock
+    mode: slider
+
+  # Auto-close windows delay
+  ev9_auto_close_windows_delay:
+    name: "EV9 Auto-Close Windows Delay"
+    min: 1
+    max: 10
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer
+    mode: slider
+
+  # Charging power monitoring
+  ev9_expected_charge_power:
+    name: "EV9 Expected Charge Power"
+    min: 0.5
+    max: 20
+    step: 0.1
+    unit_of_measurement: "kW"
+    icon: mdi:flash
+    mode: box
+
+  ev9_low_power_threshold:
+    name: "EV9 Low Power Alert Threshold"
+    min: 0.3
+    max: 5
+    step: 0.1
+    unit_of_measurement: "kW"
+    icon: mdi:flash-alert
+    mode: box
+
+  # Charging interruption check time (minutes to wait before alerting)
+  ev9_charge_interrupt_check_delay:
+    name: "EV9 Charge Interrupt Check Delay"
+    min: 5
+    max: 60
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:clock-alert
+    mode: slider
+
+# ============================================================
+# CHARGING CURRENT SELECTOR
+# ============================================================
+
+input_select:
+  ev9_charging_current:
+    name: "EV9 Charging Current"
+    options:
+      - "100%"
+      - "90%"
+      - "60%"
+    icon: mdi:current-ac

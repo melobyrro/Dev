@@ -1,0 +1,145 @@
+{
+  "name": "Config Sync Webhook",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "config-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-node",
+      "name": "Config Sync Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract projects from webhook payload\nconst payload = $input.first().json.body;\nconst projects = payload.projects || [];\nconst agentVersion = payload.agent_version;\nconst hostname = payload.hostname;\nconst scannedAt = payload.scanned_at;\n\nreturn projects.map(project => ({\n  json: {\n    ...project,\n    agent_version: agentVersion,\n    hostname: hostname,\n    received_at: new Date().toISOString()\n  }\n}));"
+      },
+      "id": "code-node",
+      "name": "Parse Projects",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO projects (name, path, config_hash, last_seen_at)\nVALUES ($1, $2, $3, NOW())\nON CONFLICT (path) DO UPDATE SET\n  name = EXCLUDED.name,\n  config_hash = EXCLUDED.config_hash,\n  last_seen_at = NOW()\nRETURNING id;",
+        "options": {
+          "queryParams": "={{ [$json.name, $json.path, $json.config_hash] }}"
+        }
+      },
+      "id": "postgres-upsert",
+      "name": "Upsert Project",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO config_snapshots (project_id, config_hash, settings_json, settings_local_json, claude_md, skills_list, commands_list)\nVALUES ($1, $2, $3::jsonb, $4::jsonb, $5, $6, $7);",
+        "options": {
+          "queryParams": "={{ [$json.project_id, $json.config_hash, JSON.stringify($json.settings_json), JSON.stringify($json.settings_local_json), $json.claude_md, $json.skills_list, $json.commands_list] }}"
+        }
+      },
+      "id": "postgres-snapshot",
+      "name": "Insert Snapshot",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [850, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { \"status\": \"ok\", \"processed\": $input.all().length } }}"
+      },
+      "id": "respond-node",
+      "name": "Respond Success",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "workflowId": "={{ $workflow.id }}",
+        "options": {}
+      },
+      "id": "trigger-audit",
+      "name": "Trigger Audit Engine",
+      "type": "n8n-nodes-base.executeWorkflow",
+      "typeVersion": 1.1,
+      "position": [1050, 450]
+    }
+  ],
+  "connections": {
+    "Config Sync Webhook": {
+      "main": [
+        [
+          {
+            "node": "Parse Projects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Projects": {
+      "main": [
+        [
+          {
+            "node": "Upsert Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Project": {
+      "main": [
+        [
+          {
+            "node": "Insert Snapshot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert Snapshot": {
+      "main": [
+        [
+          {
+            "node": "Respond Success",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Trigger Audit Engine",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

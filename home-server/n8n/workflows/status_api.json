@@ -1,0 +1,123 @@
+{
+  "name": "Status API",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "status-api",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "status-webhook",
+      "name": "Status API Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT oh.*, (SELECT MAX(last_seen_at) FROM projects) as last_sync, (SELECT COUNT(*) FROM candidates WHERE status = 'pending') as pending_candidates FROM overall_health oh;"
+      },
+      "id": "get-health",
+      "name": "Get Health Data",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [450, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM audit_summary ORDER BY critical_failures DESC, error_failures DESC;"
+      },
+      "id": "get-projects",
+      "name": "Get Projects",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [650, 300],
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get data from previous nodes\nconst health = $('Get Health Data').first()?.json || {};\nconst projects = $('Get Projects').all().map(p => p.json);\n\nreturn [{\n  json: {\n    status: health.status || 'unknown',\n    total_projects: health.total_projects || 0,\n    critical_count: health.total_critical || 0,\n    error_count: health.total_errors || 0,\n    warning_count: health.total_warnings || 0,\n    info_count: health.total_info || 0,\n    pass_count: health.total_passes || 0,\n    health_score: health.health_score || 0,\n    last_sync: health.last_sync,\n    pending_candidates: parseInt(health.pending_candidates) || 0,\n    projects: projects\n  }\n}];"
+      },
+      "id": "merge-response",
+      "name": "Build Response",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [850, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ $json }}"
+      },
+      "id": "respond-api",
+      "name": "Respond with Status",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1050, 300]
+    }
+  ],
+  "connections": {
+    "Status API Webhook": {
+      "main": [
+        [
+          {
+            "node": "Get Health Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Health Data": {
+      "main": [
+        [
+          {
+            "node": "Get Projects",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Projects": {
+      "main": [
+        [
+          {
+            "node": "Build Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Response": {
+      "main": [
+        [
+          {
+            "node": "Respond with Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

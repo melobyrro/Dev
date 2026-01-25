@@ -1,0 +1,141 @@
+# Kia EV9 Scripts
+# Version: 2.0
+# Last Updated: 2026-01-19
+#
+# CHANGES from v1.4:
+# - Added ev9_clear_event_log script for clearing automation history
+#
+# DEPLOYMENT:
+# Add these scripts to your scripts.yaml or create via UI
+# Then reload scripts: Settings -> Automations -> Reload
+
+# ============================================================
+# CLIMATE WITH TIMER
+# ============================================================
+
+ev9_start_climate_with_timer:
+  alias: "EV9: Start Climate with Timer"
+  description: "Start climate control and set auto-stop timer"
+  icon: mdi:air-conditioner
+  mode: single
+  sequence:
+    - variables:
+        target_temp: "{{ states('input_number.ev9_target_temperature') | int(72) }}"
+        duration_min: "{{ states('input_number.ev9_climate_duration') | int(15) }}"
+    - service: kia_uvo.start_climate
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+        climate: true
+        temperature: "{{ target_temp }}"
+    - service: timer.start
+      data:
+        duration: "{{ duration_min * 60 }}"
+      target:
+        entity_id: timer.ev9_climate_timer
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - CLIMATE_START: Manual start, {{ target_temp }}°F, timer {{ duration_min }}min"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "EV9 Climate Started"
+        message: "Target: {{ target_temp }}°F, Timer: {{ duration_min }} min"
+
+# ============================================================
+# STOP CLIMATE AND CANCEL TIMER
+# ============================================================
+
+ev9_stop_climate_cancel_timer:
+  alias: "EV9: Stop Climate and Cancel Timer"
+  description: "Stop climate control and cancel any running timer"
+  icon: mdi:fan-off
+  mode: single
+  sequence:
+    - service: kia_uvo.stop_climate
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+    - service: timer.cancel
+      target:
+        entity_id: timer.ev9_climate_timer
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - CLIMATE_MANUAL_STOP: User stopped climate"
+
+# ============================================================
+# CLEAR EVENT LOG (v2.0)
+# ============================================================
+
+ev9_clear_event_log:
+  alias: "EV9: Clear Event Log"
+  description: "Clear all event log entries"
+  icon: mdi:delete
+  mode: single
+  sequence:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_1
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_2
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_3
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_4
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_5
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_6
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_7
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_8
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_9
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_event_10
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_walkaway_result
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_timeout_lock_result
+      data:
+        value: ""
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_precondition_result
+      data:
+        value: ""

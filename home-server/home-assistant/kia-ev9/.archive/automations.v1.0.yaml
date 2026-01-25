@@ -1,0 +1,187 @@
+# Kia EV9 Automations
+# Version: 1.0
+# Last Updated: 2025-01-19
+#
+# DEPLOYMENT:
+# Add these automations to your automations.yaml or create via UI
+# Then reload automations: Settings → Automations → Reload
+
+# ============================================================
+# CHARGING NOTIFICATIONS
+# ============================================================
+
+- id: ev9_charging_complete
+  alias: "EV9: Charging Complete Notification"
+  description: "Notify when EV9 finishes charging"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      from: "on"
+      to: "off"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_charging_complete
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      state: "on"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔋 EV9 Charging Complete"
+        message: >
+          Battery at {{ states('sensor.ev9_ev_battery_level') }}%
+          Range: {{ states('sensor.ev9_ev_range') }} miles
+        data:
+          push:
+            sound: default
+            interruption-level: active
+  mode: single
+
+- id: ev9_low_battery_alert
+  alias: "EV9: Low Battery Alert"
+  description: "Notify when battery drops below threshold"
+  trigger:
+    - platform: numeric_state
+      entity_id: sensor.ev9_ev_battery_level
+      below: input_number.ev9_low_battery_threshold
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_low_battery
+      state: "on"
+    - condition: state
+      entity_id: binary_sensor.ev9_ev_battery_charge
+      state: "off"
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "⚠️ EV9 Low Battery"
+        message: >
+          Battery at {{ states('sensor.ev9_ev_battery_level') }}%
+          Range: {{ states('sensor.ev9_ev_range') }} miles
+          Consider charging soon.
+        data:
+          push:
+            sound: default
+            interruption-level: time-sensitive
+  mode: single
+
+# ============================================================
+# SECURITY NOTIFICATIONS
+# ============================================================
+
+- id: ev9_unlocked_at_home
+  alias: "EV9: Unlocked at Home Alert"
+  description: "Notify if car is unlocked at home for too long"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_locked
+      to: "off"
+      for:
+        minutes: "{{ states('input_number.ev9_unlocked_alert_delay') | int }}"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_notify_unlocked_at_home
+      state: "on"
+    - condition: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+  action:
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔓 EV9 Unlocked"
+        message: >
+          Your EV9 has been unlocked at home for {{ states('input_number.ev9_unlocked_alert_delay') | int }} minutes.
+        data:
+          push:
+            sound: default
+          actions:
+            - action: LOCK_EV9
+              title: "Lock Now"
+              destructive: false
+  mode: single
+
+- id: ev9_lock_from_notification
+  alias: "EV9: Lock from Notification Action"
+  description: "Lock car when notification action is tapped"
+  trigger:
+    - platform: event
+      event_type: mobile_app_notification_action
+      event_data:
+        action: LOCK_EV9
+  action:
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "🔒 EV9 Locked"
+        message: "Your EV9 has been locked."
+  mode: single
+
+# ============================================================
+# PRE-CONDITIONING AUTOMATION
+# ============================================================
+
+- id: ev9_precondition_schedule
+  alias: "EV9: Scheduled Pre-conditioning"
+  description: "Start climate control before scheduled departure"
+  trigger:
+    - platform: time_pattern
+      minutes: "/1"
+  condition:
+    - condition: state
+      entity_id: input_boolean.ev9_precondition_enabled
+      state: "on"
+    - condition: template
+      value_template: >
+        {% set day = now().strftime('%A').lower() %}
+        {% set enabled = states('input_boolean.ev9_precondition_' ~ day) %}
+        {{ enabled == 'on' }}
+    - condition: template
+      value_template: >
+        {% set day = now().strftime('%A').lower() %}
+        {% set departure = states('input_datetime.ev9_departure_' ~ day) %}
+        {% set lead_time = states('input_number.ev9_precondition_lead_time') | int %}
+        {% if departure not in ['unknown', 'unavailable'] %}
+          {% set dep_time = today_at(departure) %}
+          {% set start_time = dep_time - timedelta(minutes=lead_time) %}
+          {{ start_time <= now() < start_time + timedelta(minutes=1) }}
+        {% else %}
+          false
+        {% endif %}
+    - condition: state
+      entity_id: binary_sensor.ev9_air_conditioner
+      state: "off"
+  action:
+    - service: kia_uvo.start_climate
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+        climate: true
+        temperature: "{{ states('input_number.ev9_target_temperature') | int }}"
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: "❄️ EV9 Pre-conditioning Started"
+        message: >
+          Climate control started. Target: {{ states('input_number.ev9_target_temperature') }}°F
+          Departure in {{ states('input_number.ev9_precondition_lead_time') }} minutes.
+  mode: single
+
+# ============================================================
+# DATA REFRESH
+# ============================================================
+
+- id: ev9_force_update_on_plug
+  alias: "EV9: Force Update When Plugged In"
+  description: "Refresh data when charging cable is connected"
+  trigger:
+    - platform: state
+      entity_id: binary_sensor.ev9_ev_battery_plug
+      to: "on"
+  action:
+    - delay:
+        seconds: 30
+    - service: kia_uvo.update
+      data:
+        device_id: 7f6b71f10dc261408a02149c68aa3e23
+  mode: single
