@@ -1,0 +1,3 @@
+services:
+  immich-redis:
+    command: ["--aclfile","/data/users.acl"]

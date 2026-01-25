@@ -110,8 +110,6 @@ mcp__chrome-devtools__click - Click elements
 mcp__chrome-devtools__fill - Fill inputs
 ```
 
-**Never use Playwright MCP for this project - use Chrome DevTools MCP only.**
-
 ### Multi-Tenant Test Checklist
 When modifying configuration features:
 1. Switch to Church A, make a change, verify it saves

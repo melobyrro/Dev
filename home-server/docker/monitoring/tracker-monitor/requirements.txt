@@ -1,0 +1,12 @@
+# RSS feed parsing
+feedparser==6.0.11
+
+# YAML configuration parsing
+PyYAML==6.0.1
+
+# HTTP requests for ntfy and Pushgateway
+requests==2.31.0
+
+# Prometheus metrics formatting
+prometheus-client==0.19.0
+flask==3.0.0

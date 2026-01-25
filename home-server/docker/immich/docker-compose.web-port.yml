@@ -1,0 +1,4 @@
+services:
+  immich-web:
+    ports:
+      - "3000:3000"

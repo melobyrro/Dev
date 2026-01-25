@@ -1,0 +1,4 @@
+services:
+  qbittorrent:
+    environment:
+      WEBUI_PORT: "9090"

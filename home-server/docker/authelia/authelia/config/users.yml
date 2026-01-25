@@ -1,0 +1,9 @@
+---
+users:
+  admin:
+    displayname: "Admin"
+    password: "$argon2id$v=19$m=65536,t=3,p=4$6JnOP1hm0SJDweZFESTmYw$TwEJYlUKMUNk1jsG/9I/Z3e5hYY423YPz1vQwJwl7c4"
+    email: andre.byrro@gmail.com
+    groups:
+      - admins
+      - users

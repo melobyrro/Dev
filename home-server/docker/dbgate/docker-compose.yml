@@ -1,0 +1,21 @@
+version: '3.8'
+services:
+  dbgate:
+    image: dbgate/dbgate
+    container_name: dbgate
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/root/.dbgate
+      - /home/byrro:/mnt/user_home:ro
+    networks:
+      - byrro-net
+      - culto_culto_network
+      - default
+
+networks:
+  byrro-net:
+    external: true
+  culto_culto_network:
+    external: true

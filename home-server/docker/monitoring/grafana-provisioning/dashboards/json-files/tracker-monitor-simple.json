@@ -1,0 +1,24 @@
+{
+  "title": "Tracker Monitor (Simple)",
+  "uid": "tracker-monitor-simple",
+  "editable": true,
+  "panels": [
+    {
+      "id": 1,
+      "title": "Tracker Status",
+      "type": "timeseries",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 0},
+      "targets": [{"expr": "tracker_enrollment_status", "refId": "A"}]
+    },
+    {
+      "id": 2,
+      "title": "Total Checks",
+      "type": "stat",
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 8},
+      "targets": [{"expr": "sum(tracker_check_count_total)", "refId": "A"}]
+    }
+  ],
+  "refresh": "30s",
+  "time": {"from": "now-6h", "to": "now"},
+  "timezone": "browser"
+}

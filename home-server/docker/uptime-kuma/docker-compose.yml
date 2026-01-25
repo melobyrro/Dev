@@ -1,0 +1,23 @@
+services:
+  uptime-kuma:
+    image: louislam/uptime-kuma:1
+    container_name: uptime-kuma
+    restart: unless-stopped
+    volumes:
+      - /mnt/ByrroServer/docker-data/uptime-kuma/data:/app/data
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    environment:
+      - TZ=America/New_York
+    ports:
+      - "3002:3001"
+    networks:
+      - byrro-net
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:3001/api/health >/dev/null || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  byrro-net:
+    external: true

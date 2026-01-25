@@ -1,0 +1,5 @@
+services:
+  gluetun:
+    environment:
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24,172.18.0.0/16
+      - FIREWALL_INPUT_PORTS=8181,8191,1080

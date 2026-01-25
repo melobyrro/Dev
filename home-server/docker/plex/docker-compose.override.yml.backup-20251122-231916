@@ -1,0 +1,6 @@
+services:
+  plex:
+    cpu_shares: 2048      # higher priority
+    cpus: "4.0"           # max CPU Plex can use
+    mem_limit: 6g         # cap memory
+    oom_kill_disable: true

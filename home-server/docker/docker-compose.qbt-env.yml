@@ -1,0 +1,8 @@
+services:
+  qbittorrent:
+    environment:
+      QBT_EULA: "accept"
+      QBT_WEBUI_ADDRESS: "0.0.0.0"
+      QBT_WEBUI_PORT: "8080"
+      QBT_WEBUI_HTTPS_ENABLED: "false"
+      QBT_WEBUI_SERVERDOMAINS: "qbittorrent.byrroserver.com,localhost,127.0.0.1"

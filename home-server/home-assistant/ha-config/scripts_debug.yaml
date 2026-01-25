@@ -6,7 +6,7 @@ patio_ac_temp_up_debug:
       data:
         title: Debug: Temp Up
         message: >
-          Current temp attr: {{ state_attr('climate.150633095083490_climate', 'temperature') }}
-          Type: {{ state_attr('climate.150633095083490_climate', 'temperature').__class__.__name__ }}
-          Is none: {{ state_attr('climate.150633095083490_climate', 'temperature') is none }}
-          All attributes: {{ state_attr('climate.150633095083490_climate', '') }}
+          Current temp attr: {{ state_attr('climate.patio_ac', 'temperature') }}
+          Type: {{ state_attr('climate.patio_ac', 'temperature').__class__.__name__ }}
+          Is none: {{ state_attr('climate.patio_ac', 'temperature') is none }}
+          All attributes: {{ state_attr('climate.patio_ac', '') }}

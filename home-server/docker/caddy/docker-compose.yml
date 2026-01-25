@@ -1,0 +1,21 @@
+services:
+  caddy:
+    build: .
+    container_name: caddy
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - /mnt/ByrroServer/docker-data/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - /mnt/ByrroServer/docker-data/caddy/data:/data
+      - /mnt/ByrroServer/docker-data/caddy/config:/config
+    networks:
+      - byrro-net
+
+networks:
+  byrro-net:
+    external: true

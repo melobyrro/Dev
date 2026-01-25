@@ -1,0 +1,333 @@
+services:
+  blackbox-exporter:
+    image: prom/blackbox-exporter:latest
+    container_name: blackbox-exporter
+    ports:
+      - 9115:9115
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: node-exporter
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)'
+    ports:
+      - 9100:9100
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=15d
+      - --web.enable-lifecycle
+    ports:
+      - 9090:9090
+    volumes:
+      - /home/byrro/docker/monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - /home/byrro/docker/monitoring/container_memory_alerts.yml:/etc/prometheus/container_memory_alerts.yml:ro
+      - /home/byrro/docker/monitoring/prometheus-data:/prometheus
+    networks:
+      - byrro-net
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - 3030:3000
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=ByrroSecure!2025
+      - GF_AUTH_PROXY_ENABLED=true
+      - GF_AUTH_PROXY_HEADER_NAME=Remote-User
+      - GF_AUTH_PROXY_HEADER_PROPERTY=username
+      - GF_AUTH_PROXY_AUTO_SIGN_UP=true
+      - GF_AUTH_PROXY_EMAIL_HEADER_NAME=Remote-Email
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+      - GF_SMTP_ENABLED=true
+      - GF_SMTP_HOST=smtp.gmail.com:587
+      - GF_SMTP_USER=andre.byrro@gmail.com
+      - GF_SMTP_PASSWORD=zblemvfrwquszyoj
+      - GF_SMTP_FROM_ADDRESS=andre.byrro@gmail.com
+      - GF_SMTP_FROM_NAME=Home Server Monitoring
+      - GF_SMTP_STARTTLS_POLICY=MandatoryStartTLS
+      - TZ=America/New_York
+    volumes:
+      - /home/byrro/docker/monitoring/grafana-data:/var/lib/grafana
+      - /home/byrro/docker/monitoring/grafana-provisioning:/etc/grafana/provisioning
+    networks:
+      - byrro-net
+
+  loki:
+    image: grafana/loki:2.9.17
+    container_name: loki
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/local-config.yml
+    ports:
+      - 3100:3100
+    volumes:
+      - /mnt/ByrroServer/docker-data/loki/config.yml:/etc/loki/local-config.yml:ro
+      - /mnt/ByrroServer/docker-data/loki/data:/loki
+    networks:
+      - byrro-net
+
+  promtail:
+    image: grafana/promtail:2.9.17
+    container_name: promtail
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/promtail/promtail-config.yml
+    depends_on:
+      loki:
+        condition: service_started
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mnt/ByrroServer/docker-data/promtail/promtail-config.yml:/etc/promtail/promtail-config.yml:ro
+    networks:
+      - byrro-net
+
+  tempo:
+    image: grafana/tempo:latest
+    container_name: tempo
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/tempo/tempo.yml
+    ports:
+      - 127.0.0.1:3200:3200
+    volumes:
+      - /home/byrro/docker/monitoring/tempo/tempo.yml:/etc/tempo/tempo.yml:ro
+      - /home/byrro/docker/monitoring/tempo-data:/var/tempo
+    networks:
+      - byrro-net
+
+  telemetrygen:
+    image: ghcr.io/open-telemetry/opentelemetry-collector-contrib/telemetrygen:latest
+    container_name: telemetrygen
+    restart: unless-stopped
+    command:
+      - traces
+      - --otlp-endpoint=tempo:4317
+      - --otlp-insecure
+      - --duration=inf
+      - --rate=0.2
+    depends_on:
+      - tempo
+    networks:
+      - byrro-net
+
+  falco:
+    image: falcosecurity/falco-no-driver:latest
+    container_name: falco
+    restart: unless-stopped
+    privileged: true
+    volumes:
+      - /var/run/docker.sock:/host/var/run/docker.sock
+      - /proc:/host/proc:ro
+      - /boot:/host/boot:ro
+      - /lib/modules:/host/lib/modules:ro
+      - /usr:/host/usr:ro
+      - /dev:/host/dev:ro
+    command:
+      - /usr/bin/falco
+      - -o
+      - json_output=true
+      - -o
+      - http_output.enabled=true
+      - -o
+      - http_output.url=http://falcosidekick:2801/
+      - -o
+      - container_engines.docker.socket=/host/var/run/docker.sock
+    depends_on:
+      - falcosidekick
+    networks:
+      - byrro-net
+
+  falcosidekick:
+    image: falcosecurity/falcosidekick:latest
+    container_name: falcosidekick
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:2801:2801
+    env_file:
+      - ./tracker-monitor/.env
+      - /home/byrro/docker/monitoring/.env.obs-secrets
+    environment:
+      LOKI_HOSTPORT: http://loki:3100
+      LOKI_FORMAT: json
+    networks:
+      - byrro-net
+
+
+  falco-event-generator:
+    image: falcosecurity/event-generator:latest
+    container_name: falco-event-generator
+    profiles: ["tools"]
+    command: ["run", "syscall", "--loop"]
+    restart: "no"
+    networks:
+      - byrro-net
+
+  pushgateway:
+    image: prom/pushgateway:latest
+    container_name: pushgateway
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  trivy-runner:
+    image: aquasec/trivy:latest
+    container_name: trivy-runner
+    restart: unless-stopped
+    depends_on:
+      - pushgateway
+      - falcosidekick
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/byrro/docker/monitoring/trivy:/work
+    entrypoint: ["/bin/sh", "/work/run.sh"]
+    environment:
+      TRIVY_INTERVAL_SECONDS: "86400"
+      TRIVY_SEVERITIES: "HIGH,CRITICAL"
+      TRIVY_IGNORE_UNFIXED: "true"
+      FALCOSIDEKICK_URL: "http://falcosidekick:2801/"
+      PUSHGATEWAY_URL: "http://pushgateway:9091"
+    networks:
+      - byrro-net
+
+  trivy-api:
+    build: /home/byrro/docker/monitoring/trivy-api
+    container_name: trivy-api
+    environment:
+      FALCO_SUPPRESS_RULES: "Read sensitive file untrusted@culto_db,Read sensitive file untrusted@immich-postgres,Read sensitive file untrusted@dawarich-db"
+    restart: unless-stopped
+    volumes:
+      - /home/byrro/docker/monitoring/trivy/reports:/work/reports:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /home/byrro/logs:/home/byrro/logs:ro
+      - /var/log:/var/log:ro
+    ports:
+      - 0.0.0.0:8083:8080
+    networks:
+      - byrro-net
+
+  tracker-monitor:
+    build: ./tracker-monitor
+    container_name: tracker-monitor
+    ports:
+      - "5050:5000"
+    restart: unless-stopped
+    networks:
+      - byrro-net
+    env_file:
+      - ./tracker-monitor/.env
+      - /home/byrro/docker/monitoring/.env.obs-secrets
+    environment:
+      - PUSHGATEWAY_URL=http://pushgateway:9091
+      - NTFY_SERVER=https://ntfy.sh
+      - NTFY_TOPIC=tracker-enrollments
+      - TZ=America/New_York
+    volumes:
+      - ./tracker-monitor/config.yml:/app/config.yml:ro
+      - ./tracker-monitor/data:/app/data
+      - /etc/localtime:/etc/localtime:ro
+    depends_on:
+      - pushgateway
+    healthcheck:
+      test: ["CMD", "python", "-c", "import sys; sys.exit(0)"]
+      interval: 5m
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  pve-exporter:
+    image: prompve/prometheus-pve-exporter:latest
+    container_name: pve-exporter
+    restart: unless-stopped
+    ports:
+      - 127.0.0.1:9221:9221
+    environment:
+      - PVE_USER=prometheus@pve
+      - PVE_TOKEN_NAME=monitoring
+      - PVE_TOKEN_VALUE=${PVE_TOKEN_SECRET}
+      - PVE_VERIFY_SSL=false
+    networks:
+      - byrro-net
+
+  falco-ha-bridge:
+    build: ./falco-ha-bridge
+    container_name: falco-ha-bridge
+    restart: unless-stopped
+    environment:
+      - HA_URL=http://192.168.1.11:8123
+      - HA_TOKEN=${HA_TOKEN}
+      - HA_NOTIFY_SERVICE=notify.mobile_app_andre_iphone
+      - DEDUP_WINDOW_HOURS=24
+      - TZ=America/New_York
+      - "FALCO_SUPPRESS_RULES=Read sensitive file untrusted@culto_db,Read sensitive file untrusted@immich-postgres,Read sensitive file untrusted@dawarich-db,Drop and execute new binary in container@qbit-safety-cleaner,Drop and execute new binary in container@qb-port-sync,Drop and execute new binary in container@flaresolverr"
+    volumes:
+      - ./falco-ha-bridge/data:/data
+    ports:
+      - "127.0.0.1:5002:5001"
+    networks:
+      - byrro-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    container_name: mosquitto
+    restart: unless-stopped
+    ports:
+      - 1883:1883
+    volumes:
+      - /home/byrro/docker/monitoring/mosquitto/config:/mosquitto/config
+      - /home/byrro/docker/monitoring/mosquitto/data:/mosquitto/data
+      - /home/byrro/docker/monitoring/mosquitto/log:/mosquitto/log
+    networks:
+      - byrro-net
+
+  netalertx:
+    image: jokobsk/netalertx:latest
+    container_name: netalertx
+    network_mode: host
+    restart: unless-stopped
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+      - NET_BIND_SERVICE
+      - CHOWN
+      - SETGID
+      - SETUID
+    environment:
+      - TZ=America/New_York
+      - PORT=20211
+      - PUID=0
+      - PGID=0
+      - SCAN_SUBNETS=192.168.1.0/24 --interface=eth0
+    volumes:
+      - /home/byrro/docker/monitoring/netalertx/data:/data
+      - /etc/localtime:/etc/localtime:ro
+
+networks:
+  byrro-net:
+    external: true

@@ -1,0 +1,5 @@
+services:
+  immich-server:
+    volumes:
+      - /mnt/ByrroServer/ByrroMedia/Photos:/external/Photos            # library root
+      - /mnt/ByrroServer/ByrroMedia/Photos/ImmichUploads:/data/upload  # staging

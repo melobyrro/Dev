@@ -1,0 +1,60 @@
+#!/bin/sh
+set -eu
+
+QBIT_HOST="${QBIT_HOST:-http://127.0.0.1:8181}"
+QBIT_USER="${QBIT_USER:-}"
+QBIT_PASS="${QBIT_PASS:-}"
+INTERVAL="${INTERVAL:-300}"
+CATEGORIES="${CATEGORIES:-tv movies}"
+
+if [ -z "$QBIT_USER" ] || [ -z "$QBIT_PASS" ]; then
+  echo "qbit-safety-cleaner: QBIT_USER/QBIT_PASS not set" >&2
+  exit 1
+fi
+
+VIDEO_RE='\.(mkv|mp4|avi|mov|m4v|ts|webm)$'
+DANGER_RE='\.(exe|scr|bat|cmd|com|pif|msi|lnk|jar|vbs|js|ps1)$'
+
+login() {
+  cookie_file="$1"
+  curl -fsS -c "$cookie_file" \
+    -d "username=$QBIT_USER&password=$QBIT_PASS" \
+    "$QBIT_HOST/api/v2/auth/login" >/dev/null
+}
+
+while true; do
+  cookie_file="$(mktemp)"
+
+  if ! login "$cookie_file"; then
+    echo "qbit-safety-cleaner: login failed; retrying in ${INTERVAL}s" >&2
+    rm -f "$cookie_file"
+    sleep "$INTERVAL"
+    continue
+  fi
+
+  torrents_json="$(curl -fsS -b "$cookie_file" "$QBIT_HOST/api/v2/torrents/info?filter=all" || echo '[]')"
+
+  for category in $CATEGORIES; do
+    echo "$torrents_json" \
+      | jq -r --arg cat "$category" '.[] | select((.progress // 0) >= 1 and (.category==$cat or ((.save_path // "") | test("/downloads/" + $cat + "(/|$)")))) | .hash' \
+      | while read -r hash; do
+          [ -n "$hash" ] || continue
+
+          files_json="$(curl -fsS -b "$cookie_file" "$QBIT_HOST/api/v2/torrents/files?hash=$hash" || echo '[]')"
+
+          if echo "$files_json" | jq -e --arg re "$DANGER_RE" 'any(.[]; (.name // "") | test($re; "i"))' >/dev/null 2>&1; then
+            if ! echo "$files_json" | jq -e --arg re "$VIDEO_RE" 'any(.[]; (.name // "") | test($re; "i"))' >/dev/null 2>&1; then
+              name="$(echo "$torrents_json" | jq -r --arg h "$hash" '.[] | select(.hash==$h) | (.name // $h)' | head -n1)"
+              echo "qbit-safety-cleaner: deleting suspicious torrent (no video files): $name"
+              curl -fsS -b "$cookie_file" \
+                --data-urlencode "hashes=$hash" \
+                --data "deleteFiles=true" \
+                "$QBIT_HOST/api/v2/torrents/delete" >/dev/null || true
+            fi
+          fi
+        done
+  done
+
+  rm -f "$cookie_file"
+  sleep "$INTERVAL"
+done

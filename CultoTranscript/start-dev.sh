@@ -194,36 +194,6 @@ fi
 echo ""
 
 ###############################################################################
-# Step 6: Run Smoke Tests (Optional)
-###############################################################################
-
-echo -e "${YELLOW}[6/6]${NC} Running smoke tests..."
-
-cd "$PROJECT_ROOT/Tests"
-
-# Install test dependencies if needed
-if [ ! -d "node_modules" ]; then
-    echo "  Installing test dependencies..."
-    npm install
-fi
-
-# Check if Playwright browsers are installed
-if ! npx playwright --version > /dev/null 2>&1; then
-    echo "  Installing Playwright browsers..."
-    npx playwright install chromium
-fi
-
-# Run smoke tests
-echo "  Running smoke test suite..."
-if npm run test:smoke -- --reporter=list; then
-    echo -e "${GREEN}✓ All smoke tests passed${NC}"
-else
-    echo -e "${YELLOW}⚠ Some smoke tests failed (this is OK during development)${NC}"
-fi
-
-echo ""
-
-###############################################################################
 # Summary
 ###############################################################################
 

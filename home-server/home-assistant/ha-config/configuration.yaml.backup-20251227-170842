@@ -1,0 +1,268 @@
+homeassistant:
+  name: Home
+  external_url: https://home.byrroserver.com
+  internal_url: http://192.168.1.11:8123
+
+# Loads default set of integrations. Do not remove.
+default_config:
+
+# HTTP settings for reverse proxy
+http:
+  use_x_forwarded_for: true
+  trusted_proxies:
+    - 127.0.0.1
+    - 192.168.1.0/24
+    - 172.16.0.0/12
+    - 172.18.0.0/16
+    - 10.0.0.0/8
+
+# Google Assistant Integration
+google_assistant:
+  project_id: ha-byrro
+  service_account: !include SERVICE_ACCOUNT.json
+  report_state: true
+  expose_by_default: false
+  exposed_domains:
+    - light
+    - switch
+    - fan
+    - climate
+    - lock
+    - script
+    - scene
+  entity_config:
+    light.living_room_light_2:
+      name: "Living Room Fan Light"
+      expose: true
+      room: "Living Room"
+    light.master_light:
+      name: "Master Light"
+      expose: true
+    light.master_fan:
+      name: "Master Fan"
+      expose: true
+    light.office_light:
+      name: "Office Light"
+      expose: true
+    switch.cinema_light:
+      name: "Cinema Light"
+      expose: true
+    fan.living_room_light:
+      name: "Living Room Fan"
+      expose: true
+      room: "Living Room"
+    input_number.living_room_light_brightness:
+      name: "Living Room Light Brightness"
+      expose: true
+      room: "Living Room"
+    input_number.living_room_light_temperature:
+      name: "Living Room Light Temperature"
+      expose: true
+      room: "Living Room"
+    input_number.living_room_fan_speed:
+      name: "Living Room Fan Speed"
+      expose: true
+      room: "Living Room"
+    input_number.office_light_brightness:
+      name: "Office Light Brightness"
+      expose: true
+      room: "Office"
+    lock.front_door:
+      name: "Front Door"
+      expose: true
+    climate.150633095083490_climate:
+      name: "Patio AC"
+      expose: true
+    vacuum.jose:
+      name: "Jose"
+      expose: true
+
+# Load frontend themes from the themes folder
+frontend:
+  themes: !include_dir_merge_named themes
+
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+# ===========================================================================
+# Patio AC Automation Helpers (State Machine Redesign)
+# Updated: 2025-12-27 for energy-efficient state-machine-based automation
+# ===========================================================================
+
+# State Machine
+input_select:
+  patio_ac_reason:
+    name: "Patio AC Active Reason"
+    options:
+      - idle
+      - heat_spike
+      - night_cycle
+      - manual
+      - safety_lock
+    initial: idle
+    icon: mdi:state-machine
+
+# Boolean Helpers
+input_boolean:
+  patio_ac_manual_override:
+    name: "Patio AC Manual Override"
+    icon: mdi:hand-back-right
+    initial: off
+
+  patio_ac_compressor_cooldown:
+    name: "Patio AC Compressor Cooldown Active"
+    initial: off
+    icon: mdi:snowflake-alert
+
+# Datetime Helpers (for protection and runtime tracking)
+input_datetime:
+  patio_ac_last_command:
+    name: "Patio AC Last Command Time"
+    has_date: true
+    has_time: true
+
+  patio_ac_last_off:
+    name: "Patio AC Last OFF Time"
+    has_date: true
+    has_time: true
+
+  patio_ac_runtime_start:
+    name: "Patio AC Runtime Start"
+    has_date: true
+    has_time: true
+
+# Timer Helpers
+timer:
+  patio_ac_heat_spike:
+    name: "Patio AC Heat Spike Timer"
+    restore: true
+
+  patio_ac_night_cycle:
+    name: "Patio AC Night Cycle Timer"
+    restore: true
+
+  patio_ac_manual_override:
+    name: "Patio AC Manual Override Timer"
+    restore: true
+
+  patio_ac_compressor_protection:
+    name: "Patio AC Compressor Protection Timer"
+    duration: "00:10:00"
+    restore: true
+
+  patio_ac_command_throttle:
+    name: "Patio AC Command Throttle Timer"
+    duration: "00:03:00"
+    restore: true
+
+# Number Helpers
+input_number:
+  # Runtime Tracking
+  patio_ac_daily_runtime:
+    name: "Patio AC Daily Runtime (minutes)"
+    min: 0
+    max: 1440
+    step: 1
+    unit_of_measurement: "min"
+    mode: box
+    icon: mdi:timer-sand
+
+  patio_ac_daily_limit:
+    name: "Patio AC Daily Runtime Limit (minutes)"
+    min: 0
+    max: 480
+    step: 15
+    initial: 240
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-lock
+
+  # Tunable Parameters
+  patio_ac_heat_threshold:
+    name: "Heat Spike Threshold"
+    min: 85
+    max: 100
+    step: 1
+    initial: 90
+    unit_of_measurement: "°F"
+    mode: slider
+    icon: mdi:thermometer-alert
+
+  patio_ac_heat_duration:
+    name: "Heat Spike Max Duration"
+    min: 30
+    max: 120
+    step: 15
+    initial: 60
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer
+
+  patio_ac_night_cycle_duration:
+    name: "Night Cycle Duration"
+    min: 5
+    max: 30
+    step: 5
+    initial: 15
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer
+
+  patio_ac_night_cycle_interval:
+    name: "Night Cycle Interval"
+    min: 30
+    max: 120
+    step: 15
+    initial: 60
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:clock-outline
+
+  patio_ac_manual_timeout:
+    name: "Manual Override Timeout"
+    min: 30
+    max: 360
+    step: 30
+    initial: 120
+    unit_of_measurement: "min"
+    mode: slider
+    icon: mdi:timer-off
+
+  # Living Room Fan/Light Controls
+  living_room_light_brightness:
+    name: "Living Room Light Brightness"
+    min: 0
+    max: 100
+    step: 1
+    initial: 100
+    unit_of_measurement: "%"
+    icon: mdi:brightness-7
+
+  living_room_light_temperature:
+    name: "Living Room Light Temperature"
+    min: 2000
+    max: 6500
+    step: 100
+    initial: 4000
+    unit_of_measurement: "K"
+    icon: mdi:thermometer
+
+  living_room_fan_speed:
+    name: "Living Room Fan Speed"
+    min: 0
+    max: 100
+    step: 5
+    initial: 50
+    unit_of_measurement: "%"
+    icon: mdi:fan
+
+  # Office Light Controls
+  office_light_brightness:
+    name: "Office Light Brightness"
+    min: 0
+    max: 100
+    step: 1
+    initial: 100
+    unit_of_measurement: "%"
+    icon: mdi:brightness-7

@@ -1,0 +1,21 @@
+apiVersion: 1
+
+contactPoints:
+  - orgId: 1
+    name: email-daily-digest
+    receivers:
+      - uid: email-daily-digest
+        type: email
+        settings:
+          addresses: melobyrro@gmail.com
+          singleEmail: true
+        disableResolveMessage: false
+  - orgId: 1
+    name: email-critical
+    receivers:
+      - uid: email-critical
+        type: email
+        settings:
+          addresses: melobyrro@gmail.com
+          singleEmail: true
+        disableResolveMessage: false

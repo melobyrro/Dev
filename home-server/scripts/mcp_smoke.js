@@ -40,22 +40,6 @@ const tests = [
     ]
   },
   {
-    key: "playwright",
-    name: "playwright",
-    command: resolveCommand("playwright-mcp"),
-    args: ["--headless"],
-    beforeCalls: [
-      { name: "init-browser", arguments: { url: "https://example.org" } }
-    ],
-    tool: "execute-code",
-    toolArgs: {
-      code: "async function run(page) { await page.waitForLoadState('domcontentloaded'); return page.url(); }"
-    },
-    afterCalls: [
-      { name: "browser_close" }
-    ]
-  },
-  {
     key: "semgrep",
     name: "semgrep",
     command: "/Users/andrebyrro/bin/custom-semgrep-mcp",

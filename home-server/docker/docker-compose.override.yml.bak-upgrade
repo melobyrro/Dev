@@ -1,0 +1,15 @@
+services:
+  gluetun:
+    environment:
+      - FIREWALL_OUTBOUND_SUBNETS=192.168.1.0/24,172.18.0.0/16
+      - FIREWALL_INPUT_PORTS=8181,8191,1080
+
+  qb-port-sync:
+    image: curlimages/curl:8.11.1
+    entrypoint: ["/bin/sh","-c","until [ -s /gluetun/forwarded_port ]; do echo 'waiting for forwarded_port'; sleep 5; done; /app/update_port.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "[ -s /gluetun/forwarded_port ]"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s

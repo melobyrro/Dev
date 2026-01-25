@@ -1,0 +1,39 @@
+version: '3.8'
+
+networks:
+  byrro-net:
+    external: true
+
+services:
+  redis:
+    image: redis:alpine
+    container_name: authelia-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - byrro-net
+    command: redis-server --save 60 1 --loglevel warning
+
+  authelia:
+    image: authelia/authelia:latest
+    container_name: authelia
+    restart: unless-stopped
+    expose:
+      - 9091
+    volumes:
+      - ./authelia/config:/config
+    networks:
+      - byrro-net
+    environment:
+      - TZ=America/New_York
+      - AUTHELIA_IDENTITY_VALIDATION_RESET_PASSWORD_JWT_SECRET=e69fd665bb1e71265a85a30d35a7ad00786f33008f3284843825e2ec6247d284
+      - AUTHELIA_SESSION_SECRET=a9bc9223014484d6161124e84983f18b852c43e09acec607fdc973e05f9836f6
+      - AUTHELIA_STORAGE_ENCRYPTION_KEY=2204562ec9b00c653c712d0337bc1d4fd475125c74ea6e80e74b4e9d58dd6c01
+    depends_on:
+      - redis
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+volumes:
+  redis-data:

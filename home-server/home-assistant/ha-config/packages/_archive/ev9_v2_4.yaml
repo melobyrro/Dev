@@ -1,0 +1,63 @@
+# Kia EV9 v2.4 Package - Connection Watchdog + Email OTP Automation
+# Deployed: 2026-01-21
+#
+# This package adds v2.3 + v2.4 features:
+# - Connection watchdog (v2.3)
+#   - Enable toggle
+#   - Recovery attempt tracking
+#   - Recovery result storage
+# - Automated email OTP recovery (v2.4)
+#   - Recovery flow ID storage
+#   - Recovery state machine
+#   - OTP request timestamp for timeout tracking
+
+# ============================================================
+# INPUT BOOLEAN (v2.3 - Connection Watchdog)
+# ============================================================
+
+input_boolean:
+  ev9_connection_watchdog_enabled:
+    name: "EV9 Connection Watchdog Enabled"
+    icon: mdi:connection
+
+# ============================================================
+# INPUT TEXT (v2.3 - Connection Watchdog)
+# ============================================================
+
+input_text:
+  ev9_last_recovery_attempt:
+    name: "EV9 Last Recovery Attempt"
+    max: 64
+    icon: mdi:clock-alert
+
+  ev9_last_recovery_result:
+    name: "EV9 Last Recovery Result"
+    max: 255
+    icon: mdi:connection
+
+# ============================================================
+# INPUT TEXT (v2.4 - Email OTP Recovery)
+# ============================================================
+
+  ev9_recovery_flow_id:
+    name: "EV9 Recovery Flow ID"
+    max: 64
+    icon: mdi:identifier
+
+  ev9_recovery_state:
+    name: "EV9 Recovery State"
+    max: 32
+    icon: mdi:state-machine
+    initial: "idle"
+    # Values: idle, starting, awaiting_otp, completing, failed
+
+# ============================================================
+# INPUT DATETIME (v2.4 - OTP Timeout Tracking)
+# ============================================================
+
+input_datetime:
+  ev9_otp_requested_at:
+    name: "EV9 OTP Requested At"
+    has_date: true
+    has_time: true
+    icon: mdi:email-clock

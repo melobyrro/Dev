@@ -1,0 +1,125 @@
+services:
+  postgres:
+    image: docker.io/library/postgres:16-alpine
+    container_name: authentik-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    healthcheck:
+      test: ["CMD-SHELL","pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - /mnt/ByrroServer/docker-data/authentik/pgdata:/var/lib/postgresql/data
+    networks:
+      - byrro-net
+
+  redis:
+    image: docker.io/library/redis:7-alpine
+    container_name: authentik-redis
+    restart: unless-stopped
+    command: ["redis-server","--appendonly","yes","--requirepass","${REDIS_PASSWORD}"]
+    healthcheck:
+      test: ["CMD-SHELL","redis-cli -a ${REDIS_PASSWORD} ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - /mnt/ByrroServer/docker-data/authentik/redis:/data
+    networks:
+      - byrro-net
+
+  server:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_VERSION}
+    container_name: authentik-server
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_REDIS__PASSWORD: ${REDIS_PASSWORD}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__NAME: ${POSTGRES_DB}
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
+      AUTHENTIK_DISABLE_UPDATE_CHECK: ${AUTHENTIK_DISABLE_UPDATE_CHECK}
+      AUTHENTIK_LOG_LEVEL: ${AUTHENTIK_LOG_LEVEL}
+      AUTHENTIK_HOST: ${AUTHENTIK_EXTERNAL_HOST}
+      AUTHENTIK_HTTP__REDIRECT_URL: ${AUTHENTIK_EXTERNAL_SCHEME}://${AUTHENTIK_EXTERNAL_HOST}
+      TZ: ${TZ}
+    volumes:
+      - /mnt/ByrroServer/docker-data/authentik/media:/media
+      - /mnt/ByrroServer/docker-data/authentik/custom-templates:/templates
+      - /mnt/ByrroServer/docker-data/authentik/scripts:/healthchecks:ro
+    networks:
+      - byrro-net
+    expose:
+      - "9000"   # HTTP
+      - "9443"   # HTTPS
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /healthchecks/server-health.sh
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+  worker:
+    image: ghcr.io/goauthentik/server:${AUTHENTIK_VERSION}
+    container_name: authentik-worker
+    restart: unless-stopped
+    depends_on:
+      postgres: { condition: service_healthy }
+      redis: { condition: service_healthy }
+    command: ["worker"]
+    environment:
+      AUTHENTIK_SECRET_KEY: ${AUTHENTIK_SECRET_KEY}
+      AUTHENTIK_REDIS__HOST: redis
+      AUTHENTIK_REDIS__PASSWORD: ${REDIS_PASSWORD}
+      AUTHENTIK_POSTGRESQL__HOST: postgres
+      AUTHENTIK_POSTGRESQL__NAME: ${POSTGRES_DB}
+      AUTHENTIK_POSTGRESQL__USER: ${POSTGRES_USER}
+      AUTHENTIK_POSTGRESQL__PASSWORD: ${POSTGRES_PASSWORD}
+      TZ: ${TZ}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /mnt/ByrroServer/docker-data/authentik/media:/media
+      - /mnt/ByrroServer/docker-data/authentik/custom-templates:/templates
+      - /mnt/ByrroServer/docker-data/authentik/scripts:/healthchecks:ro
+    networks:
+      - byrro-net
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - /healthchecks/worker-health.sh
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 5
+
+  # Authentik Outpost (forward-auth proxy) to integrate cleanly with Caddy later
+  outpost-proxy:
+    image: ghcr.io/goauthentik/outpost-proxy:${AUTHENTIK_VERSION}
+    container_name: authentik-outpost
+    restart: unless-stopped
+    depends_on:
+      server: { condition: service_started }
+    environment:
+      AUTHENTIK_HOST: server:9000
+      AUTHENTIK_INSECURE: "true"
+      # The outpost will be registered via the UI after first boot.
+    networks:
+      - byrro-net
+    expose:
+      - "9000"
+      - "9001"   # decision endpoint
+networks:
+  byrro-net:
+    external: true

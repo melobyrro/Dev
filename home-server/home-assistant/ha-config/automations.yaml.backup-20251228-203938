@@ -1,0 +1,580 @@
+# ===========================================================================
+# NEW Patio AC Automations (State Machine Design - Updated)
+# Added: 2025-12-27 for energy-efficient state-machine-based automation
+# Updated: 2025-12-27 to exempt manual control from daily limits
+# ===========================================================================
+
+- id: patio_ac_heat_guard_on
+  alias: "Patio AC - Heat Guard ON"
+  description: "Activate cooling when temperature exceeds threshold"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: climate.150633095083490_climate
+      attribute: current_temperature
+      above: input_number.patio_ac_heat_threshold
+      for:
+        minutes: 5
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "idle"
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float <
+           states('input_number.patio_ac_daily_limit')|float }}
+    - condition: time
+      after: "08:00:00"
+      before: "22:00:00"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "cool"
+        temperature: 75
+        reason: "heat_spike"
+        duration: "{{ states('input_number.patio_ac_heat_duration')|int }}"
+
+- id: patio_ac_heat_guard_off
+  alias: "Patio AC - Heat Guard OFF (Early Stop)"
+  description: "Stop cooling when temperature drops"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: climate.150633095083490_climate
+      attribute: current_temperature
+      below: 88
+      for:
+        minutes: 5
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "heat_spike"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "heat_spike"
+
+- id: patio_ac_night_cycle_on
+  alias: "Patio AC - Night Cycle ON"
+  description: "Start hourly DRY cycles during night"
+  mode: single
+  triggers:
+    - trigger: time_pattern
+      minutes: 0
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "idle"
+    - condition: time
+      after: "22:00:00"
+      before: "08:00:00"
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float <
+           states('input_number.patio_ac_daily_limit')|float }}
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "dry"
+        temperature: 75
+        reason: "night_cycle"
+        duration: "{{ states('input_number.patio_ac_night_cycle_duration')|int }}"
+
+- id: patio_ac_timer_expired
+  alias: "Patio AC - Timer Expiration Handler"
+  description: "Turn off AC when duration timer expires"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_heat_spike
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_night_cycle
+  conditions:
+    - condition: template
+      value_template: >
+        {% set reason = states('input_select.patio_ac_reason') %}
+        {% set timer = trigger.event.data.entity_id %}
+        {{ (timer == 'timer.patio_ac_heat_spike' and reason == 'heat_spike') or
+           (timer == 'timer.patio_ac_night_cycle' and reason == 'night_cycle') }}
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "{{ states('input_select.patio_ac_reason') }}"
+
+- id: patio_ac_manual_override_detect
+  alias: "Patio AC - Manual Override Detector"
+  description: "Detect manual state changes - reset to idle on OFF, set to manual on ON"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: climate.150633095083490_climate
+  conditions:
+    - condition: template
+      value_template: >
+        {{ trigger.to_state.context.user_id is not none or
+           trigger.to_state.context.parent_id is none }}
+    - condition: template
+      value_template: >
+        {{ states('input_select.patio_ac_reason') != 'safety_lock' }}
+  actions:
+    - choose:
+        # Manual turn OFF - reset to idle immediately
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.state == 'off' }}"
+          sequence:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.patio_ac_reason
+              data:
+                option: "idle"
+            - action: timer.cancel
+              target:
+                entity_id:
+                  - timer.patio_ac_manual_override
+                  - timer.patio_ac_manual_safety
+        # Manual turn ON - set to manual, start timers
+        - conditions:
+            - condition: template
+              value_template: "{{ trigger.to_state.state != 'off' }}"
+            - condition: template
+              value_template: "{{ states('input_select.patio_ac_reason') != 'manual' }}"
+          sequence:
+            - action: input_select.select_option
+              target:
+                entity_id: input_select.patio_ac_reason
+              data:
+                option: "manual"
+            - action: timer.start
+              target:
+                entity_id: timer.patio_ac_manual_override
+              data:
+                duration: >
+                  {{ '00:%02d:00'|format(states('input_number.patio_ac_manual_timeout')|int) }}
+            - action: timer.start
+              target:
+                entity_id: timer.patio_ac_manual_safety
+
+- id: patio_ac_manual_override_reset
+  alias: "Patio AC - Manual Override Reset"
+  description: "Reset to idle after manual timeout expires"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_manual_override
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "manual"
+  actions:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "idle"
+
+- id: patio_ac_safety_monitor
+  alias: "Patio AC - Safety Monitor"
+  description: "Prevent dangerous configurations (HEAT mode, etc.)"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: climate.150633095083490_climate
+      attribute: hvac_mode
+      to: "heat"
+  actions:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "safety_lock"
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.150633095083490_climate
+      data:
+        hvac_mode: "off"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Safety Lock"
+        message: "AC was set to HEAT mode and has been disabled. Manual reset required."
+        notification_id: "patio_ac_safety_lock"
+
+- id: patio_ac_daily_limit_enforcer
+  alias: "Patio AC - Daily Limit Enforcer"
+  description: "Stop AUTOMATED runs when daily runtime limit is reached (manual exempt)"
+  mode: single
+  triggers:
+    - trigger: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float >=
+           states('input_number.patio_ac_daily_limit')|float }}
+  conditions:
+    - condition: template
+      value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+    - condition: template
+      value_template: "{{ states('input_select.patio_ac_reason') in ['heat_spike', 'night_cycle'] }}"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "{{ states('input_select.patio_ac_reason') }}"
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "safety_lock"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Daily Limit Reached"
+        message: >
+          Automated runtime limit of {{ states('input_number.patio_ac_daily_limit')|int }}
+          minutes reached. Automations disabled until midnight. Manual control still works!
+        notification_id: "patio_ac_daily_limit"
+
+- id: patio_ac_midnight_reset
+  alias: "Patio AC - Midnight Runtime Reset"
+  description: "Reset daily runtime counter at midnight"
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  actions:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_daily_runtime
+      data:
+        value: 0
+    - if:
+        - condition: state
+          entity_id: input_select.patio_ac_reason
+          state: "safety_lock"
+      then:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: "idle"
+        - action: persistent_notification.dismiss
+          data:
+            notification_id: "patio_ac_daily_limit"
+
+- id: patio_ac_startup_recovery
+  alias: "Patio AC - Startup Recovery"
+  description: "Accumulate runtime if AC was ON during HA restart"
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+  actions:
+    - if:
+        - condition: template
+          value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+      then:
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.patio_ac_daily_runtime
+          data:
+            value: >
+              {% set start = states('input_datetime.patio_ac_runtime_start') %}
+              {% set runtime = states('input_number.patio_ac_daily_runtime')|float %}
+              {% if start not in ['unknown', '', 'unavailable'] %}
+                {% set elapsed = (now().timestamp() - as_timestamp(start)) / 60 %}
+                {{ (runtime + elapsed)|round(1) }}
+              {% else %}
+                {{ runtime }}
+              {% endif %}
+
+- id: patio_ac_manual_safety_timeout
+  alias: "Patio AC - Manual Safety Timeout (8 hours)"
+  description: "Auto-stop AC after 8 hours of continuous manual use (safety net)"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_manual_safety
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "manual"
+    - condition: template
+      value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+  actions:
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.150633095083490_climate
+      data:
+        hvac_mode: "off"
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "idle"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Manual Safety Stop"
+        message: >
+          AC has been running for 8 hours continuously in manual mode.
+          Auto-stopped as a safety measure. Turn it back on if still needed.
+        notification_id: "patio_ac_manual_safety"
+- id: master_bedroom_brightness_slider_to_lights
+  alias: Master Bedroom - Brightness sliders -> lights
+  mode: queued
+  trigger:
+  - platform: state
+    entity_id:
+    - input_number.master_fan_brightness
+    - input_number.master_light_brightness
+  action:
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.entity_id == "input_number.master_fan_brightness" }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) <= 0 }}'
+          sequence:
+          - service: light.turn_off
+            target:
+              entity_id: light.master_fan
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) > 0 }}'
+          sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.master_fan
+            data:
+              brightness_pct: '{{ trigger.to_state.state | int }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ trigger.entity_id == "input_number.master_light_brightness" }}'
+      sequence:
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) <= 0 }}'
+          sequence:
+          - service: light.turn_off
+            target:
+              entity_id: light.master_light
+        - conditions:
+          - condition: template
+            value_template: '{{ (trigger.to_state.state | float) > 0 }}'
+          sequence:
+          - service: light.turn_on
+            target:
+              entity_id: light.master_light
+            data:
+              brightness_pct: '{{ trigger.to_state.state | int }}'
+- id: master_bedroom_lights_to_brightness_sliders
+  alias: Master Bedroom - lights -> brightness sliders
+  mode: queued
+  trigger:
+  - platform: state
+    entity_id:
+    - light.master_fan
+    - light.master_light
+  action:
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: |
+          {{ trigger.entity_id == 'light.master_fan'
+             and trigger.to_state is not none
+             and trigger.to_state.state == 'on'
+             and (trigger.to_state.attributes.brightness is defined) }}
+      sequence:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.master_fan_brightness
+        data:
+          value: |
+            {{ ((trigger.to_state.attributes.brightness | float) / 255 * 100) | round(0) }}
+    - conditions:
+      - condition: template
+        value_template: |
+          {{ trigger.entity_id == 'light.master_light'
+             and trigger.to_state is not none
+             and trigger.to_state.state == 'on'
+             and (trigger.to_state.attributes.brightness is defined) }}
+      sequence:
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.master_light_brightness
+        data:
+          value: |
+            {{ ((trigger.to_state.attributes.brightness | float) / 255 * 100) | round(0) }}
+
+# ===========================================================================
+# Living Room Light/Fan Slider Automations
+# Added: 2025-12-28 to sync dashboard sliders with actual devices
+# ===========================================================================
+
+- id: living_room_brightness_slider_to_light
+  alias: Living Room - Brightness slider -> light
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: input_number.living_room_light_brightness
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ (trigger.to_state.state | float) <= 0 }}"
+          sequence:
+            - service: light.turn_off
+              target:
+                entity_id: light.living_room_light_2
+        - conditions:
+            - condition: template
+              value_template: "{{ (trigger.to_state.state | float) > 0 }}"
+          sequence:
+            - service: light.turn_on
+              target:
+                entity_id: light.living_room_light_2
+              data:
+                brightness_pct: "{{ trigger.to_state.state | int }}"
+
+- id: living_room_light_to_brightness_slider
+  alias: Living Room - light -> brightness slider
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: light.living_room_light_2
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: |
+                {{ trigger.to_state is not none
+                   and trigger.to_state.state == 'on'
+                   and (trigger.to_state.attributes.brightness is defined) }}
+          sequence:
+            - service: input_number.set_value
+              target:
+                entity_id: input_number.living_room_light_brightness
+              data:
+                value: |
+                  {{ ((trigger.to_state.attributes.brightness | float) / 255 * 100) | round(0) }}
+        - conditions:
+            - condition: template
+              value_template: |
+                {{ trigger.to_state is not none
+                   and trigger.to_state.state == 'off' }}
+          sequence:
+            - service: input_number.set_value
+              target:
+                entity_id: input_number.living_room_light_brightness
+              data:
+                value: 0
+
+- id: living_room_temperature_slider_to_light
+  alias: Living Room - Temperature slider -> light
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: input_number.living_room_light_temperature
+  condition:
+    - condition: state
+      entity_id: light.living_room_light_2
+      state: "on"
+  action:
+    - service: light.turn_on
+      target:
+        entity_id: light.living_room_light_2
+      data:
+        color_temp_kelvin: "{{ trigger.to_state.state | int }}"
+
+- id: living_room_light_to_temperature_slider
+  alias: Living Room - light -> temperature slider
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: light.living_room_light_2
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: |
+                {{ trigger.to_state is not none
+                   and trigger.to_state.state == 'on'
+                   and (trigger.to_state.attributes.color_temp_kelvin is defined) }}
+          sequence:
+            - service: input_number.set_value
+              target:
+                entity_id: input_number.living_room_light_temperature
+              data:
+                value: "{{ trigger.to_state.attributes.color_temp_kelvin | int }}"
+
+- id: living_room_fan_speed_slider_to_fan
+  alias: Living Room - Fan speed slider -> fan
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: input_number.living_room_fan_speed
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ (trigger.to_state.state | float) <= 0 }}"
+          sequence:
+            - service: fan.turn_off
+              target:
+                entity_id: fan.living_room_light
+        - conditions:
+            - condition: template
+              value_template: "{{ (trigger.to_state.state | float) > 0 }}"
+          sequence:
+            - service: fan.turn_on
+              target:
+                entity_id: fan.living_room_light
+            - service: fan.set_percentage
+              target:
+                entity_id: fan.living_room_light
+              data:
+                percentage: "{{ trigger.to_state.state | int }}"
+
+- id: living_room_fan_to_speed_slider
+  alias: Living Room - fan -> speed slider
+  mode: queued
+  trigger:
+    - platform: state
+      entity_id: fan.living_room_light
+  action:
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: |
+                {{ trigger.to_state is not none
+                   and trigger.to_state.state == 'on'
+                   and (trigger.to_state.attributes.percentage is defined) }}
+          sequence:
+            - service: input_number.set_value
+              target:
+                entity_id: input_number.living_room_fan_speed
+              data:
+                value: "{{ trigger.to_state.attributes.percentage | int }}"
+        - conditions:
+            - condition: template
+              value_template: |
+                {{ trigger.to_state is not none
+                   and trigger.to_state.state == 'off' }}
+          sequence:
+            - service: input_number.set_value
+              target:
+                entity_id: input_number.living_room_fan_speed
+              data:
+                value: 0

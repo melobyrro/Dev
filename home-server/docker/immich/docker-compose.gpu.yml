@@ -1,0 +1,9 @@
+services:
+  immich-server:
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "44"
+      - "993"
+    environment:
+      - LIBVA_DRIVER_NAME=iHD     # Intel Gen9+; use i965 for very old gens

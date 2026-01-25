@@ -1,0 +1,22 @@
+services:
+  immich-redis:
+    command: ["--aclfile","/data/users.acl"]
+
+  immich-machine-learning:
+    image: ghcr.io/immich-app/immich-machine-learning@sha256:cc94659771d7e394d6406ebb0664069f2523062fda4f934def31648e903c4de2
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3003/openapi.json',timeout=5)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 60s
+  immich-server:
+    image: ghcr.io/immich-app/immich-server@sha256:a5935f03b93137952c38b14a47148525023f4c36a2db174d8266a9d3b37e7e3b
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:2283/api/server/ping >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+  immich-postgres:
+    image: ankane/pgvector@sha256:956744bd14e9cbdf639c61c2a2a7c7c2c48a9c8cdd42f7de4ac034f4e96b90f8

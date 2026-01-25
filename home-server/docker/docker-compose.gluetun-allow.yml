@@ -1,0 +1,4 @@
+services:
+  gluetun:
+    environment:
+      FIREWALL_INPUT_SUBNETS: 172.18.0.0/16

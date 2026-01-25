@@ -1,0 +1,30 @@
+# Kia EV9 v2.8 Package - Car Status Visibility
+# Deployed: 2026-01-24
+#
+# This package adds:
+# - sensor.ev9_car_mode - Combined car status sensor
+
+template:
+  - sensor:
+      - name: "EV9 Car Mode"
+        unique_id: ev9_car_mode
+        icon: >
+          {% if is_state('binary_sensor.ev9_engine', 'on') %}
+            mdi:car
+          {% elif is_state('binary_sensor.ev9_air_conditioner', 'on') %}
+            mdi:air-conditioner
+          {% else %}
+            mdi:car-off
+          {% endif %}
+        state: >
+          {% set engine = is_state('binary_sensor.ev9_engine', 'on') %}
+          {% set climate = is_state('binary_sensor.ev9_air_conditioner', 'on') %}
+          {% if engine and climate %}
+            Driving (Climate On)
+          {% elif engine %}
+            Driving
+          {% elif climate %}
+            Climate Running
+          {% else %}
+            Parked
+          {% endif %}

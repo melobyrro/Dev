@@ -1,0 +1,101 @@
+services:
+  paperless-redis:
+    image: valkey/valkey:8-bookworm
+    container_name: paperless-redis
+    restart: unless-stopped
+    volumes:
+      - /home/byrro/docker/paperless/redis-data:/data
+    networks:
+      - byrro-net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  paperless-db:
+    image: postgres:16-alpine
+    container_name: paperless-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: paperless
+      POSTGRES_USER: paperless
+      POSTGRES_PASSWORD: ${PAPERLESS_DB_PASS}
+      POSTGRES_HOST_AUTH_METHOD: md5
+    volumes:
+      - /home/byrro/docker/paperless/pgdata:/var/lib/postgresql/data
+    networks:
+      - byrro-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U paperless -d paperless"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: paperless-gotenberg
+    restart: unless-stopped
+    command:
+      - gotenberg
+      - --chromium-disable-javascript=true
+      - --chromium-allow-list=file:///tmp/.*
+    networks:
+      - byrro-net
+
+  tika:
+    image: apache/tika:latest
+    container_name: paperless-tika
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  paperless:
+    image: ghcr.io/paperless-ngx/paperless-ngx:latest
+    container_name: paperless
+    restart: unless-stopped
+    depends_on:
+      paperless-db:
+        condition: service_healthy
+      paperless-redis:
+        condition: service_healthy
+      gotenberg:
+        condition: service_started
+      tika:
+        condition: service_started
+    environment:
+      PAPERLESS_REDIS: redis://paperless-redis:6379
+      PAPERLESS_DBHOST: paperless-db
+      PAPERLESS_DBNAME: paperless
+      PAPERLESS_DBUSER: paperless
+      PAPERLESS_DBPASS: ${PAPERLESS_DB_PASS}
+      PAPERLESS_SECRET_KEY: ${PAPERLESS_SECRET_KEY}
+      PAPERLESS_TIME_ZONE: America/New_York
+      PAPERLESS_OCR_LANGUAGE: eng
+      PAPERLESS_OCR_LANGUAGES: por
+      PAPERLESS_URL: https://paperless.byrroserver.com
+      PAPERLESS_TIKA_ENABLED: 1
+      PAPERLESS_TIKA_ENDPOINT: http://paperless-tika:9998
+      PAPERLESS_TIKA_GOTENBERG_ENDPOINT: http://paperless-gotenberg:3000
+      USERMAP_UID: 1000
+      USERMAP_GID: 1000
+      PAPERLESS_TASK_WORKERS: 2
+      PAPERLESS_CONSUMER_POLLING: 30
+      PAPERLESS_CONSUMER_DELETE_DUPLICATES: "true"
+      PAPERLESS_CONSUMER_RECURSIVE: "true"
+      PAPERLESS_CONSUMER_SUBDIRS_AS_TAGS: "true"
+      PAPERLESS_FILENAME_FORMAT: "{{ document_type }}/{{ created_year }}/{{ correspondent }} - {{ title }}"
+      PAPERLESS_DATE_ORDER: MDY
+      PAPERLESS_NUMBER_OF_SUGGESTED_DATES: 5
+      PAPERLESS_OCR_USER_ARGS: '{"continue_on_soft_render_error": true}'
+    volumes:
+      - /mnt/ByrroServer/docker-data/paperless/data:/usr/src/paperless/data
+      - /mnt/ByrroServer/docker-data/paperless/media:/usr/src/paperless/media
+      - /mnt/ByrroServer/docker-data/paperless/export:/usr/src/paperless/export
+      - /mnt/ByrroServer/docker-data/paperless/consume:/usr/src/paperless/consume
+    networks:
+      - byrro-net
+
+networks:
+  byrro-net:
+    external: true

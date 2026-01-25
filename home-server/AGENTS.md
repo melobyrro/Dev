@@ -38,7 +38,7 @@ When starting a session:
 
 ## Browser Automation (MCP)
 
-- Use **chrome-devtools-mcp** via CDP; avoid Playwright or `mcp-server-browser` unless explicitly requested.
+- Use **chrome-devtools-mcp** via CDP; avoid `mcp-server-browser` unless explicitly requested.
 - Start Chrome with remote debugging + repo profile using `./scripts/chrome-mcp-start.sh`.
 - Verify CDP is live with `./scripts/chrome-mcp-check.sh` (expects `webSocketDebuggerUrl`).
 - CDP endpoint: `http://127.0.0.1:9222` (Codex MCP config points `chrome-devtools-mcp@latest --browserUrl http://127.0.0.1:9222`).

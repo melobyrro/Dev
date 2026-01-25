@@ -40,7 +40,6 @@ build/
 *.swo
 
 # MCP and tooling
-.playwright-mcp/
 .mcp/
 .remote/
 
@@ -52,3 +51,15 @@ SERVICE_ACCOUNT.json
 **/SERVICE_ACCOUNT.json
 *credentials*.json
 *service_account*.json
+
+# Container data directories (don't sync to git)
+**/prometheus-data/
+**/grafana-data/
+**/grafana-cli/
+**/trivy/
+**/typesense-data/
+**/redis-data/
+**/pgdata/
+**/pgdata.bak*/
+**/backups/
+**/*-data/

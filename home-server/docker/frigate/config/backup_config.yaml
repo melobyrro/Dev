@@ -1,0 +1,114 @@
+mqtt:
+  host: 192.168.1.11
+  port: 1883
+
+detectors:
+  cpu1:
+    type: cpu
+
+ffmpeg:
+  hwaccel_args: preset-intel-qsv-h264
+  input_args: preset-rtsp-restream
+
+record:
+  enabled: true
+  retain:
+    days: 10
+    mode: all
+  events:
+    retain:
+      default: 30
+      mode: motion
+
+snapshots:
+  enabled: true
+  clean_copy: true
+  timestamp: false
+  bounding_box: true
+  crop: false
+  height: 500
+  retain:
+    default: 30
+
+objects:
+  track:
+    - person
+    - car
+    - dog
+
+# Restream Wyze RTSP feeds for low-latency viewing and single camera connection.
+go2rtc:
+  streams:
+    baby-room:
+      - rtsp://192.168.1.11:8554/baby-room
+    front-door-cam:
+      - rtsp://192.168.1.11:8554/front-door-cam
+    living-room-cam:
+      - rtsp://192.168.1.11:8554/living-room-cam
+    patio-cam:
+      - rtsp://192.168.1.11:8554/patio-cam
+
+cameras:
+  baby-room:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/baby-room
+          roles:
+            - detect
+            - record
+    detect:
+      fps: 5
+    mqtt:
+      timestamp: false
+      bounding_box: false
+      crop: true
+      quality: 100
+      height: 500
+
+  front-door-cam:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/front-door-cam
+          roles:
+            - detect
+            - record
+    detect:
+      fps: 5
+    mqtt:
+      timestamp: false
+      bounding_box: false
+      crop: true
+      quality: 100
+      height: 500
+
+  living-room-cam:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/living-room-cam
+          roles:
+            - detect
+            - record
+    detect:
+      fps: 5
+    mqtt:
+      timestamp: false
+      bounding_box: false
+      crop: true
+      quality: 100
+      height: 500
+
+  patio-cam:
+    ffmpeg:
+      inputs:
+        - path: rtsp://127.0.0.1:8554/patio-cam
+          roles:
+            - detect
+            - record
+    detect:
+      fps: 5
+    mqtt:
+      timestamp: false
+      bounding_box: false
+      crop: true
+      quality: 100
+      height: 500

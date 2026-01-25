@@ -1,0 +1,124 @@
+version: '3.8'
+
+services:
+  frigate:
+    image: ghcr.io/blakeblackshear/frigate:stable
+    container_name: frigate
+    restart: unless-stopped
+    shm_size: '512mb'
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /home/byrro/docker/frigate/config:/config
+      - /mnt/ByrroServer/wyze/frigate/media:/media/frigate
+      - /mnt/ByrroServer/wyze/frigate/db:/db
+      - /etc/localtime:/etc/localtime:ro
+    tmpfs:
+      - /tmp:size=1024m
+    ports:
+      - '5001:5000'
+      - '8555:8555'
+      - '8556:8554'
+    environment:
+      - TZ=America/New_York
+
+  double-take:
+    image: jakowenko/double-take:latest
+    container_name: double-take
+    restart: unless-stopped
+    volumes:
+      - /mnt/ByrroServer/docker-data/double-take:/.storage
+    ports:
+      - '3330:3000'
+    depends_on:
+      - compreface-api
+
+  compreface-postgres-db:
+    image: ${registry}compreface-postgres-db:${POSTGRES_VERSION}
+    restart: unless-stopped
+    container_name: 'compreface-postgres-db'
+    env_file:
+      - ./.env
+    environment:
+      - POSTGRES_USER=${postgres_username}
+      - POSTGRES_PASSWORD=${postgres_password}
+      - POSTGRES_DB=${postgres_db}
+    volumes:
+      - /mnt/ByrroServer/docker-data/compreface/postgres:/var/lib/postgresql/data
+
+  compreface-admin:
+    restart: unless-stopped
+    image: ${registry}compreface-admin:${ADMIN_VERSION}
+    container_name: 'compreface-admin'
+    env_file:
+      - ./.env
+    environment:
+      - POSTGRES_USER=${postgres_username}
+      - POSTGRES_PASSWORD=${postgres_password}
+      - POSTGRES_URL=jdbc:postgresql://${postgres_domain}:${postgres_port}/${postgres_db}
+      - SPRING_PROFILES_ACTIVE=dev
+      - ENABLE_EMAIL_SERVER=${enable_email_server}
+      - EMAIL_HOST=${email_host}
+      - EMAIL_USERNAME=${email_username}
+      - EMAIL_FROM=${email_from}
+      - EMAIL_PASSWORD=${email_password}
+      - ADMIN_JAVA_OPTS=${compreface_admin_java_options}
+      - MAX_FILE_SIZE=${max_file_size}
+      - MAX_REQUEST_SIZE=${max_request_size}B
+    depends_on:
+      - compreface-postgres-db
+      - compreface-api
+
+  compreface-api:
+    restart: unless-stopped
+    image: ${registry}compreface-api:${API_VERSION}
+    container_name: 'compreface-api'
+    env_file:
+      - ./.env
+    depends_on:
+      - compreface-postgres-db
+    environment:
+      - POSTGRES_USER=${postgres_username}
+      - POSTGRES_PASSWORD=${postgres_password}
+      - POSTGRES_URL=jdbc:postgresql://${postgres_domain}:${postgres_port}/${postgres_db}
+      - SPRING_PROFILES_ACTIVE=dev
+      - API_JAVA_OPTS=${compreface_api_java_options}
+      - SAVE_IMAGES_TO_DB=${save_images_to_db}
+      - MAX_FILE_SIZE=${max_file_size}
+      - MAX_REQUEST_SIZE=${max_request_size}B
+      - CONNECTION_TIMEOUT=${connection_timeout:-10000}
+      - READ_TIMEOUT=${read_timeout:-60000}
+
+  compreface-fe:
+    restart: unless-stopped
+    image: ${registry}compreface-fe:${FE_VERSION}
+    container_name: 'compreface-ui'
+    env_file:
+      - ./.env
+    ports:
+      - '8100:80'
+    depends_on:
+      - compreface-api
+      - compreface-admin
+    environment:
+      - CLIENT_MAX_BODY_SIZE=${max_request_size}
+      - PROXY_READ_TIMEOUT=${read_timeout:-60000}ms
+      - PROXY_CONNECT_TIMEOUT=${connection_timeout:-10000}ms
+
+  compreface-core:
+    restart: unless-stopped
+    image: ${registry}compreface-core:${CORE_VERSION}
+    container_name: 'compreface-core'
+    env_file:
+      - ./.env
+    environment:
+      - ML_PORT=3000
+      - IMG_LENGTH_LIMIT=${max_detect_size}
+      - UWSGI_PROCESSES=${uwsgi_processes:-2}
+      - UWSGI_THREADS=${uwsgi_threads:-1}
+    healthcheck:
+      test: curl --fail http://localhost:3000/healthcheck || exit 1
+      interval: 10s
+      retries: 0
+      start_period: 0s
+      timeout: 1s

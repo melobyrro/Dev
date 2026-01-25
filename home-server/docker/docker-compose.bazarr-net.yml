@@ -1,0 +1,8 @@
+services:
+  bazarr:
+    networks:
+      - byrro-net
+
+networks:
+  byrro-net:
+    external: true

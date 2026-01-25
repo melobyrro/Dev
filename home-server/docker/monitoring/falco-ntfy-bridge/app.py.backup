@@ -1,0 +1,37 @@
+from flask import Flask, request, jsonify
+import requests
+import os
+
+app = Flask(__name__)
+
+NTFY_URL = os.environ.get('NTFY_URL', 'http://ntfy:80')
+NTFY_TOPIC = os.environ.get('NTFY_TOPIC', 'homelab-security')
+
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({'status': 'healthy'}), 200
+
+@app.route('/webhook', methods=['POST'])
+def webhook():
+    data = request.get_json()
+    
+    # Extract Falco details
+    rule = data.get('rule', 'Unknown')
+    priority = data.get('priority', 'Warning')
+    output = data.get('output', 'Security event')
+    
+    # Set ntfy priority (5=max, 3=default, 1=min)
+    ntfy_pri = 5 if priority in ['Critical', 'Error'] else (4 if priority == 'Warning' else 3)
+    
+    # Send to ntfy (avoid emojis in headers - use ASCII only)
+    requests.post(
+        f"{NTFY_URL}/{NTFY_TOPIC}",
+        data=output.encode('utf-8'),
+        headers={'Title': f"Falco Security: {rule}", 'Priority': str(ntfy_pri), 'Tags': 'security,falco'},
+        timeout=5
+    )
+    
+    return jsonify({'status': 'success'}), 200
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5001)

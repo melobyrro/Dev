@@ -1,0 +1,180 @@
+# Kia EV9 v1.4 Package - New Helpers
+# Deployed: 2026-01-19
+#
+# This package adds v1.4 features:
+# - Per-schedule temperatures
+# - Climate timer
+# - Proximity lock settings
+# - Trunk alert settings
+# - Graph controls
+# - Template sensors
+
+# ============================================================
+# INPUT NUMBERS
+# ============================================================
+
+input_number:
+  # Per-schedule temperatures
+  ev9_schedule_1_temperature:
+    name: "EV9 Schedule 1 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_2_temperature:
+    name: "EV9 Schedule 2 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_3_temperature:
+    name: "EV9 Schedule 3 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_4_temperature:
+    name: "EV9 Schedule 4 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  ev9_schedule_5_temperature:
+    name: "EV9 Schedule 5 Temperature"
+    min: 60
+    max: 80
+    step: 1
+    unit_of_measurement: "°F"
+    icon: mdi:thermometer
+    mode: slider
+
+  # Climate timer duration
+  ev9_climate_duration:
+    name: "EV9 Climate Duration"
+    min: 5
+    max: 30
+    step: 5
+    unit_of_measurement: "min"
+    icon: mdi:timer
+    mode: slider
+
+  # Proximity lock distance
+  ev9_proximity_lock_distance:
+    name: "EV9 Proximity Lock Distance"
+    min: 50
+    max: 500
+    step: 50
+    unit_of_measurement: "m"
+    icon: mdi:map-marker-distance
+    mode: slider
+
+  # Trunk alert delay
+  ev9_trunk_open_delay:
+    name: "EV9 Trunk Open Alert Delay"
+    min: 1
+    max: 15
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer-alert
+    mode: slider
+
+  # Windows open alert delay
+  ev9_windows_open_delay:
+    name: "EV9 Windows Open Alert Delay"
+    min: 1
+    max: 30
+    step: 1
+    unit_of_measurement: "min"
+    icon: mdi:timer-alert
+    mode: slider
+
+# ============================================================
+# INPUT BOOLEANS
+# ============================================================
+
+input_boolean:
+  ev9_notify_trunk_open:
+    name: "EV9 Notify Trunk Open"
+    icon: mdi:car-back
+
+  ev9_notify_windows_open:
+    name: "EV9 Notify Windows Open"
+    icon: mdi:car-door
+
+  ev9_proximity_lock_enabled:
+    name: "EV9 Proximity Lock Enabled"
+    icon: mdi:crosshairs-gps
+
+  ev9_graph_exclude_dc:
+    name: "EV9 Exclude DC Charging from Graph"
+    icon: mdi:ev-station
+
+# ============================================================
+# INPUT SELECT
+# ============================================================
+
+input_select:
+  ev9_graph_scale:
+    name: "EV9 Graph Scale"
+    options:
+      - "Auto"
+      - "Level 2 (0-5 kW)"
+      - "DC Fast (0-250 kW)"
+    icon: mdi:chart-line
+
+# ============================================================
+# TIMER
+# ============================================================
+
+timer:
+  ev9_climate_timer:
+    name: "EV9 Climate Timer"
+    duration: "00:15:00"
+    icon: mdi:timer
+
+# ============================================================
+# TEMPLATE SENSORS
+# ============================================================
+
+template:
+  - sensor:
+      # L2 Charging Power (filters out DC fast charging >20kW)
+      - name: "EV9 L2 Charging Power"
+        unique_id: ev9_l2_charging_power
+        unit_of_measurement: "kW"
+        state_class: measurement
+        device_class: power
+        state: >
+          {% set power = states('sensor.ev9_ev_charging_power') | float(0) %}
+          {{ power if power < 20 else 0 }}
+        icon: mdi:ev-plug-type2
+
+      # Phone-to-Vehicle Distance (for proximity locking)
+      - name: "EV9 Phone Distance"
+        unique_id: ev9_phone_distance
+        unit_of_measurement: "m"
+        state_class: measurement
+        state: >
+          {% set ev9_lat = state_attr('device_tracker.ev9_location', 'latitude') %}
+          {% set ev9_lon = state_attr('device_tracker.ev9_location', 'longitude') %}
+          {% set phone_lat = state_attr('device_tracker.andre_iphone', 'latitude') %}
+          {% set phone_lon = state_attr('device_tracker.andre_iphone', 'longitude') %}
+          {% if ev9_lat and ev9_lon and phone_lat and phone_lon %}
+            {{ (distance(ev9_lat, ev9_lon, phone_lat, phone_lon) * 1000) | round(0) }}
+          {% else %}
+            unknown
+          {% endif %}
+        icon: mdi:map-marker-distance
+

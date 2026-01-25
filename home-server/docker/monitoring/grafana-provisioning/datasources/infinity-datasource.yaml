@@ -1,0 +1,13 @@
+apiVersion: 1
+
+datasources:
+  - name: Infinity
+    type: yesoreyeram-infinity-datasource
+    access: proxy
+    uid: infinity
+    isDefault: false
+    jsonData:
+      tlsSkipVerify: true
+      serverName: trivy-api
+    version: 1
+    editable: true

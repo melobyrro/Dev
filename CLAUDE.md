@@ -4,7 +4,13 @@
 - OS: macOS (Darwin)
 - Shell: zsh
 - Primary machine: Mac
-- Apps: Docker containers on VM (not in this repo)
+- Docker VM: `192.168.1.11` (SSH: `byrro@192.168.1.11`)
+- Proxmox: `192.168.1.10` (SSH: `root@192.168.1.10`)
+
+## Key Documentation
+Before starting work, read these files for context:
+- `home-server/AGENTS.md` - SSH access, monitoring stack, service details
+- `home-server/architecture.md` - VPN, WireGuard, network topology
 
 ## Sync Protocol
 - Always `git pull` at session start (handled by claudee command)

@@ -1,0 +1,97 @@
+services:
+  immich-server:
+    container_name: immich-server
+    image: ghcr.io/immich-app/immich-server:release
+    env_file:
+      - .env
+    environment:
+      - IMMICH_HOST=0.0.0.0
+    depends_on:
+      immich-redis:
+        condition: service_healthy
+      immich-postgres:
+        condition: service_healthy
+      immich-machine-learning:
+        condition: service_started
+    ports:
+      - "2283:2283"
+    volumes:
+      - ${UPLOAD_LOCATION}:/data
+      - /mnt/ByrroServer/Photos:/external/Photos
+      - /mnt/ByrroServer/ByrroMedia/ImmichCache/thumbs:/data/thumbs
+      - /mnt/ByrroServer/ByrroMedia/ImmichCache/encoded-video:/data/encoded-video
+      - /etc/localtime:/etc/localtime:ro
+    devices:
+      - /dev/dri:/dev/dri
+    group_add:
+      - "44"
+      - "993"
+    restart: unless-stopped
+    networks:
+      - byrro-net
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:2283/api/server/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  immich-machine-learning:
+    container_name: immich-machine-learning
+    image: ghcr.io/immich-app/immich-machine-learning:release
+    env_file:
+      - .env
+    volumes:
+      - model-cache:/cache
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  immich-redis:
+    container_name: immich-redis
+    image: valkey/valkey:8-bookworm
+    volumes:
+      - ./redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  immich-postgres:
+    container_name: immich-postgres
+    image: tensorchord/vchord-postgres:pg15-v0.5.3
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  immich-typesense:
+    container_name: immich-typesense
+    image: typesense/typesense:0.25.1
+    command: ["--data-dir", "/data", "--api-key", "${TYPESENSE_API_KEY:-typesense}"]
+    volumes:
+      - ./typesense-data:/data
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+volumes:
+  model-cache:
+
+networks:
+  byrro-net:
+    external: true

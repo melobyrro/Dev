@@ -1,0 +1,1318 @@
+- alias: Update Plex Priority Config
+  id: plex_priority_config_sync
+  trigger:
+  - platform: state
+    entity_id:
+    - input_number.plex_niceness
+    - input_number.qbit_niceness
+    - input_select.plex_io_class
+    - input_select.qbit_io_class
+    - input_boolean.plex_priority_enabled
+  action:
+  - service: shell_command.update_plex_priority_config
+- id: dawarich_trip_start
+  alias: Dawarich Trip - Start
+  description: Start or resume a trip when leaving home zone
+  mode: single
+  trigger:
+  - platform: zone
+    entity_id: person.andre_byrro
+    zone: zone.home
+    event: leave
+  condition:
+  - condition: state
+    entity_id: input_boolean.dawarich_on_trip
+    state: 'off'
+  - condition: state
+    entity_id: timer.dawarich_trip_debounce
+    state: idle
+  action:
+  - service: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.dawarich_on_trip
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.dawarich_trip_start
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  - service: shell_command.dawarich_trip_create
+- id: dawarich_trip_extend
+  alias: Dawarich Trip - Extend
+  description: Extend the current trip based on configurable interval
+  mode: single
+  trigger:
+  - platform: time_pattern
+    minutes: /1
+  condition:
+  - condition: state
+    entity_id: input_boolean.dawarich_on_trip
+    state: 'on'
+  - condition: template
+    value_template: '{% set interval = states(''input_number.dawarich_extend_minutes'')
+      | int(10) %} {{ now().minute % interval == 0 }}
+
+      '
+  action:
+  - service: shell_command.dawarich_trip_extend
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.dawarich_trip_last_update
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+- id: dawarich_trip_finalize
+  alias: Dawarich Trip - Finalize
+  description: Finalize the trip when returning home
+  mode: single
+  trigger:
+  - platform: zone
+    entity_id: person.andre_byrro
+    zone: zone.home
+    event: enter
+  condition:
+  - condition: state
+    entity_id: input_boolean.dawarich_on_trip
+    state: 'on'
+  action:
+  - service: shell_command.dawarich_trip_finalize
+  - service: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.dawarich_on_trip
+  - service: timer.start
+    target:
+      entity_id: timer.dawarich_trip_debounce
+    data:
+      duration: '{{ (states(''input_number.dawarich_debounce_minutes'') | int(5))
+        * 60 }}'
+- id: dawarich_log_start
+  alias: Dawarich Log - Trip Started
+  description: Log when a trip starts
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_start
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.dawarich_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Start|zone|success|Trip
+        started'
+- id: dawarich_log_extend
+  alias: Dawarich Log - Trip Extended
+  description: Log when a trip is extended
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_extend
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.dawarich_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Extend|scheduled|success|-'
+- id: dawarich_log_finalize
+  alias: Dawarich Log - Trip Finalized
+  description: Log when a trip is finalized
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_finalize
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.dawarich_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Finalize|zone|success|Trip
+        finalized'
+- id: plex_priority_log_change
+  alias: Plex Priority Log - Config Changed
+  description: Log when Plex priority config is synced
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.plex_priority_config_sync
+    attribute: last_triggered
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.plex_priority_activity_log
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}|Config Sync|state_change|success|Plex={{
+        states(''input_number.plex_niceness'')|int }}, qBit={{ states(''input_number.qbit_niceness'')|int
+        }}'
+- id: dawarich_error_notify
+  alias: Dawarich Error - Notify on Failure
+  description: Send notification when Dawarich automations become unavailable
+  mode: single
+  trigger:
+  - platform: state
+    entity_id:
+    - automation.dawarich_trip_start
+    - automation.dawarich_trip_extend
+    - automation.dawarich_trip_finalize
+    to: unavailable
+    for:
+      minutes: 5
+  action:
+  - service: persistent_notification.create
+    data:
+      title: Dawarich Automation Error
+      message: One or more Dawarich trip automations are unavailable. Please check
+        the configuration.
+      notification_id: dawarich_automation_error
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Dawarich Error
+      message: Trip automations are unavailable
+      data:
+        tag: dawarich_error
+- id: dawarich_error_clear
+  alias: Dawarich Error - Clear Notification
+  description: Clear error notification when automations recover
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: automation.dawarich_trip_start
+    from: unavailable
+    to: 'on'
+  action:
+  - service: persistent_notification.dismiss
+    data:
+      notification_id: dawarich_automation_error
+- id: ev9_charging_complete
+  alias: 'EV9: Charging Complete Notification'
+  description: Notify when EV9 finishes charging
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    from: 'on'
+    to: 'off'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_charging_complete
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_plug
+    state: 'on'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      new_event: '{{ now().strftime(''%H:%M'') }} - CHARGING_COMPLETE: Battery at
+        {{ states(''sensor.ev9_ev_battery_level'') }}%'
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Charging Complete
+      message: 'Battery at {{ states(''sensor.ev9_ev_battery_level'') }}% Range: {{
+        states(''sensor.ev9_ev_range'') }} miles
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: active
+  mode: single
+- id: ev9_low_battery_alert
+  alias: 'EV9: Low Battery Alert'
+  description: Notify when battery drops below threshold
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.ev9_ev_battery_level
+    below: input_number.ev9_low_battery_threshold
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_low_battery
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    state: 'off'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - LOW_BATTERY: {{ states(''sensor.ev9_ev_battery_level'')
+        }}% (threshold: {{ states(''input_number.ev9_low_battery_threshold'') }}%)'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Low Battery
+      message: 'Battery at {{ states(''sensor.ev9_ev_battery_level'') }}% Range: {{
+        states(''sensor.ev9_ev_range'') }} miles Consider charging soon.
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: time-sensitive
+  mode: single
+- id: ev9_charging_interrupted
+  alias: 'EV9: Charging Interrupted Alert'
+  description: Alert if charging stops unexpectedly while still plugged in
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    from: 'on'
+    to: 'off'
+    for:
+      minutes: '{{ states(''input_number.ev9_charge_interrupt_check_delay'') | int(10)
+        }}'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_charging_interrupted
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_plug
+    state: 'on'
+  - condition: numeric_state
+    entity_id: sensor.ev9_ev_battery_level
+    below: 95
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - CHARGING_INTERRUPTED: Stopped
+        at {{ states(''sensor.ev9_ev_battery_level'') }}%, power was {{ states(''sensor.ev9_ev_charging_power'')
+        }} kW'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Charging Stopped!
+      message: 'Charging interrupted at {{ states(''sensor.ev9_ev_battery_level'')
+        }}% Car is still plugged in but not charging. Last power: {{ states(''sensor.ev9_ev_charging_power'')
+        }} kW
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: time-sensitive
+        actions:
+        - action: EV9_RESTART_CHARGE
+          title: Restart Charging
+        - action: EV9_FORCE_UPDATE
+          title: Refresh Status
+  mode: single
+- id: ev9_restart_charge_from_notification
+  alias: 'EV9: Restart Charge from Notification'
+  description: Handle restart charging action from notification
+  trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: EV9_RESTART_CHARGE
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - RESTART_CHARGE: User initiated
+        from notification'
+  - service: kia_uvo.stop_charge
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - delay:
+      seconds: 30
+  - service: kia_uvo.start_charge
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Charging Restarted
+      message: Sent command to restart charging. Check status in a few minutes.
+  mode: single
+- id: ev9_low_charging_power
+  alias: 'EV9: Low Charging Power Alert'
+  description: Alert if charging power drops below expected threshold
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.ev9_ev_charging_power
+    below: input_number.ev9_low_power_threshold
+    for:
+      minutes: 5
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_low_charging_power
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_ev_battery_charge
+    state: 'on'
+  - condition: numeric_state
+    entity_id: sensor.ev9_ev_battery_level
+    below: 80
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - LOW_POWER: Charging at {{ states(''sensor.ev9_ev_charging_power'')
+        }} kW (expected {{ states(''input_number.ev9_expected_charge_power'') }} kW)'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Low Charging Power
+      message: 'Charging at {{ states(''sensor.ev9_ev_charging_power'') }} kW Expected:
+        {{ states(''input_number.ev9_expected_charge_power'') }} kW Battery: {{ states(''sensor.ev9_ev_battery_level'')
+        }}% Possible causes: Temperature, EVSE issue, or car limiting charge.
+
+        '
+      data:
+        push:
+          sound: default
+        actions:
+        - action: EV9_RESTART_CHARGE
+          title: Restart Charging
+  mode: single
+- id: ev9_unlocked_at_home
+  alias: 'EV9: Unlocked at Home Alert'
+  description: Notify if car is unlocked at home for too long (informational, not
+    auto-lock)
+  trigger:
+  - platform: state
+    entity_id: lock.ev9_door_lock
+    to: unlocked
+    for:
+      minutes: '{{ states(''input_number.ev9_unlocked_alert_delay'') | int(10) }}'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_unlocked_at_home
+    state: 'on'
+  - condition: zone
+    entity_id: device_tracker.ev9_location
+    zone: zone.home
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - UNLOCKED_ALERT: At home for {{
+        states(''input_number.ev9_unlocked_alert_delay'') | int }} min'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Unlocked
+      message: 'Your EV9 has been unlocked at home for {{ states(''input_number.ev9_unlocked_alert_delay'')
+        | int }} minutes.
+
+        '
+      data:
+        push:
+          sound: default
+        actions:
+        - action: LOCK_EV9
+          title: Lock Now
+          destructive: false
+  mode: single
+- id: ev9_lock_from_notification
+  alias: 'EV9: Lock from Notification Action'
+  description: Lock car when notification action is tapped
+  trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: LOCK_EV9
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - MANUAL_LOCK: User initiated from
+        notification'
+  - service: lock.lock
+    target:
+      entity_id: lock.ev9_door_lock
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Locked
+      message: Your EV9 has been locked.
+  mode: single
+- id: ev9_auto_close_windows
+  alias: 'EV9: Auto-Close Windows on Leave'
+  description: Auto-close windows when leaving home zone
+  trigger:
+  - platform: zone
+    entity_id: device_tracker.ev9_location
+    zone: zone.home
+    event: leave
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_auto_close_windows_enabled
+    state: 'on'
+  action:
+  - delay:
+      minutes: '{{ states(''input_number.ev9_auto_close_windows_delay'') | int(2)
+        }}'
+  - condition: not
+    conditions:
+    - condition: zone
+      entity_id: device_tracker.ev9_location
+      zone: zone.home
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - AUTO_CLOSE_WINDOWS: Triggered
+        after leaving home zone'
+  - service: kia_uvo.set_windows
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+      close_all: true
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Windows Closed
+      message: Auto-close windows activated after leaving home.
+  mode: single
+- id: ev9_trunk_left_open
+  alias: 'EV9: Trunk Left Open Alert'
+  description: Alert when trunk is left open for too long
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_trunk
+    to: 'on'
+    for:
+      minutes: '{{ states(''input_number.ev9_trunk_open_delay'') | int(5) }}'
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_notify_trunk_open
+    state: 'on'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - TRUNK_OPEN: Alert after {{ states(''input_number.ev9_trunk_open_delay'')
+        | int }}min'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Trunk Open
+      message: 'Your EV9 trunk has been open for {{ states(''input_number.ev9_trunk_open_delay'')
+        | int }} minutes.
+
+        '
+      data:
+        push:
+          sound: default
+          interruption-level: time-sensitive
+  mode: single
+- id: ev9_climate_timer_stop
+  alias: 'EV9: Climate Timer Auto-Stop'
+  description: Stop climate control when timer finishes
+  trigger:
+  - platform: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.ev9_climate_timer
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - CLIMATE_STOP: Timer expired, stopping
+        climate control'
+  - service: kia_uvo.stop_climate
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Climate Timer Finished
+      message: Climate control stopped automatically after timer expired.
+  mode: single
+- id: ev9_precondition_schedule
+  alias: 'EV9: Scheduled Pre-conditioning'
+  description: Start climate control before scheduled departure - evaluates conditions
+    and computes optimal start time using per-schedule rate
+  trigger:
+  - platform: time_pattern
+    minutes: /1
+  condition:
+  - condition: state
+    entity_id: binary_sensor.ev9_air_conditioner
+    state: 'off'
+  - condition: template
+    value_template: "{% set day_map = {'Monday': 'mon', 'Tuesday': 'tue', 'Wednesday':\
+      \ 'wed',\n                  'Thursday': 'thu', 'Friday': 'fri', 'Saturday':\
+      \ 'sat', 'Sunday': 'sun'} %}\n{% set today = day_map[now().strftime('%A')] %}\
+      \ {% set eval_window = states('input_number.ev9_evaluation_window') | int(30)\
+      \ %} {% set ns = namespace(is_eval_time=false) %} {% for sched_num in range(1,\
+      \ 6) %}\n  {% if not ns.is_eval_time %}\n    {% set enabled = is_state('input_boolean.ev9_schedule_'\
+      \ ~ sched_num ~ '_enabled', 'on') %}\n    {% set day_enabled = is_state('input_boolean.ev9_schedule_'\
+      \ ~ sched_num ~ '_' ~ today, 'on') %}\n    {% set departure = states('input_datetime.ev9_schedule_'\
+      \ ~ sched_num ~ '_time') %}\n    {% if enabled and day_enabled and departure\
+      \ not in ['unknown', 'unavailable', ''] %}\n      {% set dep_time = today_at(departure)\
+      \ %}\n      {% set eval_time = dep_time - timedelta(minutes=eval_window) %}\n\
+      \      {% if eval_time <= now() < eval_time + timedelta(minutes=1) %}\n    \
+      \    {% set ns.is_eval_time = true %}\n      {% endif %}\n    {% endif %}\n\
+      \  {% endif %}\n{% endfor %} {{ ns.is_eval_time }}\n"
+  action:
+  - variables:
+      day_map: "{{ {'Monday': 'mon', 'Tuesday': 'tue', 'Wednesday': 'wed',\n    'Thursday':\
+        \ 'thu', 'Friday': 'fri', 'Saturday': 'sat', 'Sunday': 'sun'} }}\n"
+      today: '{{ day_map[now().strftime(''%A'')] }}'
+      eval_window: '{{ states(''input_number.ev9_evaluation_window'') | int(30) }}'
+      outside_temp: '{{ state_attr(''weather.forecast_home'', ''temperature'') | float(72)
+        }}'
+      global_temp: '{{ states(''input_number.ev9_target_temperature'') | float(72)
+        }}'
+      matched_schedule: "{% set ns = namespace(matched=0) %} {% for sched_num in range(1,\
+        \ 6) %}\n  {% if ns.matched == 0 %}\n    {% set enabled = is_state('input_boolean.ev9_schedule_'\
+        \ ~ sched_num ~ '_enabled', 'on') %}\n    {% set day_enabled = is_state('input_boolean.ev9_schedule_'\
+        \ ~ sched_num ~ '_' ~ today, 'on') %}\n    {% set departure = states('input_datetime.ev9_schedule_'\
+        \ ~ sched_num ~ '_time') %}\n    {% if enabled and day_enabled and departure\
+        \ not in ['unknown', 'unavailable', ''] %}\n      {% set dep_time = today_at(departure)\
+        \ %}\n      {% set eval_time = dep_time - timedelta(minutes=eval_window) %}\n\
+        \      {% if eval_time <= now() < eval_time + timedelta(minutes=1) %}\n  \
+        \      {% set ns.matched = sched_num %}\n      {% endif %}\n    {% endif %}\n\
+        \  {% endif %}\n{% endfor %} {{ ns.matched }}\n"
+      smart_rate: "{% if matched_schedule | int > 0 %}\n  {{ states('input_number.ev9_schedule_'\
+        \ ~ matched_schedule ~ '_rate') | float(1.0) }}\n{% else %}\n  1.0\n{% endif\
+        \ %}\n"
+      target_temp: "{% if matched_schedule | int > 0 %}\n  {{ states('input_number.ev9_schedule_'\
+        \ ~ matched_schedule ~ '_temperature') | float(global_temp) }}\n{% else %}\n\
+        \  {{ global_temp }}\n{% endif %}\n"
+      temp_diff: '{{ (target_temp | float - outside_temp | float) | abs }}'
+      runtime_minutes: '{{ (temp_diff * smart_rate) | round(0) | int }}'
+      climate_mode: "{% if outside_temp | float > target_temp | float %}\n  cooling\n\
+        {% else %}\n  heating\n{% endif %}\n"
+      departure_time_str: "{% if matched_schedule | int > 0 %}\n  {{ states('input_datetime.ev9_schedule_'\
+        \ ~ matched_schedule ~ '_time') }}\n{% else %}\n  00:00:00\n{% endif %}\n"
+      delay_seconds: '{% set dep_str = departure_time_str | trim %} {% set dep_time
+        = today_at(dep_str) %} {% set start = dep_time - timedelta(minutes=runtime_minutes
+        | int) %} {{ [((start - now()).total_seconds()) | int, 0] | max }}
+
+        '
+      start_time_str: '{% set dep_str = departure_time_str | trim %} {% set dep_time
+        = today_at(dep_str) %} {% set start = dep_time - timedelta(minutes=runtime_minutes
+        | int) %} {{ start.strftime(''%H:%M'') }}
+
+        '
+      departure_formatted: '{% set dep_str = departure_time_str | trim %} {% set dep_time
+        = today_at(dep_str) %} {{ dep_time.strftime(''%I:%M %p'') }}
+
+        '
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - PRECONDITION_EVAL: Schedule {{
+        matched_schedule }} - Outside {{ outside_temp | round(0) }}F, target {{ target_temp
+        | round(0) }}F, runtime {{ runtime_minutes }}min, start at {{ start_time_str
+        }}
+
+        '
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ delay_seconds | int > 0 }}'
+      sequence:
+      - delay:
+          seconds: '{{ delay_seconds }}'
+  - service: kia_uvo.start_climate
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+      climate: true
+      temperature: '{{ target_temp | int }}'
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_precondition_result
+    data:
+      value: '{{ now().strftime(''%H:%M'') }} - SUCCESS: Schedule {{ matched_schedule
+        }}, {{ target_temp | round(0) }}F, {{ climate_mode }}, {{ runtime_minutes
+        }}min runtime'
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - PRECONDITION_START: Schedule {{
+        matched_schedule }} - Climate started, target {{ target_temp | round(0) }}F
+        ({{ climate_mode }})'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Pre-conditioning Started
+      message: 'Schedule {{ matched_schedule }} triggered. Outside: {{ outside_temp
+        | round(0) }}F -> Target: {{ target_temp | round(0) }}F ({{ climate_mode }})
+        Computed runtime: {{ runtime_minutes }} min Departure: {{ departure_formatted
+        }}
+
+        '
+  mode: single
+- id: ev9_force_update_on_plug
+  alias: 'EV9: Force Update When Plugged In'
+  description: Refresh data when charging cable is connected
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.ev9_ev_battery_plug
+    to: 'on'
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - PLUG_DETECTED: Forcing data refresh'
+  - delay:
+      seconds: 30
+  - service: kia_uvo.force_update
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  mode: single
+- id: ev9_force_update_from_notification
+  alias: 'EV9: Force Update from Notification'
+  description: Handle force update action from notification
+  trigger:
+  - platform: event
+    event_type: mobile_app_notification_action
+    event_data:
+      action: EV9_FORCE_UPDATE
+  action:
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - FORCE_UPDATE: User initiated from
+        notification'
+  - service: kia_uvo.force_update
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Status Refreshing
+      message: Requested fresh data from vehicle. Check back in 1-2 minutes.
+  mode: single
+- id: netalertx_new_device_alert
+  alias: '[NetAlertX] New Unknown Device Detected'
+  description: Alert when new/unknown device appears on network
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.netalertx_new
+    above: 0
+  condition: []
+  action:
+  - service: persistent_notification.create
+    data:
+      title: 🚨 New Unknown Device on Network
+      message: NetAlertX detected {{ states('sensor.netalertx_new') }} new/unknown
+        device(s). Check NetAlertX for details.
+      notification_id: netalertx_new_device
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: New Network Device
+      message: '{{ states(''sensor.netalertx_new'') }} unknown device(s) detected.
+        Check NetAlertX.'
+- id: netalertx_device_down_alert
+  alias: '[NetAlertX] Device Down'
+  description: Alert when devices go offline
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.netalertx_down
+    above: 0
+  condition: []
+  action:
+  - service: persistent_notification.create
+    data:
+      title: ⚠️ Network Device Offline
+      message: '{{ states(''sensor.netalertx_down'') }} device(s) are offline. Check
+        NetAlertX.'
+      notification_id: netalertx_device_down
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Device Offline
+      message: '{{ states(''sensor.netalertx_down'') }} device(s) down'
+- id: ev9_walkaway_lock
+  alias: 'EV9: Walk-Away Auto Lock'
+  description: Auto-lock when phone moves beyond configured distance from vehicle
+    (self-healing on HA restart)
+  trigger:
+  - platform: numeric_state
+    entity_id: sensor.ev9_phone_distance
+    above: input_number.ev9_walkaway_distance
+    for:
+      minutes: 1
+    id: distance_trigger
+  - platform: homeassistant
+    event: start
+    id: startup_trigger
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_walk_away_lock_enabled
+    state: 'on'
+  - condition: state
+    entity_id: binary_sensor.ev9_engine
+    state: 'off'
+  - condition: numeric_state
+    entity_id: sensor.ev9_phone_distance
+    above: input_number.ev9_walkaway_distance
+  action:
+  - variables:
+      current_distance: '{{ states(''sensor.ev9_phone_distance'') | float(0) }}'
+      threshold: '{{ states(''input_number.ev9_walkaway_distance'') | float(5) }}'
+      is_already_locked: '{{ is_state(''lock.ev9_door_lock'', ''locked'') }}'
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ is_already_locked }}'
+      sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_last_walkaway_result
+        data:
+          value: '{{ now().strftime(''%H:%M'') }} - SKIPPED: Already locked at {{
+            current_distance | round(0) }}m'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - WALKAWAY_LOCK: SKIPPED - Vehicle
+            already locked at {{ current_distance | round(0) }}m'
+    default:
+    - service: lock.lock
+      target:
+        entity_id: lock.ev9_door_lock
+      continue_on_error: true
+    - delay:
+        seconds: 10
+    - choose:
+      - conditions:
+        - condition: state
+          entity_id: lock.ev9_door_lock
+          state: locked
+        sequence:
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_last_walkaway_result
+          data:
+            value: '{{ now().strftime(''%H:%M'') }} - SUCCESS: Locked at {{ current_distance
+              | round(0) }}m (threshold: {{ threshold | round(0) }}m)'
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: '{{ now().strftime(''%H:%M'') }} - WALKAWAY_LOCK: SUCCESS -
+              Distance {{ current_distance | round(0) }}m > {{ threshold | round(0)
+              }}m threshold'
+        - service: notify.mobile_app_andre_iphone
+          data:
+            title: EV9 Walk-Away Locked
+            message: 'Auto-locked when you moved {{ current_distance | round(0) }}m
+              away from vehicle. (Threshold: {{ threshold | round(0) }}m)
+
+              '
+            data:
+              push:
+                sound: default
+      default:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_last_walkaway_result
+        data:
+          value: '{{ now().strftime(''%H:%M'') }} - FAILED: Lock command sent at {{
+            current_distance | round(0) }}m but vehicle may not have locked'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - WALKAWAY_LOCK: FAILED - API
+            error or timeout at {{ current_distance | round(0) }}m'
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: ⚠️ EV9 Walk-Away Lock FAILED
+          message: 'Tried to auto-lock at {{ current_distance | round(0) }}m but command
+            may have failed. Please verify vehicle is locked.
+
+            '
+          data:
+            push:
+              sound: default
+              interruption-level: time-sensitive
+  mode: single
+- id: wyze_bridge_recover_offline
+  alias: Wyze Bridge - Recover Offline Cameras
+  description: Restart Wyze Bridge camera connections when any camera is offline or
+    stale
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.wyze_any_camera_problem
+    from: 'off'
+    to: 'on'
+    for:
+      minutes: 5
+  action:
+  - service: rest_command.wyze_bridge_restart
+    data:
+      restart_cmd: cam_data
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Wyze Bridge Recovery
+      message: 'Restarted camera connections (cam_data). Offline: {{ states(''sensor.wyze_offline_cameras'')
+        }}. Stale: {{ states(''sensor.wyze_stale_cameras'') }}.
+
+        '
+      data:
+        tag: wyze_bridge_recovery
+- id: wyze_bridge_recover_persistent
+  alias: Wyze Bridge - Restart All After Persistent Problem
+  description: Restart all Wyze Bridge services if cameras remain offline or stale
+  mode: single
+  trigger:
+  - platform: state
+    entity_id: binary_sensor.wyze_any_camera_problem
+    from: 'off'
+    to: 'on'
+    for:
+      minutes: 15
+  condition:
+  - condition: state
+    entity_id: binary_sensor.wyze_any_camera_problem
+    state: 'on'
+  action:
+  - service: rest_command.wyze_bridge_restart
+    data:
+      restart_cmd: all
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: Wyze Bridge Escalation
+      message: 'Restarted all Wyze Bridge services. Offline: {{ states(''sensor.wyze_offline_cameras'')
+        }}. Stale: {{ states(''sensor.wyze_stale_cameras'') }}.
+
+        '
+      data:
+        tag: wyze_bridge_recovery
+- id: frigate_person_snapshot_notify
+  alias: Frigate - Person Snapshot
+  description: Send a snapshot when a new person event starts
+  mode: single
+  trigger:
+  - platform: mqtt
+    topic: frigate/events
+  condition:
+  - condition: template
+    value_template: "{{ trigger.payload_json.type == 'new'\n   and trigger.payload_json.after.label\
+      \ == 'person'\n   and trigger.payload_json.after.has_snapshot }}\n"
+  action:
+  - variables:
+      event_id: '{{ trigger.payload_json.after.id }}'
+  - wait_for_trigger:
+    - platform: mqtt
+      topic: frigate/events
+      value_template: "{% set after = trigger.payload_json.after %} {{ trigger.payload_json.type\
+        \ == 'update'\n   and after.id == event_id\n   and (after.sub_label | default(''))\
+        \ != '' }}\n"
+    timeout: 00:00:15
+    continue_on_timeout: true
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ wait.trigger is none }}'
+      sequence:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: 'Frigate: Person detected'
+          message: '{{ trigger.payload_json.after.camera | replace(''-'', '' '') |
+            title }}'
+          data:
+            image: http://192.168.1.11:5001/api/events/{{ event_id }}/snapshot.jpg?bbox=1&crop=1
+            url: http://192.168.1.11:5001/#/events?event={{ event_id }}
+            tag: frigate-event-{{ event_id }}
+- id: frigate_face_recognition_notify
+  alias: Frigate - Face Recognition
+  description: Notify when a recognized face updates a Frigate person event
+  mode: single
+  trigger:
+  - platform: mqtt
+    topic: frigate/events
+  condition:
+  - condition: template
+    value_template: "{% set after = trigger.payload_json.after %} {% set before =\
+      \ trigger.payload_json.before or {} %} {{ trigger.payload_json.type == 'update'\n\
+      \   and after.label == 'person'\n   and (after.sub_label | default('')) != ''\n\
+      \   and (before.sub_label | default('')) != (after.sub_label | default(''))\n\
+      \   and after.has_snapshot }}\n"
+  action:
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: 'Frigate: {{ trigger.payload_json.after.sub_label }} spotted'
+      message: '{{ trigger.payload_json.after.camera | replace(''-'', '' '') | title
+        }}'
+      data:
+        image: http://192.168.1.11:5001/api/events/{{ trigger.payload_json.after.id
+          }}/snapshot.jpg?bbox=1&crop=1
+        url: http://192.168.1.11:5001/#/events?event={{ trigger.payload_json.after.id
+          }}
+        tag: frigate-event-{{ trigger.payload_json.after.id }}
+- id: ev9_connection_watchdog
+  alias: 'EV9: Connection Watchdog'
+  description: Auto-recover kia_uvo integration with email OTP
+  trigger:
+  - platform: state
+    entity_id: sensor.ev9_ev_battery_level
+    to: unavailable
+    for:
+      hours: 2
+    id: unavailable_trigger
+  - platform: time_pattern
+    hours: /8
+    id: periodic_trigger
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_connection_watchdog_enabled
+    state: 'on'
+  - condition: template
+    value_template: '{{ states(''input_text.ev9_recovery_state'') in [''idle'', ''unknown'',
+      ''unavailable'', ''''] }}'
+  - condition: or
+    conditions:
+    - condition: trigger
+      id: unavailable_trigger
+    - condition: and
+      conditions:
+      - condition: trigger
+        id: periodic_trigger
+      - condition: template
+        value_template: '{{ states(''sensor.ev9_ev_battery_level'') in [''unknown'',
+          ''unavailable''] or state_attr(''sensor.ev9_ev_battery_level'', ''friendly_name'')
+          is none }}'
+  - condition: template
+    value_template: "{% set last_attempt = states('input_text.ev9_last_recovery_attempt')\
+      \ %} {% if last_attempt in ['unknown', 'unavailable', ''] %}\n  true\n{% else\
+      \ %}\n  {% set last_time = as_timestamp(strptime(last_attempt, '%Y-%m-%d %H:%M:%S'))\
+      \ | default(0) %}\n  {{ (as_timestamp(now()) - last_time) > 28800 }}\n{% endif\
+      \ %}\n"
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_recovery_state
+    data:
+      value: starting
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_recovery_attempt
+    data:
+      value: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_START: Beginning auto-recovery
+        with OTP'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Recovery Started
+      message: Kia integration unavailable. Starting auto-recovery with email OTP...
+  - service: shell_command.ev9_recovery_start
+    data:
+      token: ''
+    response_variable: recovery_result
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ recovery_result.returncode == 0 }}'
+      sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_recovery_flow_id
+        data:
+          value: '{{ recovery_result.stdout | trim }}'
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_recovery_state
+        data:
+          value: awaiting_otp
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.ev9_otp_requested_at
+        data:
+          datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_OTP_REQUESTED: Waiting
+            for email (flow: {{ recovery_result.stdout | trim }})'
+    default:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_recovery_state
+      data:
+        value: failed
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_recovery_result
+      data:
+        value: '{{ now().strftime(''%H:%M'') }} - FAILED: Recovery script error'
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_FAILED: Recovery script
+          error'
+    - service: notify.mobile_app_andre_iphone
+      data:
+        title: EV9 Recovery FAILED
+        message: Recovery script failed. Manual intervention required.
+        data:
+          push:
+            interruption-level: critical
+  mode: single
+- id: ev9_otp_received
+  alias: 'EV9: OTP Email Received'
+  description: Extract OTP from Kia email and complete config flow (v2.4.3 - fixed
+    imap.fetch syntax)
+  trigger:
+  - platform: event
+    event_type: imap_content
+    event_data:
+      sender: no-reply@notification.kiausa.com
+  condition:
+  - condition: template
+    value_template: '{{ states(''input_text.ev9_recovery_state'') == ''awaiting_otp''
+      }}'
+  - condition: template
+    value_template: '{{ states(''input_text.ev9_recovery_flow_id'') not in ['''',
+      ''unknown'', ''unavailable''] }}'
+  - condition: template
+    value_template: '{% set email_ts = trigger.event.data.date | as_timestamp %} {%
+      set otp_ts = states("input_datetime.ev9_otp_requested_at") | as_timestamp %}
+      {{ email_ts > otp_ts if email_ts and otp_ts else false }}
+
+      '
+  action:
+  - action: imap.fetch
+    data:
+      entry: 01KFHWR9EMN3GVQ03WVFSXHNRY
+      uid: '{{ trigger.event.data.uid }}'
+    response_variable: fetched_email
+  - service: system_log.write
+    data:
+      message: 'EV9 IMAP fetch result - Text length: {{ (fetched_email.text | default('''')|length)
+        }}, Preview: {{ (fetched_email.text | default('''')|string)[:300] }}'
+      level: warning
+  - variables:
+      email_text: '{{ fetched_email.text | default(trigger.event.data.text | default(''''))
+        }}'
+      otp_specific: '{{ email_text | regex_findall(''[Vv]erification [Cc]ode[:\s]+([0-9]{6})'')
+        }}'
+      otp_all: '{{ email_text | regex_findall(''([0-9]{6})'') | reject(''eq'', ''797979'')
+        | list }}'
+      otp_code: '{% if otp_specific %}{{ otp_specific[0] }}{% elif otp_all %}{{ otp_all[0]
+        }}{% else %}{% endif %}'
+      flow_id: '{{ states(''input_text.ev9_recovery_flow_id'') }}'
+  - service: system_log.write
+    data:
+      message: 'EV9 OTP extraction - Specific: {{ otp_specific }}, Filtered: {{ otp_all
+        }}, Final: {{ otp_code }}'
+      level: warning
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ (otp_code | string) | length == 6 }}'
+      sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_recovery_state
+        data:
+          value: completing
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_OTP_RECEIVED: Got
+            code {{ otp_code }}'
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_otp_code
+        data:
+          value: '{{ otp_code | string }}'
+      - service: shell_command.ev9_submit_otp
+        response_variable: submit_result
+      - delay:
+          minutes: 2
+      - choose:
+        - conditions:
+          - condition: template
+            value_template: '{{ states(''sensor.ev9_ev_battery_level'') not in [''unavailable'',
+              ''unknown''] }}'
+          sequence:
+          - service: input_text.set_value
+            target:
+              entity_id: input_text.ev9_recovery_state
+            data:
+              value: idle
+          - service: input_text.set_value
+            target:
+              entity_id: input_text.ev9_recovery_flow_id
+            data:
+              value: ''
+          - service: input_text.set_value
+            target:
+              entity_id: input_text.ev9_last_recovery_result
+            data:
+              value: '{{ now().strftime(''%H:%M'') }} - SUCCESS: Auto-recovered with
+                OTP'
+          - service: python_script.shift_event_log
+            data:
+              entity_prefix: input_text.ev9_event
+              max_events: 10
+              new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_SUCCESS: Integration
+                restored!'
+          - service: notify.mobile_app_andre_iphone
+            data:
+              title: EV9 Connection Restored!
+              message: 'Auto-recovery completed! Battery: {{ states(''sensor.ev9_ev_battery_level'')
+                }}%'
+        default:
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_recovery_state
+          data:
+            value: failed
+        - service: input_text.set_value
+          target:
+            entity_id: input_text.ev9_last_recovery_result
+          data:
+            value: '{{ now().strftime(''%H:%M'') }} - FAILED: OTP submitted but integration
+              not working'
+        - service: python_script.shift_event_log
+          data:
+            entity_prefix: input_text.ev9_event
+            max_events: 10
+            new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_FAILED: OTP submitted
+              but sensor unavailable'
+        - service: notify.mobile_app_andre_iphone
+          data:
+            title: EV9 Recovery Partial Failure
+            message: OTP submitted but integration did not initialize.
+    default:
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_ERROR: Could not extract
+          OTP'
+  mode: single
+- id: ev9_otp_timeout
+  alias: 'EV9: OTP Timeout'
+  description: Handle timeout if OTP email doesn't arrive
+  trigger:
+  - platform: time_pattern
+    minutes: /1
+  condition:
+  - condition: template
+    value_template: '{{ states(''input_text.ev9_recovery_state'') == ''awaiting_otp''
+      }}'
+  - condition: template
+    value_template: "{% set requested = states('input_datetime.ev9_otp_requested_at')\
+      \ %} {% if requested in ['unknown', 'unavailable', ''] %}\n  false\n{% else\
+      \ %}\n  {% set req_time = as_timestamp(requested) %}\n  {{ (as_timestamp(now())\
+      \ - req_time) > 300 }}\n{% endif %}\n"
+  action:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_recovery_state
+    data:
+      value: failed
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_recovery_flow_id
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_recovery_result
+    data:
+      value: '{{ now().strftime(''%H:%M'') }} - TIMEOUT: OTP email not received in
+        5 min'
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - WATCHDOG_TIMEOUT: No OTP email
+        received within 5 minutes'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Recovery Timeout
+      message: 'OTP email was not received within 5 minutes. Recovery failed. Manual
+        intervention may be needed.
+
+        Check spam folder or try again later.
+
+        '
+      data:
+        push:
+          interruption-level: time-sensitive
+  mode: single
+- id: ev9_track_unlock_time
+  alias: 'EV9: Track Unlock Time'
+  description: Record timestamp when car becomes unlocked
+  trigger:
+  - platform: state
+    entity_id: lock.ev9_door_lock
+    to: unlocked
+  action:
+  - service: input_datetime.set_datetime
+    target:
+      entity_id: input_datetime.ev9_unlocked_since
+    data:
+      datetime: '{{ now().strftime(''%Y-%m-%d %H:%M:%S'') }}'
+  mode: single
+- id: ev9_timeout_lock_check
+  alias: 'EV9: Timeout Lock Check'
+  description: Check every minute if car should be auto-locked
+  trigger:
+  - platform: time_pattern
+    minutes: /1
+  condition:
+  - condition: state
+    entity_id: input_boolean.ev9_timeout_lock_enabled
+    state: 'on'
+  - condition: state
+    entity_id: lock.ev9_door_lock
+    state: unlocked
+  - condition: state
+    entity_id: binary_sensor.ev9_engine
+    state: 'off'
+  action:
+  - variables:
+      unlocked_since: '{{ states(''input_datetime.ev9_unlocked_since'') }}'
+      timeout_minutes: '{{ states(''input_number.ev9_unlock_timeout'') | int(30) }}'
+  - condition: template
+    value_template: '{% if unlocked_since in [''unknown'', ''unavailable'', '''']
+      %}false{% else %}{% set unlocked_time = as_datetime(unlocked_since) %}{% set
+      elapsed = (now() - unlocked_time).total_seconds() / 60 %}{{ elapsed >= (timeout_minutes
+      | int) }}{% endif %}'
+  - service: lock.lock
+    target:
+      entity_id: lock.ev9_door_lock
+    continue_on_error: true
+  - delay:
+      seconds: 10
+  - choose:
+    - conditions:
+      - condition: state
+        entity_id: lock.ev9_door_lock
+        state: locked
+      sequence:
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.ev9_last_timeout_lock_result
+        data:
+          value: '{{ now().strftime(''%H:%M'') }} - SUCCESS: Locked after {{ timeout_minutes
+            }}min timeout'
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - TIMEOUT_LOCK: SUCCESS - Auto-locked
+            after {{ timeout_minutes }}min'
+    default:
+    - service: input_text.set_value
+      target:
+        entity_id: input_text.ev9_last_timeout_lock_result
+      data:
+        value: '{{ now().strftime(''%H:%M'') }} - FAILED: Could not lock after {{
+          timeout_minutes }}min'
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: '{{ now().strftime(''%H:%M'') }} - TIMEOUT_LOCK: FAILED - API error'
+  mode: single

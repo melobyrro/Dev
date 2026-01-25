@@ -1,0 +1,7 @@
+services:
+  immich-server:
+    volumes:
+      - /mnt/ByrroServer/ByrroMedia/Photos:/external/Photos         # final target tree
+      - /mnt/ByrroServer:/scan_ro:ro                                # whole export, RO for hashing
+      - /mnt/ByrroServer:/scan_rw                                   # whole export, RW for moving
+      - /mnt/ByrroServer/ByrroMedia/Photos/ImmichUploads:/data/upload

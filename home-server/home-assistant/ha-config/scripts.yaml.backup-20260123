@@ -1,0 +1,455 @@
+patio_ac_control:
+  alias: Patio AC Control (Protected)
+  mode: queued
+  max: 3
+  fields:
+    action:
+      description: Turn on or off
+      example: 'on'
+      selector:
+        select:
+          options:
+          - 'on'
+          - 'off'
+    mode:
+      description: AC mode (if turning on)
+      example: cool
+      selector:
+        select:
+          options:
+          - cool
+          - dry
+          - fan_only
+    temperature:
+      description: Target temperature (if turning on)
+      example: 75
+      selector:
+        number:
+          min: 61
+          max: 86
+          unit_of_measurement: °F
+    reason:
+      description: Reason for operation
+      example: heat_guard
+      selector:
+        select:
+          options:
+          - heat_guard
+          - humidity_night
+          - humidity_day
+          - humidity_emergency
+          - manual
+          - safety_lock
+    duration:
+      description: Max runtime in minutes (optional)
+      example: 60
+      selector:
+        number:
+          min: 0
+          max: 1440
+          unit_of_measurement: min
+  sequence:
+  - condition: state
+    entity_id: timer.patio_ac_command_throttle
+    state: idle
+  - choose:
+    - conditions:
+      - condition: template
+        value_template: '{{ action == ''on'' }}'
+      sequence:
+      - condition: template
+        value_template: "{% set auto_hours = states('sensor.patio_ac_runtime_total_automation')\
+          \ | float(0) %} {% set auto_minutes = auto_hours * 60 %} {{ reason not in\
+          \ ['heat_guard', 'humidity_day', 'humidity_night'] or\n   auto_minutes <\
+          \ states('input_number.patio_ac_daily_limit') | float(0) }}\n"
+      - condition: or
+        conditions:
+        - condition: state
+          entity_id: timer.patio_ac_compressor_protection
+          state: idle
+        - condition: template
+          value_template: '{{ states(''climate.150633095083490_climate'') != ''off''
+            }}'
+      - variables:
+          ac_min_temp: 61
+          ac_max_temp: 86
+          clamped_temp: "{% if mode == 'cool' %}\n  {{ [[temperature|int, ac_min_temp]|max,\
+            \ ac_max_temp]|min }}\n{% else %}\n  {{ temperature|int(0) }}\n{% endif\
+            \ %}\n"
+      - condition: template
+        value_template: "{{ states('climate.150633095083490_climate') == 'off' or\n\
+          \   state_attr('climate.150633095083490_climate', 'hvac_mode') != mode or\n\
+          \   (state_attr('climate.150633095083490_climate', 'temperature')|int(0)\
+          \ != clamped_temp|int(0) if mode == 'cool' else false) }}\n"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.patio_ac_expected_signature
+        data:
+          value: "{% if mode == 'cool' %}\n  cool|{{ clamped_temp }}\n{% elif mode\
+            \ == 'dry' %}\n  dry|none\n{% else %}\n  {{ mode }}|none\n{% endif %}\n"
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: '{% set settle = states(''input_number.patio_ac_poll_settle_seconds'')
+            | int(0) %} {{ now().timestamp() + settle + 10 }}
+
+            '
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.150633095083490_climate
+        data:
+          hvac_mode: '{{ mode }}'
+      - if:
+        - condition: template
+          value_template: '{{ mode == ''cool'' }}'
+        then:
+        - delay: 00:00:01
+        - service: climate.set_temperature
+          target:
+            entity_id: climate.150633095083490_climate
+          data:
+            temperature: '{{ clamped_temp }}'
+      - wait_template: "{% set sig = states('input_text.patio_ac_expected_signature').split('|')\
+          \ %} {% set target_mode = sig[0] %} {% set target_temp = sig[1] %} {{ is_state('climate.150633095083490_climate',\
+          \ target_mode) and\n   (state_attr('climate.150633095083490_climate', 'temperature')|int(0)\
+          \ == target_temp|int(0) if target_temp != 'none' else true) }}\n"
+        timeout: '{{ states(''input_number.patio_ac_poll_settle_seconds'')|int }}'
+      - delay: 00:00:03
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.patio_ac_reason
+        data:
+          option: '{{ reason }}'
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_runtime_start
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - if:
+        - condition: template
+          value_template: '{{ duration is defined and duration|int > 0 and reason
+            == ''heat_guard'' }}'
+        then:
+        - service: timer.start
+          target:
+            entity_id: timer.patio_ac_heat_spike
+          data:
+            duration: '{{ ''00:%02d:00''|format(duration|int) }}'
+        - service: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.patio_ac_heat_spike_until
+          data:
+            timestamp: '{{ now().timestamp() + (duration|int * 60) }}'
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_command
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - service: timer.start
+        target:
+          entity_id: timer.patio_ac_command_throttle
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_command_throttle_until
+        data:
+          timestamp: '{{ now().timestamp() + 30 }}'
+    - conditions:
+      - condition: template
+        value_template: '{{ action == ''off'' }}'
+      sequence:
+      - condition: template
+        value_template: '{{ states(''input_select.patio_ac_reason'') == reason or
+          reason == ''safety_lock'' }}
+
+          '
+      - condition: template
+        value_template: '{{ states(''climate.150633095083490_climate'') != ''off''
+          }}'
+      - variables:
+          run_duration: "{% set start = states('input_datetime.patio_ac_runtime_start')\
+            \ %} {% if start not in ['unknown', '', 'unavailable'] %}\n  {{ (now().timestamp()\
+            \ - as_timestamp(start)) / 60 }}\n{% else %}\n  0\n{% endif %}\n"
+          is_short_run: '{{ run_duration|float < states(''input_number.patio_ac_min_meaningful_run_minutes'')|float
+            }}'
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.patio_ac_daily_runtime
+        data:
+          value: '{{ (states(''input_number.patio_ac_daily_runtime'')|float + run_duration|float)|round(1)
+            }}'
+      - if:
+        - condition: template
+          value_template: '{{ states(''input_select.patio_ac_reason'') in [''humidity_day'',''humidity_night'']
+            }}'
+        then:
+        - service: input_number.set_value
+          target:
+            entity_id: input_number.patio_ac_humidity_runtime
+          data:
+            value: '{{ (states(''input_number.patio_ac_humidity_runtime'')|float +
+              run_duration|float)|round(1) }}'
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.patio_ac_expected_signature
+        data:
+          value: off|none
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: '{% set settle = states(''input_number.patio_ac_poll_settle_seconds'')
+            | int(0) %} {{ now().timestamp() + settle + 10 }}
+
+            '
+      - service: climate.set_hvac_mode
+        target:
+          entity_id: climate.150633095083490_climate
+        data:
+          hvac_mode: 'off'
+      - wait_template: '{{ is_state(''climate.150633095083490_climate'', ''off'')
+          }}'
+        timeout: '{{ states(''input_number.patio_ac_poll_settle_seconds'')|int }}'
+      - delay: 00:00:03
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_expecting_change_until
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.patio_ac_reason
+        data:
+          option: idle
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_off
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - if:
+        - condition: template
+          value_template: '{% set cooldown = states(''input_number.patio_ac_compressor_cooldown_minutes'')
+            | int(0) %} {{ (not is_short_run or reason == ''safety_lock'') and cooldown
+            > 0 }}
+
+            '
+        then:
+        - service: timer.start
+          target:
+            entity_id: timer.patio_ac_compressor_protection
+          data:
+            duration: '{{ ''00:%02d:00''|format(states(''input_number.patio_ac_compressor_cooldown_minutes'')|int(0))
+              }}'
+        - service: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.patio_ac_compressor_protection_until
+          data:
+            timestamp: '{{ now().timestamp() + (states(''input_number.patio_ac_compressor_cooldown_minutes'')|int(0)
+              * 60) }}'
+        else:
+        - service: timer.cancel
+          target:
+            entity_id: timer.patio_ac_compressor_protection
+        - service: input_datetime.set_datetime
+          target:
+            entity_id: input_datetime.patio_ac_compressor_protection_until
+          data:
+            timestamp: '{{ now().timestamp() }}'
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_last_command
+        data:
+          timestamp: '{{ now().timestamp() }}'
+      - service: timer.start
+        target:
+          entity_id: timer.patio_ac_command_throttle
+      - service: input_datetime.set_datetime
+        target:
+          entity_id: input_datetime.patio_ac_command_throttle_until
+        data:
+          timestamp: '{{ now().timestamp() + 30 }}'
+ev9_start_climate_with_timer:
+  alias: 'EV9: Start Climate with Timer'
+  description: Start climate control and set auto-stop timer
+  icon: mdi:air-conditioner
+  mode: single
+  sequence:
+  - variables:
+      target_temp: '{{ states(''input_number.ev9_target_temperature'') | int(72) }}'
+      duration_min: '{{ states(''input_number.ev9_climate_duration'') | int(15) }}'
+  - service: kia_uvo.start_climate
+    data:
+      device_id: '{{ states(''input_text.ev9_device_id'') }}'
+      climate: true
+      temperature: '{{ target_temp }}'
+  - service: timer.start
+    data:
+      duration: '{{ duration_min * 60 }}'
+    target:
+      entity_id: timer.ev9_climate_timer
+  - service: python_script.shift_event_log
+    data:
+      entity_prefix: input_text.ev9_event
+      max_events: 10
+      new_event: '{{ now().strftime(''%H:%M'') }} - CLIMATE_START: Manual start, {{
+        target_temp }}°F, timer {{ duration_min }}min'
+  - service: notify.mobile_app_andre_iphone
+    data:
+      title: EV9 Climate Started
+      message: 'Target: {{ target_temp }}°F, Timer: {{ duration_min }} min'
+ev9_stop_climate_cancel_timer:
+  alias: 'EV9: Stop Climate and Cancel Timer'
+  description: Stop climate control and cancel any running timer
+  icon: mdi:fan-off
+  mode: single
+  sequence:
+  - choose:
+      - conditions:
+          - condition: state
+            entity_id: binary_sensor.ev9_air_conditioner
+            state: 'on'
+        sequence:
+          - service: kia_uvo.stop_climate
+            data:
+              device_id: '{{ states(''input_text.ev9_device_id'') }}'
+          - service: python_script.shift_event_log
+            data:
+              entity_prefix: input_text.ev9_event
+              max_events: 10
+              new_event: '{{ now().strftime(''%H:%M'') }} - CLIMATE_MANUAL_STOP: User stopped climate'
+    default:
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: input_text.ev9_event
+          max_events: 10
+          new_event: '{{ now().strftime(''%H:%M'') }} - CLIMATE_ALREADY_OFF: Climate was not running'
+  - service: timer.cancel
+    target:
+      entity_id: timer.ev9_climate_timer
+ev9_clear_event_log:
+  alias: 'EV9: Clear Event Log'
+  description: Clear all event log entries
+  icon: mdi:delete
+  mode: single
+  sequence:
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_1
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_2
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_3
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_4
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_5
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_6
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_7
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_8
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_9
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_event_10
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_walkaway_result
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_timeout_lock_result
+    data:
+      value: ''
+  - service: input_text.set_value
+    target:
+      entity_id: input_text.ev9_last_precondition_result
+    data:
+      value: ''
+
+# ============================================================
+# EV9 CHARGING CONTROL WRAPPERS (v2.5)
+# Dashboard buttons cannot use templates, so these scripts
+# provide indirection via the ev9_device_id helper.
+# ============================================================
+
+ev9_start_charge:
+  alias: "EV9: Start Charging"
+  description: "Start EV charging using centralized device_id"
+  icon: mdi:ev-station
+  mode: single
+  sequence:
+    - service: kia_uvo.start_charge
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - CHARGE_START: Manual start"
+
+ev9_stop_charge:
+  alias: "EV9: Stop Charging"
+  description: "Stop EV charging using centralized device_id"
+  icon: mdi:ev-station
+  mode: single
+  sequence:
+    - service: kia_uvo.stop_charge
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - CHARGE_STOP: Manual stop"
+
+ev9_force_update:
+  alias: "EV9: Force Data Refresh"
+  description: "Force vehicle data update using centralized device_id"
+  icon: mdi:refresh
+  mode: single
+  sequence:
+    - service: kia_uvo.force_update
+      data:
+        device_id: "{{ states('input_text.ev9_device_id') }}"
+    - service: python_script.shift_event_log
+      data:
+        entity_prefix: input_text.ev9_event
+        max_events: 10
+        new_event: "{{ now().strftime('%H:%M') }} - DATA_REFRESH: Manual refresh"

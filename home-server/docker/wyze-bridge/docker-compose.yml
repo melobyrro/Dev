@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  wyze-bridge:
+    image: mrlt8/wyze-bridge:latest
+    container_name: wyze-bridge
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      - TZ=America/New_York
+      - WB_IP=192.168.1.11
+    network_mode: host
+    volumes:
+      - ./tokens:/tokens
+      - ./mediamtx.yml:/app/mediamtx.yml

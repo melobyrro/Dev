@@ -1,0 +1,117 @@
+services:
+  dawarich-redis:
+    container_name: dawarich-redis
+    image: redis:7.4.7-alpine
+    command: redis-server
+    volumes:
+      - dawarich-shared:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  dawarich-db:
+    container_name: dawarich-db
+    image: postgis/postgis:17-3.5
+    shm_size: 1gb
+    volumes:
+      - dawarich-db-data:/var/lib/postgresql/data
+    environment:
+      POSTGRES_USER: ${DATABASE_USERNAME}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+      POSTGRES_DB: ${DATABASE_NAME}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME} -d ${DATABASE_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - byrro-net
+
+  dawarich-app:
+    container_name: dawarich-app
+    image: freikin/dawarich:latest
+    depends_on:
+      dawarich-db:
+        condition: service_healthy
+      dawarich-redis:
+        condition: service_healthy
+    volumes:
+      - dawarich-public:/var/app/public
+      - dawarich-watched:/var/app/tmp/imports/watched
+      - dawarich-storage:/var/app/storage
+      - /home/byrro/docker/dawarich/overrides/routes.rb:/var/app/config/routes.rb:ro
+      - /home/byrro/docker/dawarich/overrides/api_v1_trips_controller.rb:/var/app/app/controllers/api/v1/trips_controller.rb:ro
+    stdin_open: true
+    tty: true
+    entrypoint: web-entrypoint.sh
+    command: ["bin/rails", "server", "-p", "3000", "-b", "0.0.0.0"]
+    ports:
+      - "3001:3000"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO - http://127.0.0.1:3000/api/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+    networks:
+      - byrro-net
+
+  dawarich-sidekiq:
+    container_name: dawarich-sidekiq
+    image: freikin/dawarich:latest
+    depends_on:
+      dawarich-db:
+        condition: service_healthy
+      dawarich-redis:
+        condition: service_healthy
+      dawarich-app:
+        condition: service_healthy
+    volumes:
+      - dawarich-public:/var/app/public
+      - dawarich-watched:/var/app/tmp/imports/watched
+      - dawarich-storage:/var/app/storage
+    stdin_open: true
+    tty: true
+    entrypoint: sidekiq-entrypoint.sh
+    command: ["bundle", "exec", "sidekiq"]
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -f sidekiq || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+    networks:
+      - byrro-net
+
+volumes:
+  dawarich-db-data:
+  dawarich-shared:
+  dawarich-public:
+  dawarich-watched:
+  dawarich-storage:
+
+networks:
+  byrro-net:
+    external: true

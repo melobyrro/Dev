@@ -1,0 +1,5 @@
+services:
+  immich-server:
+    volumes:
+      - /mnt/ByrroServer/ByrroMedia/Photos:/external/Photos
+      - ./overrides/server/dist/utils/media.js:/usr/src/app/server/dist/utils/media.js:ro

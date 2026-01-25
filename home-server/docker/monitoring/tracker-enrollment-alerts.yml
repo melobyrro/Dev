@@ -1,0 +1,72 @@
+# Tracker Enrollment Monitor Alert Rules
+# These rules generate alerts for enrollment detections and service health issues
+
+groups:
+  - name: tracker_enrollment_alerts
+    interval: 30s
+    rules:
+      # Alert when a tracker enrollment is detected (status = 1)
+      - alert: TrackerEnrollmentDetected
+        expr: tracker_enrollment_status == 1
+        for: 0m
+        labels:
+          severity: critical
+          category: tracker-enrollment
+        annotations:
+          summary: "Tracker enrollment detected: {{ $labels.tracker }}"
+          description: "The tracker {{ $labels.tracker }} has an open enrollment opportunity detected. Check immediately!"
+          
+      # Alert when tracker status changes to open
+      - alert: TrackerStatusChanged
+        expr: changes(tracker_enrollment_status[5m]) > 0
+        for: 0m
+        labels:
+          severity: warning
+          category: tracker-status
+        annotations:
+          summary: "Tracker status changed: {{ $labels.tracker }}"
+          description: "The status of {{ $labels.tracker }} has changed in the last 5 minutes. Current value: {{ $value }}"
+          
+      # Alert when check errors accumulate
+      - alert: TrackerCheckErrorsHigh
+        expr: rate(tracker_check_errors_total[1h]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          category: tracker-health
+        annotations:
+          summary: "High error rate for tracker: {{ $labels.tracker }}"
+          description: "Tracker {{ $labels.tracker }} is experiencing errors. Error rate: {{ $value | humanize }} errors/sec"
+          
+      # Alert when tracker monitor service is down
+      - alert: TrackerMonitorServiceDown
+        expr: up{job="tracker-monitor"} == 0
+        for: 5m
+        labels:
+          severity: critical
+          category: service-health
+        annotations:
+          summary: "Tracker Monitor service is down"
+          description: "The tracker-monitor service has been down for more than 5 minutes. No enrollment checks are being performed!"
+          
+      # Alert when no checks have been performed recently
+      - alert: TrackerMonitorStale
+        expr: (time() - tracker_last_check_timestamp) > 3600
+        for: 5m
+        labels:
+          severity: warning
+          category: service-health
+        annotations:
+          summary: "Tracker monitor hasn't checked {{ $labels.tracker }} recently"
+          description: "No successful checks for {{ $labels.tracker }} in the last hour. Last check: {{ $value | humanizeDuration }} ago"
+          
+      # Alert when too many total errors across all trackers
+      - alert: TrackerMonitorGlobalErrors
+        expr: sum(tracker_check_errors_total) > 50
+        for: 10m
+        labels:
+          severity: warning
+          category: service-health
+        annotations:
+          summary: "Tracker Monitor has accumulated many errors"
+          description: "Total error count across all trackers: {{ $value }}. Review logs for issues."

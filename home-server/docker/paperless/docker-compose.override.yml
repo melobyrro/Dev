@@ -1,0 +1,20 @@
+services:
+  paperless:
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
+    volumes:
+      - /home/byrro/docker/paperless/document_classification_policy.json:/usr/src/paperless/document_classification_policy.json:ro
+      - /home/byrro/docker/paperless/classify_document.py:/usr/src/paperless/src/classify_document.py:ro
+      - /home/byrro/docker/paperless/reprocess_policy_code.py:/usr/src/paperless/reprocess_policy_code.py:ro
+
+  tika:
+    deploy:
+      resources:
+        limits:
+          memory: 768M
+        reservations:
+          memory: 256M

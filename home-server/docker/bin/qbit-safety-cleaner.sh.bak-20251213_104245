@@ -1,0 +1,120 @@
+#!/bin/sh
+set -eu
+
+QBIT_HOST="${QBIT_HOST:-http://127.0.0.1:8181}"
+QBIT_USER="${QBIT_USER:-}"
+QBIT_PASS="${QBIT_PASS:-}"
+INTERVAL="${INTERVAL:-300}"
+CATEGORIES="${CATEGORIES:-tv movies}"
+
+if [ -z "$QBIT_USER" ] || [ -z "$QBIT_PASS" ]; then
+  echo "qbit-safety-cleaner: QBIT_USER/QBIT_PASS not set" >&2
+  exit 1
+fi
+
+# qBittorrent only reports files that are part of the torrent.
+# If unpackerr extracts an archive, the extracted files will *not* show up in the torrent file list.
+# So we also scan the download folder on disk (requires /downloads to be mounted).
+
+login() {
+  cookie_file="$1"
+  curl -fsS -c "$cookie_file" \
+    -d "username=$QBIT_USER&password=$QBIT_PASS" \
+    "$QBIT_HOST/api/v2/auth/login" >/dev/null
+}
+
+has_video_on_disk() {
+  base_dir="$1"
+  find "$base_dir" -type f \( \
+    -iname '*.mkv' -o -iname '*.mp4' -o -iname '*.avi' -o -iname '*.mov' -o -iname '*.m4v' -o -iname '*.ts' -o -iname '*.webm' \
+  \) -print -quit | grep -q .
+}
+
+has_danger_on_disk() {
+  base_dir="$1"
+  find "$base_dir" -type f \( \
+    -iname '*.exe' -o -iname '*.scr' -o -iname '*.bat' -o -iname '*.cmd' -o -iname '*.com' -o -iname '*.pif' -o -iname '*.msi' -o -iname '*.lnk' -o -iname '*.jar' -o -iname '*.vbs' -o -iname '*.js' -o -iname '*.ps1' \
+  \) -print -quit | grep -q .
+}
+
+safe_rm_rf() {
+  target="$1"
+  case "$target" in
+    /downloads/*/*) rm -rf "$target" ;;
+    *) echo "qbit-safety-cleaner: refusing to delete unsafe path: $target" >&2 ;;
+  esac
+}
+
+while true; do
+  cookie_file="$(mktemp)"
+
+  if ! login "$cookie_file"; then
+    echo "qbit-safety-cleaner: login failed; retrying in ${INTERVAL}s" >&2
+    rm -f "$cookie_file"
+    sleep "$INTERVAL"
+    continue
+  fi
+
+  torrents_json="$(curl -fsS -b "$cookie_file" "$QBIT_HOST/api/v2/torrents/info?filter=all" || echo '[]')"
+
+  for category in $CATEGORIES; do
+    echo "$torrents_json" \
+      | jq -c --arg cat "$category" '.[] | select((.progress // 0) >= 1 and (.category==$cat or ((.save_path // "") | test("/downloads/" + $cat + "(/|$)"))))' \
+      | while read -r tor; do
+          hash="$(echo "$tor" | jq -r '.hash')"
+          name="$(echo "$tor" | jq -r '(.name // .hash)')"
+          content_path="$(echo "$tor" | jq -r '(.content_path // "")')"
+
+          [ -n "$hash" ] || continue
+
+          # Prefer content_path (most accurate). Fall back to /downloads/<category>/<name>.
+          if [ -n "$content_path" ] && [ "$content_path" != "null" ]; then
+            if [ -d "$content_path" ]; then
+              base_dir="$content_path"
+            else
+              base_dir="$(dirname "$content_path")"
+            fi
+          else
+            base_dir="/downloads/$category/$name"
+          fi
+
+          # If we can't see the files on disk, fall back to torrent file list checks.
+          disk_visible=false
+          if [ -d "$base_dir" ]; then
+            disk_visible=true
+          fi
+
+          has_danger=false
+          has_video=false
+
+          if [ "$disk_visible" = true ]; then
+            if has_danger_on_disk "$base_dir"; then has_danger=true; fi
+            if has_video_on_disk "$base_dir"; then has_video=true; fi
+          else
+            files_json="$(curl -fsS -b "$cookie_file" "$QBIT_HOST/api/v2/torrents/files?hash=$hash" || echo '[]')"
+            if echo "$files_json" | jq -e 'any(.[]; (.name // "") | test("\\.(exe|scr|bat|cmd|com|pif|msi|lnk|jar|vbs|js|ps1)$"; "i"))' >/dev/null 2>&1; then
+              has_danger=true
+            fi
+            if echo "$files_json" | jq -e 'any(.[]; (.name // "") | test("\\.(mkv|mp4|avi|mov|m4v|ts|webm)$"; "i"))' >/dev/null 2>&1; then
+              has_video=true
+            fi
+          fi
+
+          if [ "$has_danger" = true ]; then
+            echo "qbit-safety-cleaner: deleting suspicious torrent (dangerous file detected): $name"
+
+            curl -fsS -b "$cookie_file" \
+              --data-urlencode "hashes=$hash" \
+              --data "deleteFiles=true" \
+              "$QBIT_HOST/api/v2/torrents/delete" >/dev/null || true
+
+            if [ "$disk_visible" = true ]; then
+              safe_rm_rf "$base_dir"
+            fi
+          fi
+        done
+  done
+
+  rm -f "$cookie_file"
+  sleep "$INTERVAL"
+done

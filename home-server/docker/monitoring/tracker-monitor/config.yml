@@ -1,0 +1,127 @@
+# Tracker Open Signup Monitor - v2
+# Detects ANY torrent tracker open signups (English + Portuguese)
+
+# Reddit Configuration
+reddit:
+  subreddits:
+    - "trackers"
+    - "OpenSignups"
+    - "OpenInvites"
+  check_interval_minutes: 15
+  max_posts_per_check: 50
+
+# Detection Mode: "all" = any tracker, "specific" = only listed trackers
+detection_mode: "all"
+
+# Signup Keywords - patterns that indicate an open signup
+signup_keywords:
+  - "open signup"
+  - "open signups"
+  - "open registration"
+  - "open for signup"
+  - "open for signups"
+  - "open for registration"
+  - "applications open"
+  - "signups open"
+  - "registration open"
+  - "accepting applications"
+  - "accepting signups"
+  - "now open"
+  - "is open"
+  - "are open"
+  - "signup thread"
+  - "freeleech signup"
+  - "limited signups"
+  - "interview open"
+  - "interviews open"
+  # Portuguese
+  - "cadastro aberto"
+  - "registro aberto"
+  - "inscrições abertas"
+  - "convites abertos"
+
+# Close Keywords - patterns that indicate a signup has closed
+close_keywords:
+  - "closed"
+  - "signups closed"
+  - "signup closed"
+  - "applications closed"
+  - "registrations closed"
+  - "no longer accepting"
+  - "has closed"
+  - "are closed"
+  - "is closed"
+
+# Close Flairs - subreddit flair values indicating closed signups
+close_flairs:
+  - "Closed"
+
+# Language Filter
+language:
+  enabled: false
+  # Only notify for these languages
+  allowed:
+    - "english"
+    - "portuguese"
+  # Known Portuguese trackers (always notify)
+  portuguese_trackers:
+    - "BrasilTracker"
+    - "Brasil Tracker"
+    - "BRT"
+    - "Cinematik"
+    - "PTFiles"
+    - "ShareClub"
+    - "Amigos"
+    - "AnimeSuki"  # Has PT content
+
+
+# Trackers to ALWAYS ignore (not interested)
+ignored_trackers:
+  - "IPTorrents"
+  - "TorrentLeech"
+  # Add any trackers you don't want notifications for
+
+# Notification Configuration
+notification:
+  # Home Assistant REST API
+  homeassistant:
+    enabled: true
+    url: "http://192.168.1.11:8123"
+    # Long-lived access token (set via HA_TOKEN env var for security)
+    token: "${HA_TOKEN}"
+    # Notification service to use
+    service: "notify.mobile_app_andre_iphone"
+    # Also create persistent notification in HA
+    persistent_notification: true
+
+  # ntfy (keep as backup)
+  ntfy:
+    # Disabled - migrated to HA
+    enabled: false
+    server: "https://ntfy.sh"
+    topic: "tracker-enrollments"
+    priority: "high"
+
+# Filtering Configuration
+filters:
+  # Ignore posts containing these (case-insensitive)
+  ignore_words:
+    - "closed"
+    - "ending"
+    - "ended"
+    - "deadline passed"
+    - "applications closed"
+    - "signup closed"
+    - "no longer accepting"
+    - "has closed"
+    - "are closed"
+    - "is closed"
+    - "will close"
+    - "closing soon"
+
+  # Minimum post score
+  minimum_post_score: 0
+
+# Disable Prometheus/Grafana metrics
+metrics:
+  pushgateway_enabled: false

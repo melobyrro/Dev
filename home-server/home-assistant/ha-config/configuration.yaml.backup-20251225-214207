@@ -1,0 +1,213 @@
+  # Loads default set of integrations. Do not remove.
+  default_config:
+
+  # HTTP settings for reverse proxy
+  http:
+    use_x_forwarded_for: true
+    trusted_proxies:
+      - 127.0.0.1
+      - 192.168.1.0/24
+      - 172.16.0.0/12
+      - 10.0.0.0/8
+
+  # Google Assistant Integration
+  google_assistant:
+    project_id: ha-byrro
+    service_account: !include SERVICE_ACCOUNT.json
+    report_state: true
+    expose_by_default: false
+    exposed_domains:
+      - light
+      - switch
+      - fan
+      - climate
+      - lock
+      - script
+      - scene
+    entity_config:
+      light.living_room_light_2:
+        name: "Living Room Light"
+        expose: true
+      light.master_light:
+        name: "Master Light"
+        expose: true
+      light.master_fan:
+        name: "Master Fan"
+        expose: true
+      light.office_light:
+        name: "Office Light"
+        expose: true
+      switch.cinema_light:
+        name: "Cinema Light"
+        expose: true
+      fan.living_room_light:
+        name: "Living Room Fan"
+        expose: true
+      lock.front_door:
+        name: "Front Door"
+        expose: true
+      climate.150633095083490_climate:
+        name: "Patio AC (Real)"
+        expose: false
+      climate.patio_ac:
+        name: "Patio AC"
+        expose: true
+      vacuum.jose:
+        name: "Jose"
+        expose: true
+
+  # Load frontend themes from the themes folder
+  frontend:
+    themes: !include_dir_merge_named themes
+
+  automation: !include automations.yaml
+  script: !include scripts.yaml
+  scene: !include scenes.yaml
+  # ===========================================================================
+  # Patio AC Automation Helpers
+  # Added: 2025-12-24 for energy-efficient AC automation
+  # ===========================================================================
+
+  # Boolean Helpers
+  input_boolean:
+    patio_ac_manual_override:
+      name: "Patio AC Manual Override"
+      icon: mdi:hand-back-right
+      initial: off
+    
+    patio_ac_automation_active:
+      name: "Patio AC Automation Active"
+      icon: mdi:robot
+      initial: off
+
+  # Timer Helpers
+  timer:
+    patio_ac_holdoff:
+      name: "Patio AC Manual Override Holdoff"
+      duration: "02:00:00"
+      icon: mdi:timer-off
+    
+    patio_ac_humidity_guard:
+      name: "Patio AC Humidity Guard Timer"
+      duration: "00:45:00"
+      icon: mdi:timer
+    
+    patio_ac_heat_spike:
+      name: "Patio AC Heat Spike Timer"
+      duration: "01:00:00"
+      icon: mdi:timer
+    
+    patio_ac_quiet_hours:
+      name: "Patio AC Quiet Hours Timer"
+      duration: "00:30:00"
+      icon: mdi:timer
+
+  # Number Helpers (Optional - for tuning thresholds)
+  input_number:
+    patio_rh_on:
+      name: "Patio Humidity ON Threshold"
+      min: 50
+      max: 85
+      step: 1
+      initial: 65
+      unit_of_measurement: "%"
+      icon: mdi:water-percent
+    
+    patio_rh_off:
+      name: "Patio Humidity OFF Threshold"
+      min: 45
+      max: 80
+      step: 1
+      initial: 60
+      unit_of_measurement: "%"
+      icon: mdi:water-percent
+    
+    patio_temp_hot_on:
+      name: "Patio Temperature ON Threshold"
+      min: 80
+      max: 100
+      step: 1
+      initial: 90
+      unit_of_measurement: "°F"
+      icon: mdi:thermometer-high
+    
+    patio_temp_hot_off:
+      name: "Patio Temperature OFF Threshold"
+      min: 75
+      max: 95
+      step: 1
+      initial: 85
+      unit_of_measurement: "°F"
+      icon: mdi:thermometer
+    
+    patio_quiet_rh_on:
+      name: "Patio Quiet Hours Humidity ON"
+      min: 60
+      max: 90
+      step: 1
+      initial: 70
+      unit_of_measurement: "%"
+      icon: mdi:water-percent
+    
+    patio_quiet_rh_off:
+      name: "Patio Quiet Hours Humidity OFF"
+      min: 55
+      max: 85
+      step: 1
+      initial: 65
+      unit_of_measurement: "%"
+      icon: mdi:water-percent
+
+
+
+
+
+  # Template climate entity for Google Assistant compatibility
+  climate:
+    - platform: climate_template
+      name: "Patio AC"
+      unique_id: patio_ac_simple_google
+      
+      modes:
+        - "off"
+        - "cool"
+      
+      min_temp: 61
+      max_temp: 86
+      temp_step: 1
+      
+      # Read current temperature from real AC
+      current_temperature_template: >-
+        {{ state_attr('climate.150633095083490_climate', 'current_temperature') }}
+      
+      # Read target temperature from real AC
+      target_temperature_template: >-
+        {{ state_attr('climate.150633095083490_climate', 'temperature') }}
+      
+      # Read current mode from real AC and simplify it
+      hvac_mode_template: >-
+        {% set mode = states('climate.150633095083490_climate') %}
+        {% if mode in ['cool', 'dry', 'auto'] %}cool
+        {% else %}off
+        {% endif %}
+      
+      # When Google sets temperature
+      set_temperature:
+        - service: climate.set_hvac_mode
+          data:
+            entity_id: climate.150633095083490_climate
+            hvac_mode: cool
+        - service: climate.set_temperature
+          data:
+            entity_id: climate.150633095083490_climate
+            temperature: "{{ temperature }}"
+      
+      # When Google changes mode
+      set_hvac_mode:
+        - service: climate.set_hvac_mode
+          data:
+            entity_id: climate.150633095083490_climate
+            hvac_mode: >-
+              {% if hvac_mode == 'cool' %}cool
+              {% else %}off
+              {% endif %}

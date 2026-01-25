@@ -1,0 +1,25 @@
+services:
+  plex:
+    build: .
+    image: byrro/plex:1.42.1.10060-4e8b05daf-ls279-vaapi
+    container_name: plex
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PLEX_MEDIA_SERVER_TMPDIR=/transcode
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM_TOKEN}
+      - ADVERTISE_IP=https://plex.byrroserver.com:443
+      - LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri
+      - LIBVA_DRIVER_NAME=iHD
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /srv/docker-data/plex:/config
+      - /mnt/ByrroServer/ByrroMedia/TV_Shows:/tv
+      - /mnt/ByrroServer/ByrroMedia/Movies:/movies
+    tmpfs:
+      - /transcode:size=10g

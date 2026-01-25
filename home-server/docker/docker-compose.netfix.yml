@@ -1,0 +1,7 @@
+services:
+  qbittorrent:
+    network_mode: "container:gluetun"
+  qb-port-sync:
+    network_mode: "container:gluetun"
+  flaresolverr:
+    network_mode: "container:gluetun"

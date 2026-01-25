@@ -1,0 +1,8 @@
+services:
+  immich-server:
+    volumes:
+      - /mnt/ByrroServer/ByrroMedia/ImmichLibrary:/data
+      - /mnt/ByrroServer/ByrroMedia/Photos:/external/Photos:rw
+      - /mnt/ByrroServer/ByrroMedia/ImmichCache/thumbs:/data/thumbs
+      - /mnt/ByrroServer/ByrroMedia/ImmichCache/encoded-video:/data/encoded-video
+      - /mnt/ByrroServer/ByrroMedia/ImmichCache/encoded-video:/external/Photos/encoded-video

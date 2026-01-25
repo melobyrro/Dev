@@ -1,0 +1,23 @@
+services:
+  immich-server:
+    volumes:
+      - type: bind
+        source: /mnt/ByrroServer/ByrroMedia/ImmichLibrary
+        target: /data
+      - type: bind
+        source: /mnt/ByrroServer/ByrroMedia/Photos/ImmichUploads
+        target: /data/upload
+      - type: bind
+        source: /mnt/ByrroServer/ByrroMedia/Photos
+        target: /external/Photos
+        read_only: true
+      - type: bind
+        source: /mnt/ByrroServer/ByrroMedia/ImmichCache/thumbs
+        target: /data/thumbs
+      - type: bind
+        source: /mnt/ByrroServer/ByrroMedia/ImmichCache/encoded-video
+        target: /data/encoded-video
+      - type: bind
+        source: /mnt/ByrroServer/ByrroMedia/ImmichCache/encoded-video
+        target: /external/Photos/encoded-video
+        read_only: false

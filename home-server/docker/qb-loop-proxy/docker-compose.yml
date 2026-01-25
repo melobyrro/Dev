@@ -1,0 +1,10 @@
+services:
+  qb-loop-proxy:
+    image: alpine/socat
+    container_name: qb-loop-proxy
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    command:
+      - -d -d
+      - TCP-LISTEN:98181,bind=127.0.0.1,reuseaddr,fork
+      - TCP6:[::1]:8181

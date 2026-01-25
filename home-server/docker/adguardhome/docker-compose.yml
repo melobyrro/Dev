@@ -1,0 +1,18 @@
+services:
+  adguardhome:
+    image: adguard/adguardhome:latest
+    container_name: adguardhome
+    restart: unless-stopped
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "8080:80/tcp"
+    volumes:
+      - /mnt/ByrroServer/docker-data/adguardhome/work:/opt/adguardhome/work
+      - /mnt/ByrroServer/docker-data/adguardhome/conf:/opt/adguardhome/conf
+    networks:
+      - byrro-net
+
+networks:
+  byrro-net:
+    external: true

@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  homeassistant:
+    container_name: homeassistant
+    image: ghcr.io/home-assistant/home-assistant:stable
+    restart: unless-stopped
+    privileged: true
+    network_mode: host
+    environment:
+      - TZ=America/New_York
+    devices:
+      - /dev/serial/by-id/usb-ITead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_44f5e5ebc79aef1185eab59061ce3355-if00-port0:/dev/serial/by-id/usb-ITead_Sonoff_Zigbee_3.0_USB_Dongle_Plus_44f5e5ebc79aef1185eab59061ce3355-if00-port0
+    volumes:
+      - /mnt/ByrroServer/docker-data/homeassistant/config:/config
+      - /etc/localtime:/etc/localtime:ro
+      - /run/dbus:/run/dbus:ro
+      - /home/byrro/automation/dawarich-trips:/dawarich-trips:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://127.0.0.1:8123/ || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    # Home Assistant runs on port 8123 by default
+    # Using network_mode: host for better device discovery (Kasa, etc.)

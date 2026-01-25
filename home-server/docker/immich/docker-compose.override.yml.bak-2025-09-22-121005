@@ -1,0 +1,12 @@
+services:
+  immich-redis:
+    command: ["--aclfile","/data/users.acl"]
+
+  # Add a real healthcheck that doesn't depend on curl/wget (uses Python)
+  immich-machine-learning:
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3003/openapi.json',timeout=3)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s

@@ -2,6 +2,6 @@
   "worker": "Tests",
   "terminal": "tests-terminal",
   "workdir": ".orchestrator/tests",
-  "allowed_tools": ["playwright", "browser-use"],
+  "allowed_tools": ["browser-use"],
   "responsibilities": ["Test execution", "E2E testing", "Test reporting"]
 }

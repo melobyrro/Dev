@@ -1,0 +1,33 @@
+services:
+  ntfy:
+    image: binwiederhier/ntfy:latest
+    container_name: ntfy
+    restart: unless-stopped
+    command: serve
+    environment:
+      - TZ=America/New_York
+      - NTFY_BASE_URL=https://ntfy.byrroserver.com
+      - NTFY_CACHE_FILE=/var/cache/ntfy/cache.db
+      - NTFY_ATTACHMENT_CACHE_DIR=/var/cache/ntfy/attachments
+      - NTFY_BEHIND_PROXY=true
+      - NTFY_AUTH_FILE=/var/lib/ntfy/auth.db
+      - NTFY_ENABLE_LOGIN=true
+      - NTFY_ENABLE_SIGNUP=false
+      - NTFY_AUTH_DEFAULT_ACCESS=read-only
+      - NTFY_UPSTREAM_BASE_URL=https://ntfy.sh
+    volumes:
+      - /mnt/ByrroServer/docker-data/ntfy/cache:/var/cache/ntfy
+      - /mnt/ByrroServer/docker-data/ntfy/auth:/var/lib/ntfy
+    ports:
+      - "2586:80"
+    networks:
+      - byrro-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/v1/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+networks:
+  byrro-net:
+    external: true

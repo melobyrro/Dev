@@ -1,0 +1,89 @@
+
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    restart: unless-stopped
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    ports:
+      - "1080:1080/tcp"   # SOCKS5 proxy
+      - "8181:8181/tcp"   # qBittorrent Web UI through VPN
+      - "8191:8191/tcp"   # FlareSolverr through VPN
+    environment:
+      - VPN_SERVICE_PROVIDER=private internet access
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=${PIA_USER}
+      - OPENVPN_PASSWORD=${PIA_PASS}
+      # - SERVER_REGIONS=US East
+      - VPN_PORT_FORWARDING=on
+      - TZ=America/New_York
+      - SOCKS5_LOGGING=on
+    volumes:
+      - ./gluetun:/gluetun
+      - /mnt/ByrroServer/docker-data/gluetun-tmp:/tmp/gluetun
+    networks:
+      - byrro-net
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9999 >/dev/null && [ -s /tmp/gluetun/forwarded_port ]"]
+      interval: 15s
+      timeout: 3s
+      retries: 20
+      start_period: 60s
+
+  qbittorrent:
+    image: lscr.io/linuxserver/qbittorrent:latest
+    container_name: qbittorrent
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - WEBUI_PORT=8181
+      - UMASK=002
+    volumes:
+      - /mnt/ByrroServer/docker-data/gluetun-tmp:/gluetun
+      - /mnt/ByrroServer/docker-data/qbittorrent:/config
+      - /mnt/ByrroServer/ByrroMedia/downloads:/downloads
+    depends_on:
+      gluetun:
+        condition: service_healthy
+
+  qb-port-sync:
+    image: alpine:3.20
+    container_name: qb-port-sync
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    environment:
+      QBIT_HOST: "http://127.0.0.1:8181"
+      QBIT_USER: "${QBIT_USER}"
+      QBIT_PASS: "${QBIT_PASS}"
+      CHECK_INTERVAL: "60"
+    volumes:
+      - /mnt/ByrroServer/docker-data/gluetun-tmp:/gluetun:ro
+      - /mnt/ByrroServer/docker-data/qb-port-sync:/app
+    entrypoint: ["/bin/sh","-c","until [ -s /gluetun/forwarded_port ]; do echo 'waiting for forwarded_port'; sleep 5; done; apk add --no-cache curl >/dev/null && /app/update_port.sh"]
+    depends_on:
+      gluetun:
+        condition: service_healthy
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    restart: unless-stopped
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - LOG_LEVEL=info
+    depends_on:
+      gluetun:
+        condition: service_healthy
+
+networks:
+  byrro-net:
+    external: true

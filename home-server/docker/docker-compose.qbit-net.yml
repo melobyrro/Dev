@@ -1,0 +1,5 @@
+services:
+  qbittorrent:
+    network_mode: null
+    networks:
+      - byrro-net

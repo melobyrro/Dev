@@ -1,0 +1,4 @@
+services:
+  gluetun:
+    environment:
+      FIREWALL_INPUT_PORTS: "9090,8181,8191,1080"

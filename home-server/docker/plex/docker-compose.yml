@@ -1,0 +1,27 @@
+services:
+  plex:
+    build: .
+    image: byrro/plex:latest-vaapi
+    container_name: plex
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PLEX_MEDIA_SERVER_TMPDIR=/transcode
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - VERSION=docker
+      - PLEX_CLAIM=
+      - ADVERTISE_IP=https://plex.byrroserver.com:443
+      # VAAPI for Intel hardware acceleration
+      - LIBVA_DRIVERS_PATH=/usr/lib/x86_64-linux-gnu/dri
+      - LIBVA_DRIVER_NAME=iHD
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /srv/docker-data/plex:/config
+      - /mnt/ByrroServer/ByrroMedia/TV_Shows:/tv
+      - /mnt/ByrroServer/ByrroMedia/Movies:/movies
+      - /mnt/ByrroServer/ByrroMedia/Other:/other
+    tmpfs:
+      - /transcode:size=10g

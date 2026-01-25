@@ -1,0 +1,58 @@
+apiVersion: 1
+
+groups:
+  - orgId: 1
+    name: daily_security_digest
+    folder: Security
+    interval: 24h
+    rules:
+      - uid: daily_security_summary
+        title: Daily Security Digest
+        condition: C
+        data:
+          - refId: A
+            relativeTimeRange:
+              from: 86400
+              to: 0
+            datasourceUid: bews1glbreyj9cc
+            model:
+              expr: trivy_critical_vulnerabilities
+              intervalMs: 1000
+              maxDataPoints: 43200
+              refId: A
+          - refId: B
+            datasourceUid: __expr__
+            model:
+              type: reduce
+              expression: A
+              reducer: last
+              refId: B
+          - refId: C
+            datasourceUid: __expr__
+            model:
+              type: threshold
+              expression: B
+              conditions:
+                - evaluator:
+                    params: [0]
+                    type: gt
+              refId: C
+        noDataState: OK
+        execErrState: OK
+        for: 0m
+        annotations:
+          summary: "Daily Security Summary"
+          description: |
+            **Trivy Vulnerabilities**: {{ $values.A }} critical CVEs detected
+            
+            **Critical Falco Events**: Check Grafana dashboard
+            
+            **Actions Required**:
+            - Review Trivy Actionable dashboard: https://grafana.byrroserver.com/d/trivy-actionable
+            - Review Falco Actionable dashboard: https://grafana.byrroserver.com/d/falco-actionable
+            
+            This is your daily security digest. Review and address critical issues.
+        labels:
+          severity: info
+          type: daily-digest
+        isPaused: false

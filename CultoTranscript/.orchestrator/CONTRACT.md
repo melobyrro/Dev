@@ -5,7 +5,7 @@
 - **Orchestrator**: Conversational interface, planner, coordinator
 - **UI Worker**: Frontend implementation (Browser MCP only)
 - **Backend Worker**: API/Server implementation (Run + Ref MCP only)
-- **Tests Worker**: Testing implementation (Playwright + Browser MCP only)
+- **Tests Worker**: Testing implementation (Browser MCP only)
 
 ## Rules
 

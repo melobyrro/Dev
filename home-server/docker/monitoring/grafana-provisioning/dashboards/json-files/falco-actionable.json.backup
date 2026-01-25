@@ -1,0 +1,388 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "panels": [
+    {
+      "gridPos": {
+        "h": 3,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 100,
+      "options": {
+        "content": "## Actionable Security Events Dashboard\n\nThis dashboard shows runtime security events from Falco with triage context.\n\n- **Falco monitors system calls in real-time** (24/7)\n- **Green rows** = known benign events (e.g., pg_isready health checks)\n- **Yellow/Red rows** = investigate further\n- **Events older than 48h** are automatically purged from Loki\n- **Detailed response procedures**: See SECURITY_OPS_GUIDE.md",
+        "mode": "markdown"
+      },
+      "pluginVersion": "12.1.1",
+      "title": "Dashboard Notes",
+      "type": "text"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "blue",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 0,
+        "y": 3
+      },
+      "id": 1,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "count_over_time({container_name=\"falco\"} | json [24h])",
+          "refId": "A"
+        }
+      ],
+      "title": "Total Events (24h)",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 6,
+        "y": 3
+      },
+      "id": 2,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "count_over_time({container_name=\"falco\"} | json | priority=\"Critical\" [24h])",
+          "refId": "A"
+        }
+      ],
+      "title": "Critical Events (24h)",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "yellow",
+                "value": 1
+              },
+              {
+                "color": "orange",
+                "value": 10
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 12,
+        "y": 3
+      },
+      "id": 3,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "count_over_time({container_name=\"falco\"} | json | priority=\"Warning\" [24h])",
+          "refId": "A"
+        }
+      ],
+      "title": "Warning Events (24h)",
+      "type": "stat"
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "blue",
+                "value": null
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 6,
+        "x": 18,
+        "y": 3
+      },
+      "id": 4,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "value_and_name"
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "expr": "count_over_time({container_name=\"falco\"} | json | priority=~\"Info|Notice\" [24h])",
+          "refId": "A"
+        }
+      ],
+      "title": "Info Events (24h)",
+      "type": "stat"
+    },
+    {
+      "gridPos": {
+        "h": 12,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "dedupStrategy": "none",
+        "enableLogDetails": true,
+        "prettifyLogMessage": false,
+        "showCommonLabels": false,
+        "showLabels": false,
+        "showTime": true,
+        "sortOrder": "Descending",
+        "wrapLogMessage": true
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "editorMode": "code",
+          "expr": "{container_name=\"falco\"} | json",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Recent Security Events (Last 50)",
+      "type": "logs",
+      "transformations": []
+    },
+    {
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            }
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "id": 6,
+      "options": {
+        "displayLabels": ["name", "percent"],
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "showLegend": true,
+          "values": ["value"]
+        },
+        "pieType": "pie",
+        "reduceOptions": {
+          "calcs": ["sum"],
+          "fields": "",
+          "values": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "12.1.1",
+      "targets": [
+        {
+          "datasource": {
+            "type": "loki",
+            "uid": "${DS_LOKI}"
+          },
+          "editorMode": "code",
+          "expr": "sum by (rule) (count_over_time({container_name=\"falco\"} | json | __error__=\"\" [24h]))",
+          "queryType": "range",
+          "refId": "A"
+        }
+      ],
+      "title": "Event Types Breakdown (Top Rules - 24h)",
+      "type": "piechart"
+    },
+    {
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 28
+      },
+      "id": 7,
+      "options": {
+        "content": "## Known Benign Events\n\n### ✅ PostgreSQL Health Checks\n- **Rule**: \"Read sensitive file untrusted\"\n- **Process**: `pg_isready`\n- **Reason**: Postgres healthcheck reads `/etc/shadow` (normal behavior)\n- **Action**: None required - this is expected\n\n### ✅ Container Startup Events\n- **Rule**: \"Terminal shell in container\"\n- **Reason**: Some containers spawn shells during initialization\n- **Action**: Review logs if persists after startup (>5 minutes)\n\n### ✅ Package Manager Operations\n- **Rule**: \"Write below etc\"\n- **Process**: `apt`, `apk`, `yum`, `dnf`\n- **Reason**: Normal package installation/update operations\n- **Action**: Verify operation was intentional\n\n---\n\n## ⚠️ Investigate These Events\n\n### 🔴 High Priority - Investigate Immediately\n- **Unexpected network connections** to unknown IPs\n- **File modifications** in `/etc`, `/bin`, `/usr/bin`, `/lib`\n- **Privilege escalation** attempts (sudo, su without authorization)\n- **Unknown processes** spawning in containers\n- **Reverse shells** or interactive shells in production containers\n- **Sensitive file reads** by unexpected processes\n\n### 🟡 Medium Priority - Review Within 24h\n- **Write operations** to system directories during non-maintenance windows\n- **New listening ports** opened by containers\n- **Changes to cron jobs** or systemd services\n- **Package installations** outside of planned updates\n\n### 🔵 Low Priority - Review When Convenient\n- **DNS lookups** to unusual domains (check if part of app functionality)\n- **Repeated failed login attempts** (might be normal if from fail2ban testing)\n- **File access** to configuration files (verify if part of normal operation)\n\n---\n\n## Investigation Steps\n\n1. **Check container logs**:\n   ```bash\n   docker logs <container-name> --tail 100\n   ```\n\n2. **Check process list**:\n   ```bash\n   docker top <container-name>\n   ```\n\n3. **Review recent changes**:\n   ```bash\n   docker exec <container-name> ls -lat /etc | head -20\n   ```\n\n4. **Check network connections**:\n   ```bash\n   docker exec <container-name> netstat -tuln\n   ```\n\n5. **Review authentication logs** (if applicable):\n   ```bash\n   docker exec <container-name> tail -50 /var/log/auth.log\n   ```\n\n**See SECURITY_OPS_GUIDE.md for detailed incident response procedures.**",
+        "mode": "markdown"
+      },
+      "pluginVersion": "12.1.1",
+      "title": "Common False Positives & Triage Guide",
+      "type": "text"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["falco", "security", "runtime", "actionable"],
+  "templating": {
+    "list": []
+  },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "",
+  "title": "Falco - Actionable Events",
+  "uid": "falco-actionable",
+  "version": 1
+}

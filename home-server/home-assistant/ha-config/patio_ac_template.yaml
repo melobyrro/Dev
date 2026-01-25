@@ -8,13 +8,13 @@
         - "cool"
       
       current_temperature_template: >-
-        {{ state_attr('climate.150633095083490_climate', 'current_temperature') | float }}
+        {{ state_attr('climate.patio_ac', 'current_temperature') | float }}
       
       temperature_template: >-
-        {{ state_attr('climate.150633095083490_climate', 'temperature') | float }}
+        {{ state_attr('climate.patio_ac', 'temperature') | float }}
       
       hvac_mode_template: >-
-        {% set mode = states('climate.150633095083490_climate') %}
+        {% set mode = states('climate.patio_ac') %}
         {% if mode in ['cool', 'dry'] %}cool
         {% elif mode == 'off' %}off
         {% else %}cool
@@ -27,28 +27,28 @@
       turn_off:
         service: climate.turn_off
         data:
-          entity_id: climate.150633095083490_climate
+          entity_id: climate.patio_ac
       
       turn_on:
         service: climate.set_hvac_mode
         data:
-          entity_id: climate.150633095083490_climate
+          entity_id: climate.patio_ac
           hvac_mode: cool
       
       set_temperature:
         - service: climate.set_hvac_mode
           data:
-            entity_id: climate.150633095083490_climate
+            entity_id: climate.patio_ac
             hvac_mode: cool
         - service: climate.set_temperature
           data:
-            entity_id: climate.150633095083490_climate
+            entity_id: climate.patio_ac
             temperature: "{{ temperature }}"
       
       set_hvac_mode:
         service: climate.set_hvac_mode
         data:
-          entity_id: climate.150633095083490_climate
+          entity_id: climate.patio_ac
           hvac_mode: >-
             {% if hvac_mode == 'cool' %}cool
             {% else %}off

@@ -1,0 +1,24 @@
+services:
+  server:
+    command: ["server"]
+    environment:
+      AUTHENTIK_EMAIL__HOST: smtp.gmail.com
+      AUTHENTIK_EMAIL__PORT: "587"
+      AUTHENTIK_EMAIL__FROM: '"Byrro Auth" <andre.byrro@gmail.com>'
+      AUTHENTIK_EMAIL__USERNAME: andre.byrro@gmail.com
+      AUTHENTIK_EMAIL__PASSWORD: hpvhapbibmcfxlzm   # Gmail App Password (no spaces)
+      AUTHENTIK_EMAIL__USE_TLS: "true"
+      AUTHENTIK_EMAIL__USE_SSL: "false"
+    healthcheck:
+      test: ["CMD-SHELL","/healthchecks/server-health.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s
+  worker:
+    healthcheck:
+      test: ["CMD-SHELL","/healthchecks/worker-health.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 60s

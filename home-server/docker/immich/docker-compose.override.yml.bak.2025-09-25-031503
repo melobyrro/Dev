@@ -1,0 +1,11 @@
+services:
+  immich-redis:
+    command: ["--aclfile","/data/users.acl"]
+
+  immich-machine-learning:
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3003/openapi.json',timeout=5)\""]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 60s

@@ -1,0 +1,21 @@
+services:
+  plex:
+    image: lscr.io/linuxserver/plex:latest
+    container_name: plex
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      - PLEX_MEDIA_SERVER_TMPDIR=/transcode
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/New_York
+      - VERSION=docker
+      - PLEX_CLAIM=${PLEX_CLAIM_TOKEN}
+    devices:
+      - /dev/dri:/dev/dri
+    volumes:
+      - /srv/docker-data/plex:/config
+      - /mnt/ByrroServer/ByrroMedia/TV_Shows:/tv
+      - /mnt/ByrroServer/ByrroMedia/Movies:/movies
+    tmpfs:
+      - /transcode:size=10g

@@ -1,0 +1,377 @@
+# Kia EV9 v2.7 Package - NEW Entities Only
+# Deployed: 2026-01-24
+#
+# This package adds:
+# - 5 per-schedule smart rate helpers (replaces global rate)
+# - 10 countdown template sensors for schedule displays
+
+# ============================================================
+# PER-SCHEDULE SMART RATES (v2.7)
+# Minutes of RUNTIME per degree of temperature difference
+# Used to compute: runtime = |target_temp - outside_temp| * rate
+# ============================================================
+
+input_number:
+  ev9_schedule_1_rate:
+    name: "EV9 Schedule 1 Smart Rate"
+    min: 0.5
+    max: 10.0
+    step: 0.5
+    unit_of_measurement: "min/°F"
+    icon: mdi:thermometer-chevron-up
+    mode: slider
+
+  ev9_schedule_2_rate:
+    name: "EV9 Schedule 2 Smart Rate"
+    min: 0.5
+    max: 10.0
+    step: 0.5
+    unit_of_measurement: "min/°F"
+    icon: mdi:thermometer-chevron-up
+    mode: slider
+
+  ev9_schedule_3_rate:
+    name: "EV9 Schedule 3 Smart Rate"
+    min: 0.5
+    max: 10.0
+    step: 0.5
+    unit_of_measurement: "min/°F"
+    icon: mdi:thermometer-chevron-up
+    mode: slider
+
+  ev9_schedule_4_rate:
+    name: "EV9 Schedule 4 Smart Rate"
+    min: 0.5
+    max: 10.0
+    step: 0.5
+    unit_of_measurement: "min/°F"
+    icon: mdi:thermometer-chevron-up
+    mode: slider
+
+  ev9_schedule_5_rate:
+    name: "EV9 Schedule 5 Smart Rate"
+    min: 0.5
+    max: 10.0
+    step: 0.5
+    unit_of_measurement: "min/°F"
+    icon: mdi:thermometer-chevron-up
+    mode: slider
+
+# ============================================================
+# COUNTDOWN TEMPLATE SENSORS (v2.7)
+# Each schedule has 2 sensors:
+#   - next_eval: Time until evaluation begins
+#   - climate_start: Time until climate actually starts
+# ============================================================
+
+template:
+  - sensor:
+      # Schedule 1 Countdown Sensors
+      - name: "EV9 Schedule 1 Next Eval"
+        unique_id: ev9_schedule_1_next_eval
+        icon: mdi:clock-outline
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_1_enabled', 'on') %}
+          {% if not enabled %}
+            Disabled
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_1_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_1_time') %}
+            {% set eval_window = states('input_number.ev9_evaluation_window') | int(30) %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              Not today
+            {% else %}
+              {% set dep = today_at(sched_time) %}
+              {% set eval = dep - timedelta(minutes=eval_window) %}
+              {% if eval > now() %}
+                {{ ((eval - now()).total_seconds() / 60) | int }} min
+              {% elif dep > now() %}
+                Evaluating
+              {% else %}
+                Done
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      - name: "EV9 Schedule 1 Climate Start"
+        unique_id: ev9_schedule_1_climate_start
+        icon: mdi:fan-clock
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_1_enabled', 'on') %}
+          {% if not enabled %}
+            --
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_1_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_1_time') %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              --
+            {% else %}
+              {% set rate = states('input_number.ev9_schedule_1_rate') | float(1.0) %}
+              {% set target = states('input_number.ev9_schedule_1_temperature') | float(72) %}
+              {% set outside = state_attr('weather.forecast_home', 'temperature') | float(72) %}
+              {% set runtime = ((target - outside) | abs * rate) | int %}
+              {% set dep = today_at(sched_time) %}
+              {% set start = dep - timedelta(minutes=runtime) %}
+              {% if start > now() %}
+                {{ ((start - now()).total_seconds() / 60) | int }} min ({{ runtime }}m run)
+              {% elif dep > now() %}
+                Running
+              {% else %}
+                --
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      # Schedule 2 Countdown Sensors
+      - name: "EV9 Schedule 2 Next Eval"
+        unique_id: ev9_schedule_2_next_eval
+        icon: mdi:clock-outline
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_2_enabled', 'on') %}
+          {% if not enabled %}
+            Disabled
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_2_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_2_time') %}
+            {% set eval_window = states('input_number.ev9_evaluation_window') | int(30) %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              Not today
+            {% else %}
+              {% set dep = today_at(sched_time) %}
+              {% set eval = dep - timedelta(minutes=eval_window) %}
+              {% if eval > now() %}
+                {{ ((eval - now()).total_seconds() / 60) | int }} min
+              {% elif dep > now() %}
+                Evaluating
+              {% else %}
+                Done
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      - name: "EV9 Schedule 2 Climate Start"
+        unique_id: ev9_schedule_2_climate_start
+        icon: mdi:fan-clock
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_2_enabled', 'on') %}
+          {% if not enabled %}
+            --
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_2_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_2_time') %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              --
+            {% else %}
+              {% set rate = states('input_number.ev9_schedule_2_rate') | float(1.0) %}
+              {% set target = states('input_number.ev9_schedule_2_temperature') | float(72) %}
+              {% set outside = state_attr('weather.forecast_home', 'temperature') | float(72) %}
+              {% set runtime = ((target - outside) | abs * rate) | int %}
+              {% set dep = today_at(sched_time) %}
+              {% set start = dep - timedelta(minutes=runtime) %}
+              {% if start > now() %}
+                {{ ((start - now()).total_seconds() / 60) | int }} min ({{ runtime }}m run)
+              {% elif dep > now() %}
+                Running
+              {% else %}
+                --
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      # Schedule 3 Countdown Sensors
+      - name: "EV9 Schedule 3 Next Eval"
+        unique_id: ev9_schedule_3_next_eval
+        icon: mdi:clock-outline
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_3_enabled', 'on') %}
+          {% if not enabled %}
+            Disabled
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_3_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_3_time') %}
+            {% set eval_window = states('input_number.ev9_evaluation_window') | int(30) %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              Not today
+            {% else %}
+              {% set dep = today_at(sched_time) %}
+              {% set eval = dep - timedelta(minutes=eval_window) %}
+              {% if eval > now() %}
+                {{ ((eval - now()).total_seconds() / 60) | int }} min
+              {% elif dep > now() %}
+                Evaluating
+              {% else %}
+                Done
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      - name: "EV9 Schedule 3 Climate Start"
+        unique_id: ev9_schedule_3_climate_start
+        icon: mdi:fan-clock
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_3_enabled', 'on') %}
+          {% if not enabled %}
+            --
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_3_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_3_time') %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              --
+            {% else %}
+              {% set rate = states('input_number.ev9_schedule_3_rate') | float(1.0) %}
+              {% set target = states('input_number.ev9_schedule_3_temperature') | float(72) %}
+              {% set outside = state_attr('weather.forecast_home', 'temperature') | float(72) %}
+              {% set runtime = ((target - outside) | abs * rate) | int %}
+              {% set dep = today_at(sched_time) %}
+              {% set start = dep - timedelta(minutes=runtime) %}
+              {% if start > now() %}
+                {{ ((start - now()).total_seconds() / 60) | int }} min ({{ runtime }}m run)
+              {% elif dep > now() %}
+                Running
+              {% else %}
+                --
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      # Schedule 4 Countdown Sensors
+      - name: "EV9 Schedule 4 Next Eval"
+        unique_id: ev9_schedule_4_next_eval
+        icon: mdi:clock-outline
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_4_enabled', 'on') %}
+          {% if not enabled %}
+            Disabled
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_4_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_4_time') %}
+            {% set eval_window = states('input_number.ev9_evaluation_window') | int(30) %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              Not today
+            {% else %}
+              {% set dep = today_at(sched_time) %}
+              {% set eval = dep - timedelta(minutes=eval_window) %}
+              {% if eval > now() %}
+                {{ ((eval - now()).total_seconds() / 60) | int }} min
+              {% elif dep > now() %}
+                Evaluating
+              {% else %}
+                Done
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      - name: "EV9 Schedule 4 Climate Start"
+        unique_id: ev9_schedule_4_climate_start
+        icon: mdi:fan-clock
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_4_enabled', 'on') %}
+          {% if not enabled %}
+            --
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_4_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_4_time') %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              --
+            {% else %}
+              {% set rate = states('input_number.ev9_schedule_4_rate') | float(1.0) %}
+              {% set target = states('input_number.ev9_schedule_4_temperature') | float(72) %}
+              {% set outside = state_attr('weather.forecast_home', 'temperature') | float(72) %}
+              {% set runtime = ((target - outside) | abs * rate) | int %}
+              {% set dep = today_at(sched_time) %}
+              {% set start = dep - timedelta(minutes=runtime) %}
+              {% if start > now() %}
+                {{ ((start - now()).total_seconds() / 60) | int }} min ({{ runtime }}m run)
+              {% elif dep > now() %}
+                Running
+              {% else %}
+                --
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      # Schedule 5 Countdown Sensors
+      - name: "EV9 Schedule 5 Next Eval"
+        unique_id: ev9_schedule_5_next_eval
+        icon: mdi:clock-outline
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_5_enabled', 'on') %}
+          {% if not enabled %}
+            Disabled
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_5_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_5_time') %}
+            {% set eval_window = states('input_number.ev9_evaluation_window') | int(30) %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              Not today
+            {% else %}
+              {% set dep = today_at(sched_time) %}
+              {% set eval = dep - timedelta(minutes=eval_window) %}
+              {% if eval > now() %}
+                {{ ((eval - now()).total_seconds() / 60) | int }} min
+              {% elif dep > now() %}
+                Evaluating
+              {% else %}
+                Done
+              {% endif %}
+            {% endif %}
+          {% endif %}
+
+      - name: "EV9 Schedule 5 Climate Start"
+        unique_id: ev9_schedule_5_climate_start
+        icon: mdi:fan-clock
+        state: >
+          {% set enabled = is_state('input_boolean.ev9_schedule_5_enabled', 'on') %}
+          {% if not enabled %}
+            --
+          {% else %}
+            {% set day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'] %}
+            {% set today_dow = now().weekday() %}
+            {% set today_name = day_names[today_dow] %}
+            {% set today_enabled = is_state('input_boolean.ev9_schedule_5_' ~ today_name, 'on') %}
+            {% set sched_time = states('input_datetime.ev9_schedule_5_time') %}
+            {% if not today_enabled or sched_time in ['unknown', 'unavailable', ''] %}
+              --
+            {% else %}
+              {% set rate = states('input_number.ev9_schedule_5_rate') | float(1.0) %}
+              {% set target = states('input_number.ev9_schedule_5_temperature') | float(72) %}
+              {% set outside = state_attr('weather.forecast_home', 'temperature') | float(72) %}
+              {% set runtime = ((target - outside) | abs * rate) | int %}
+              {% set dep = today_at(sched_time) %}
+              {% set start = dep - timedelta(minutes=runtime) %}
+              {% if start > now() %}
+                {{ ((start - now()).total_seconds() / 60) | int }} min ({{ runtime }}m run)
+              {% elif dep > now() %}
+                Running
+              {% else %}
+                --
+              {% endif %}
+            {% endif %}
+          {% endif %}

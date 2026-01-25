@@ -1,0 +1,19 @@
+services:
+  jellyseerr:
+    image: fallenbagel/jellyseerr:latest
+    container_name: jellyseerr
+    restart: unless-stopped
+    environment:
+      TZ: America/New_York
+      PUID: "1000"
+      PGID: "1000"
+    volumes:
+      - /mnt/ByrroServer/docker-data/jellyseerr:/app/config
+    expose:
+      - "5055"
+    networks:
+      - byrro-net
+
+networks:
+  byrro-net:
+    external: true

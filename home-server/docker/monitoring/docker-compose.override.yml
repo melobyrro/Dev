@@ -1,0 +1,5 @@
+services:
+  grafana:
+    environment:
+      GF_SERVER_DOMAIN: "grafana.byrroserver.com"
+      GF_SERVER_ROOT_URL: "https://grafana.byrroserver.com"

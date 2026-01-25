@@ -1,0 +1,805 @@
+- id: patio_ac_manual_override_detector
+  alias: Patio AC - Manual Override Detector
+  description: Detect manual user control and disable automations for 2 hours
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: state
+    entity_id: climate.150633095083490_climate
+  conditions:
+  - condition: template
+    value_template: "{{ trigger.to_state.context.parent_id is none and\n   trigger.to_state.context.id
+      != trigger.from_state.context.id }}\n"
+  - condition: state
+    entity_id: input_boolean.patio_ac_manual_override
+    state: 'off'
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'Manual override detected. AC changed from {{ trigger.from_state.state
+        }}  to {{ trigger.to_state.state }}. Disabling automations for 2 hours.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.patio_ac_manual_override
+  - action: timer.start
+    target:
+      entity_id: timer.patio_ac_holdoff
+    data:
+      duration: 02:00:00
+  - action: timer.cancel
+    target:
+      entity_id:
+      - timer.patio_ac_humidity_guard
+      - timer.patio_ac_heat_spike
+      - timer.patio_ac_quiet_hours
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+- id: patio_ac_humidity_guard
+  alias: Patio AC - Humidity Guard
+  description: Dehumidify when humidity > 65% during normal hours (8am-10pm)
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    above: 65
+    for:
+      minutes: 10
+  conditions:
+  - condition: state
+    entity_id: input_boolean.patio_ac_manual_override
+    state: 'off'
+  - condition: state
+    entity_id: input_boolean.patio_ac_automation_active
+    state: 'off'
+  - condition: time
+    after: 08:00:00
+    before: '22:00:00'
+  - condition: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    above: 65
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') in [''off'', ''fan_only'']
+      }}
+
+      '
+  - condition: state
+    entity_id: timer.patio_ac_heat_spike
+    state: idle
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'Starting Humidity Guard. Current humidity:  {{ state_attr(''weather.forecast_home'',
+        ''humidity'') }}%.  Setting AC to DRY mode for 45 minutes max.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: climate.150633095083490_climate
+    data:
+      hvac_mode: dry
+  - action: timer.start
+    target:
+      entity_id: timer.patio_ac_humidity_guard
+    data:
+      duration: 00:45:00
+- id: patio_ac_heat_spike_guard
+  alias: Patio AC - Heat Spike Guard
+  description: Cool when temp > 90°F AND humidity > 60%
+  enabled: false
+  triggers:
+  - trigger: numeric_state
+    entity_id:
+    - climate.150633095083490_climate
+    attribute: current_temperature
+    above: 85
+    for:
+      minutes: 10
+  conditions:
+  - condition: state
+    entity_id: input_boolean.patio_ac_manual_override
+    state: 'off'
+  - condition: state
+    entity_id: input_boolean.patio_ac_automation_active
+    state: 'off'
+  - condition: numeric_state
+    entity_id: climate.150633095083490_climate
+    attribute: current_temperature
+    above: 85
+  - condition: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    above: 60
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') in [''off'', ''fan_only'',
+      ''dry''] }}
+
+      '
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'HEAT SPIKE ALERT! Temperature:  {{ state_attr(''climate.150633095083490_climate'',
+        ''current_temperature'') }}°F,  Humidity: {{ state_attr(''weather.forecast_home'',
+        ''humidity'') }}%.  Setting AC to COOL mode at 85°F for 60 minutes max.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+  - action: climate.set_temperature
+    target:
+      entity_id: climate.150633095083490_climate
+    data:
+      hvac_mode: cool
+      temperature: 78
+  - action: timer.start
+    target:
+      entity_id: timer.patio_ac_heat_spike
+    data:
+      duration: 01:00:00
+  mode: single
+  max_exceeded: silent
+- id: patio_ac_quiet_hours_dehumidify
+  alias: Patio AC - Quiet Hours Dehumidify
+  description: Dehumidify when humidity > 70% during quiet hours (10pm-8am)
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    above: 70
+    for:
+      minutes: 15
+  conditions:
+  - condition: state
+    entity_id: input_boolean.patio_ac_manual_override
+    state: 'off'
+  - condition: state
+    entity_id: input_boolean.patio_ac_automation_active
+    state: 'off'
+  - condition: time
+    after: '22:00:00'
+    before: 08:00:00
+  - condition: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    above: 70
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') in [''off'', ''fan_only'']
+      }}
+
+      '
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'Quiet Hours: Starting dehumidify. Current humidity:  {{ state_attr(''weather.forecast_home'',
+        ''humidity'') }}%.  Setting AC to DRY mode (no cooling) for 30 minutes max.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: input_boolean.turn_on
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+  - action: climate.set_hvac_mode
+    target:
+      entity_id: climate.150633095083490_climate
+    data:
+      hvac_mode: dry
+  - action: timer.start
+    target:
+      entity_id: timer.patio_ac_quiet_hours
+    data:
+      duration: 00:30:00
+- id: patio_ac_humidity_guard_early_stop
+  alias: Patio AC - Humidity Guard Early Stop
+  description: Stop dehumidify when humidity drops below 60%
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    below: 60
+    for:
+      minutes: 2
+  conditions:
+  - condition: state
+    entity_id: timer.patio_ac_humidity_guard
+    state: active
+  - condition: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    below: 60
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'Humidity goal met ({{ state_attr(''weather.forecast_home'', ''humidity'')
+        }}%).  Stopping AC early to save energy.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: climate.turn_off
+    target:
+      entity_id: climate.150633095083490_climate
+  - action: timer.cancel
+    target:
+      entity_id: timer.patio_ac_humidity_guard
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+- id: patio_ac_heat_spike_early_stop
+  alias: Patio AC - Heat Spike Early Stop
+  description: Stop cooling when temperature drops below 85°F
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: numeric_state
+    entity_id: climate.150633095083490_climate
+    attribute: current_temperature
+    below: 85
+    for:
+      minutes: 2
+  conditions:
+  - condition: state
+    entity_id: timer.patio_ac_heat_spike
+    state: active
+  - condition: numeric_state
+    entity_id: climate.150633095083490_climate
+    attribute: current_temperature
+    below: 85
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'Temperature goal met  ({{ state_attr(''climate.150633095083490_climate'',
+        ''current_temperature'') }}°F).  Stopping AC early to save energy.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: climate.turn_off
+    target:
+      entity_id: climate.150633095083490_climate
+  - action: timer.cancel
+    target:
+      entity_id: timer.patio_ac_heat_spike
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+- id: patio_ac_quiet_hours_early_stop
+  alias: Patio AC - Quiet Hours Early Stop
+  description: Stop quiet hours dehumidify when humidity drops below 65%
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    below: 65
+    for:
+      minutes: 2
+  conditions:
+  - condition: state
+    entity_id: timer.patio_ac_quiet_hours
+    state: active
+  - condition: numeric_state
+    entity_id: weather.forecast_home
+    attribute: humidity
+    below: 65
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'Quiet hours humidity goal met ({{ state_attr(''weather.forecast_home'',
+        ''humidity'') }}%).  Stopping AC early to save energy.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: climate.turn_off
+    target:
+      entity_id: climate.150633095083490_climate
+  - action: timer.cancel
+    target:
+      entity_id: timer.patio_ac_quiet_hours
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+- id: patio_ac_timer_expiration
+  alias: Patio AC - Timer Expiration Handler
+  description: Turn off AC when time-box expires (only if automation turned it on)
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.patio_ac_humidity_guard
+    id: humidity_guard
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.patio_ac_heat_spike
+    id: heat_spike
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.patio_ac_quiet_hours
+    id: quiet_hours
+  conditions:
+  - condition: state
+    entity_id: input_boolean.patio_ac_automation_active
+    state: 'on'
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') != ''off'' }}
+
+      '
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: 'Time limit reached for {{ trigger.id }}.  Turning off AC to prevent
+        over-running.
+
+        '
+      entity_id: climate.150633095083490_climate
+  - action: climate.turn_off
+    target:
+      entity_id: climate.150633095083490_climate
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.patio_ac_automation_active
+- id: patio_ac_safety_monitor
+  alias: Patio AC - Safety Monitor
+  description: 'CRITICAL: Verify AC never enters heat mode; auto-convert auto mode to cool'
+  enabled: false
+  mode: restart
+  max_exceeded: silent
+  triggers:
+  - trigger: state
+    entity_id: climate.150633095083490_climate
+  - trigger: time_pattern
+    minutes: /5
+  conditions:
+  - condition: template
+    value_template: '{{ states(''climate.150633095083490_climate'') in [''heat'', ''auto''] }}'
+  actions:
+  - choose:
+    # CRITICAL: Heat mode detected - emergency shutdown
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''climate.150633095083490_climate'') == ''heat'' }}'
+      sequence:
+      - action: logbook.log
+        data:
+          name: Patio AC Automation - SAFETY ALERT
+          message: 'CRITICAL SAFETY VIOLATION: AC is in HEAT mode! Performing emergency shutdown and blocking automations.'
+          entity_id: climate.150633095083490_climate
+      - action: climate.turn_off
+        target:
+          entity_id: climate.150633095083490_climate
+      - action: input_boolean.turn_on
+        target:
+          entity_id: input_boolean.patio_ac_manual_override
+      - action: timer.cancel
+        target:
+          entity_id:
+          - timer.patio_ac_humidity_guard
+          - timer.patio_ac_heat_spike
+          - timer.patio_ac_quiet_hours
+      - action: input_boolean.turn_off
+        target:
+          entity_id: input_boolean.patio_ac_automation_active
+    
+    # Auto mode detected - convert to cool mode
+    - conditions:
+      - condition: template
+        value_template: '{{ states(''climate.150633095083490_climate'') == ''auto'' }}'
+      sequence:
+      - action: logbook.log
+        data:
+          name: Patio AC Automation
+          message: 'Auto mode detected. Converting to COOL mode to prevent heater activation.'
+          entity_id: climate.150633095083490_climate
+      - action: climate.set_hvac_mode
+        target:
+          entity_id: climate.150633095083490_climate
+        data:
+          hvac_mode: cool
+
+- id: patio_ac_manual_override_reset
+  alias: Patio AC - Manual Override Reset
+  description: Re-enable automations after 2-hour holdoff
+  enabled: false
+  mode: single
+  max_exceeded: silent
+  triggers:
+  - trigger: event
+    event_type: timer.finished
+    event_data:
+      entity_id: timer.patio_ac_holdoff
+  actions:
+  - action: logbook.log
+    data:
+      name: Patio AC Automation
+      message: Manual override holdoff expired. Re-enabling automations.
+      entity_id: climate.150633095083490_climate
+  - action: input_boolean.turn_off
+    target:
+      entity_id: input_boolean.patio_ac_manual_override
+- id: patio_ac_prevent_rapid_off
+  alias: Patio AC - Prevent Rapid On/Off Cycles  
+  description: If AC turns off within 15 seconds of turning on, turn it back on (fixes Google Assistant issue)
+  enabled: false
+  mode: restart
+  triggers:
+    - trigger: state
+      entity_id: climate.150633095083490_climate
+      to: 'off'
+  conditions:
+    - condition: template
+      value_template: >
+        {% if trigger.from_state.state in ['cool', 'dry', 'fan_only', 'heat'] %}
+          {% set turned_on = as_timestamp(trigger.from_state.last_changed) %}
+          {% set turned_off = as_timestamp(trigger.to_state.last_changed) %}
+          {{ (turned_off - turned_on) < 15 }}
+        {% else %}
+          false
+        {% endif %}
+  actions:
+    - action: logbook.log
+      data:
+        name: Patio AC Automation
+        message: Rapid off detected. Restoring cool mode.
+        entity_id: climate.150633095083490_climate
+    
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.150633095083490_climate
+      data:
+        hvac_mode: cool
+
+# ============================================================================
+# Living Room Fan/Light Slider Controls
+# Added: 2025-12-27
+# ============================================================================
+
+# Living Room Light Brightness Control
+- id: living_room_light_brightness_control
+  alias: "Living Room - Light Brightness Slider"
+  trigger:
+    - platform: state
+      entity_id: input_number.living_room_light_brightness
+  action:
+    - service: light.turn_on
+      target:
+        entity_id: light.living_room_light_2
+      data:
+        brightness_pct: "{{ states('input_number.living_room_light_brightness') | int }}"
+
+# Living Room Light Temperature Control
+- id: living_room_light_temperature_control
+  alias: "Living Room - Light Temperature Slider"
+  trigger:
+    - platform: state
+      entity_id: input_number.living_room_light_temperature
+  action:
+    - service: light.turn_on
+      target:
+        entity_id: light.living_room_light_2
+      data:
+        kelvin: "{{ states('input_number.living_room_light_temperature') | int }}"
+
+# Living Room Fan Speed Control
+- id: living_room_fan_speed_control
+  alias: "Living Room - Fan Speed Slider"
+  trigger:
+    - platform: state
+      entity_id: input_number.living_room_fan_speed
+  action:
+    - service: fan.set_percentage
+      target:
+        entity_id: fan.living_room_light
+      data:
+        percentage: "{{ states('input_number.living_room_fan_speed') | int }}"
+
+# Office Light Brightness Control
+- id: office_light_brightness_control
+  alias: "Office - Light Brightness Slider"
+  trigger:
+    - platform: state
+      entity_id: input_number.office_light_brightness
+  action:
+    - service: light.turn_on
+      target:
+        entity_id: light.office_light
+      data:
+        brightness_pct: "{{ states(input_number.office_light_brightness) | int }}"
+# ===========================================================================
+# NEW Patio AC Automations (State Machine Design)
+# Added: 2025-12-27 for energy-efficient state-machine-based automation
+# ===========================================================================
+
+- id: patio_ac_heat_guard_on
+  alias: "Patio AC - Heat Guard ON"
+  description: "Activate cooling when temperature exceeds threshold"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: climate.150633095083490_climate
+      attribute: current_temperature
+      above: input_number.patio_ac_heat_threshold
+      for:
+        minutes: 5
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "idle"
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float <
+           states('input_number.patio_ac_daily_limit')|float }}
+    - condition: time
+      after: "08:00:00"
+      before: "22:00:00"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "cool"
+        temperature: 75
+        reason: "heat_spike"
+        duration: "{{ states('input_number.patio_ac_heat_duration')|int }}"
+
+- id: patio_ac_heat_guard_off
+  alias: "Patio AC - Heat Guard OFF (Early Stop)"
+  description: "Stop cooling when temperature drops"
+  mode: single
+  triggers:
+    - trigger: numeric_state
+      entity_id: climate.150633095083490_climate
+      attribute: current_temperature
+      below: 88
+      for:
+        minutes: 5
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "heat_spike"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "heat_spike"
+
+- id: patio_ac_night_cycle_on
+  alias: "Patio AC - Night Cycle ON"
+  description: "Start hourly DRY cycles during night"
+  mode: single
+  triggers:
+    - trigger: time_pattern
+      minutes: "/60"
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "idle"
+    - condition: time
+      after: "22:00:00"
+      before: "08:00:00"
+    - condition: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float <
+           states('input_number.patio_ac_daily_limit')|float }}
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "on"
+        mode: "dry"
+        temperature: 75
+        reason: "night_cycle"
+        duration: "{{ states('input_number.patio_ac_night_cycle_duration')|int }}"
+
+- id: patio_ac_timer_expired
+  alias: "Patio AC - Timer Expiration Handler"
+  description: "Turn off AC when duration timer expires"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_heat_spike
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_night_cycle
+  conditions:
+    - condition: template
+      value_template: >
+        {% set reason = states('input_select.patio_ac_reason') %}
+        {% set timer = trigger.event.data.entity_id %}
+        {{ (timer == 'timer.patio_ac_heat_spike' and reason == 'heat_spike') or
+           (timer == 'timer.patio_ac_night_cycle' and reason == 'night_cycle') }}
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "{{ states('input_select.patio_ac_reason') }}"
+
+- id: patio_ac_manual_override_detect
+  alias: "Patio AC - Manual Override Detector"
+  description: "Detect manual state changes and set reason to manual"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: climate.150633095083490_climate
+  conditions:
+    - condition: template
+      value_template: >
+        {{ trigger.to_state.context.user_id is not none or
+           trigger.to_state.context.parent_id is none }}
+    - condition: template
+      value_template: >
+        {{ states('input_select.patio_ac_reason') not in ['manual', 'safety_lock'] }}
+  actions:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "manual"
+    - action: timer.start
+      target:
+        entity_id: timer.patio_ac_manual_override
+      data:
+        duration: >
+          {{ '00:%02d:00'|format(states('input_number.patio_ac_manual_timeout')|int) }}
+
+- id: patio_ac_manual_override_reset
+  alias: "Patio AC - Manual Override Reset"
+  description: "Reset to idle after manual timeout expires"
+  mode: single
+  triggers:
+    - trigger: event
+      event_type: timer.finished
+      event_data:
+        entity_id: timer.patio_ac_manual_override
+  conditions:
+    - condition: state
+      entity_id: input_select.patio_ac_reason
+      state: "manual"
+  actions:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "idle"
+
+- id: patio_ac_safety_monitor
+  alias: "Patio AC - Safety Monitor"
+  description: "Prevent dangerous configurations (HEAT mode, etc.)"
+  mode: single
+  triggers:
+    - trigger: state
+      entity_id: climate.150633095083490_climate
+      attribute: hvac_mode
+      to: "heat"
+  actions:
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "safety_lock"
+    - action: climate.set_hvac_mode
+      target:
+        entity_id: climate.150633095083490_climate
+      data:
+        hvac_mode: "off"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Safety Lock"
+        message: "AC was set to HEAT mode and has been disabled. Manual reset required."
+        notification_id: "patio_ac_safety_lock"
+
+- id: patio_ac_daily_limit_enforcer
+  alias: "Patio AC - Daily Limit Enforcer"
+  description: "Stop AC when daily runtime limit is reached"
+  mode: single
+  triggers:
+    - trigger: template
+      value_template: >
+        {{ states('input_number.patio_ac_daily_runtime')|float >=
+           states('input_number.patio_ac_daily_limit')|float }}
+  conditions:
+    - condition: template
+      value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+  actions:
+    - action: script.patio_ac_control
+      data:
+        action: "off"
+        reason: "{{ states('input_select.patio_ac_reason') }}"
+    - action: input_select.select_option
+      target:
+        entity_id: input_select.patio_ac_reason
+      data:
+        option: "safety_lock"
+    - action: persistent_notification.create
+      data:
+        title: "Patio AC Daily Limit Reached"
+        message: >
+          Daily runtime limit of {{ states('input_number.patio_ac_daily_limit')|int }}
+          minutes reached. AC disabled until midnight.
+        notification_id: "patio_ac_daily_limit"
+
+- id: patio_ac_midnight_reset
+  alias: "Patio AC - Midnight Runtime Reset"
+  description: "Reset daily runtime counter at midnight"
+  mode: single
+  triggers:
+    - trigger: time
+      at: "00:00:00"
+  actions:
+    - action: input_number.set_value
+      target:
+        entity_id: input_number.patio_ac_daily_runtime
+      data:
+        value: 0
+    - if:
+        - condition: state
+          entity_id: input_select.patio_ac_reason
+          state: "safety_lock"
+      then:
+        - action: input_select.select_option
+          target:
+            entity_id: input_select.patio_ac_reason
+          data:
+            option: "idle"
+        - action: persistent_notification.dismiss
+          data:
+            notification_id: "patio_ac_daily_limit"
+
+- id: patio_ac_startup_recovery
+  alias: "Patio AC - Startup Recovery"
+  description: "Accumulate runtime if AC was ON during HA restart"
+  mode: single
+  triggers:
+    - trigger: homeassistant
+      event: start
+  actions:
+    - if:
+        - condition: template
+          value_template: "{{ states('climate.150633095083490_climate') != 'off' }}"
+      then:
+        - action: input_number.set_value
+          target:
+            entity_id: input_number.patio_ac_daily_runtime
+          data:
+            value: >
+              {% set start = states('input_datetime.patio_ac_runtime_start') %}
+              {% set runtime = states('input_number.patio_ac_daily_runtime')|float %}
+              {% if start not in ['unknown', '', 'unavailable'] %}
+                {% set elapsed = (now().timestamp() - as_timestamp(start)) / 60 %}
+                {{ (runtime + elapsed)|round(1) }}
+              {% else %}
+                {{ runtime }}
+              {% endif %}

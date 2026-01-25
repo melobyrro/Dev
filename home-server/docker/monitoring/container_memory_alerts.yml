@@ -1,0 +1,50 @@
+groups:
+  - name: container_memory_alerts
+    interval: 30s
+    rules:
+      # Alert when any container exceeds 85% of its memory limit
+      - alert: ContainerMemoryUsageHigh
+        expr: |
+          (container_memory_usage_bytes{container!=""} 
+          / container_spec_memory_limit_bytes{container!=""}) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.container }} memory usage is high"
+          description: "Container {{ $labels.container }} is using {{ $value | humanize }}% of its memory limit"
+
+      # Alert when Immich specifically exceeds 80% (earlier warning)
+      - alert: ImmichMemoryUsageHigh
+        expr: |
+          (container_memory_usage_bytes{container="immich-server"} 
+          / container_spec_memory_limit_bytes{container="immich-server"}) * 100 > 80
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Immich memory usage is high"
+          description: "Immich is using {{ $value | humanize }}% of its 6GB memory limit"
+
+      # Alert when system memory is critically low
+      - alert: SystemMemoryLow
+        expr: |
+          (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "System memory critically low"
+          description: "Available system memory is below 10% ({{ $value | humanize }}% available)"
+
+      # Alert when swap usage is high (>50%)
+      - alert: SwapUsageHigh
+        expr: |
+          ((node_memory_SwapTotal_bytes - node_memory_SwapFree_bytes) 
+          / node_memory_SwapTotal_bytes) * 100 > 50
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Swap usage is high"
+          description: "System is using {{ $value | humanize }}% of available swap space"

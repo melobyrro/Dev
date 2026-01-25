@@ -1,0 +1,1270 @@
+{
+  "policy_name": "paperless_document_classification_and_tagging",
+  "version": "1.1.0",
+  "decision_order": [
+    "detect_document_type_by_rules",
+    "apply_tag_rules",
+    "extract_expiration_dates",
+    "ml_fallback_for_uncategorized_docs"
+  ],
+  "document_type_rules": {
+    "Bank Statement": {
+      "description": "Monthly/periodic bank or credit union statements with balances/transactions.",
+      "required_all_keywords": [],
+      "required_any_keywords": [
+        "account ending",
+        "account number",
+        "checking account",
+        "savings account",
+        "bank statement",
+        "transactions export",
+        "transaction export",
+        "transaction type",
+        "transactions\\s+export",
+        "transaction\\s+type"
+      ],
+      "required_any_keywords_logos_or_headers": [
+        "bank",
+        "credit union",
+        "online banking"
+      ],
+      "forbidden_keywords": [
+        "invoice",
+        "policy number",
+        "tax form",
+        "form w-2",
+        "form 1099",
+        "homestead",
+        "property appraiser"
+      ],
+      "layout_cues": [
+        "table of transactions with dates and amounts",
+        "beginning/ending balance summary"
+      ],
+      "default_tags_on_match": [
+        "bank"
+      ],
+      "applicable_tags_whitelist": [
+        "bank",
+        "property",
+        "tax",
+        "2024",
+        "2025",
+        "person:*"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Certificate/Record": {
+      "description": "Certificates (marriage, completion, training) that are not ID cards.",
+      "required_any_keywords": [
+        "certificate",
+        "certifies that",
+        "this is to certify",
+        "certificate of completion",
+        "certificate of achievement",
+        "marriage certificate"
+      ],
+      "forbidden_keywords": [
+        "driver license",
+        "passport",
+        "social security card"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "id:birth-certificate",
+        "person:*"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Financial/Loan/Investment": {
+      "description": "Loans, mortgages, investments, brokerage/401k summaries not already bank statements or invoices.",
+      "required_any_keywords": [
+        "loan",
+        "mortgage",
+        "principal balance",
+        "interest rate",
+        "investment account",
+        "brokerage",
+        "401k",
+        "retirement account",
+        "escrow",
+        "payment schedule"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "form 1099",
+        "form 1040",
+        "invoice",
+        "receipt",
+        "form ssa-89",
+        "ssa-89"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "bank",
+        "property",
+        "tax",
+        "vehicle",
+        "2024",
+        "2025",
+        "person:*"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Identity Document": {
+      "description": "Gov-issued personal identifiers: driver license, passport, SSN card, birth certificate, state ID, voter registration.",
+      "required_any_keywords": [
+        "driver license",
+        "driver's license",
+        "carteira de motorista",
+        "carteira nacional de habilitacao",
+        "\\bcnh\\b",
+        "passport",
+        "passaporte",
+        "social security card",
+        "ssn card",
+        "birth certificate",
+        "certificate of live birth",
+        "certidao de nascimento",
+        "registro civil",
+        "carteira de identidade",
+        "documento de identidade",
+        "registro geral",
+        "identification card",
+        "identity card",
+        "flhsmv",
+        "replacement license required",
+        "\\bCLASS:\\s*[A-Z]\\b",
+        "this number has been established",
+        "found card",
+        "ssa-3000",
+        "form ssa-3000",
+        "voter registration",
+        "voter registration card",
+        "voter card",
+        "voter identification",
+        "voter identification card",
+        "voter id",
+        "voter information card",
+        "voter information",
+        "polling location",
+        "precinct",
+        "precinct number"
+      ],
+      "forbidden_keywords": [
+        "invoice",
+        "receipt",
+        "bank statement",
+        "tax form",
+        "form w-2",
+        "license plate",
+        "vehicle identification number",
+        "title",
+        "insurance",
+        "policy",
+        "claim",
+        "vehicle registration"
+      ],
+      "subtype_detection": {
+        "id:ssn-card": {
+          "required_all_keywords": [
+            "social security administration"
+          ],
+          "forbidden_keywords": [
+            "statement",
+            "benefits statement",
+            "ssa statement",
+            "form w-2",
+            "w-2",
+            "wage and tax statement",
+            "ssa-1099",
+            "1099"
+          ],
+          "layout_cues": [
+            "blue patterned card",
+            "phrase 'This number has been established'"
+          ],
+          "tags_on_match": [
+            "id:ssn-card"
+          ],
+          "required_any_keywords": [
+            "this number has been established",
+            "found card",
+            "ssa-3000",
+            "form ssa-3000"
+          ]
+        },
+        "id:drivers-license": {
+          "required_any_keywords": [
+            "driver license",
+            "driver's license",
+            "carteira de motorista",
+            "carteira nacional de habilitacao",
+            "\\bcnh\\b",
+            "flhsmv",
+            "replacement license required",
+            "\\bCLASS:\\s*[A-Z]\\b"
+          ],
+          "forbidden_keywords": [
+            "instruction permit",
+            "temporary license",
+            "registration",
+            "license plate",
+            "vehicle",
+            "vin",
+            "title",
+            "tag"
+          ],
+          "tags_on_match": [
+            "id:drivers-license"
+          ]
+        },
+        "id:state-id": {
+          "forbidden_keywords": [],
+          "tags_on_match": [
+            "id:state-id"
+          ],
+          "required_any_keywords": [
+            "carteira de identidade",
+            "documento de identidade",
+            "registro geral",
+            "identification card",
+            "identity card"
+          ]
+        },
+        "id:passport": {
+          "required_any_keywords": [
+            "passport",
+            "passaporte"
+          ],
+          "forbidden_keywords": [
+            "passport application",
+            "insurance",
+            "policy",
+            "travel insurance",
+            "visa letter",
+            "birth certificate",
+            "certidao de nascimento",
+            "registro civil"
+          ],
+          "tags_on_match": [
+            "id:passport"
+          ]
+        },
+        "id:birth-certificate": {
+          "required_any_keywords": [
+            "birth certificate",
+            "certificate of live birth",
+            "certidao de nascimento",
+            "registro civil"
+          ],
+          "forbidden_keywords": [],
+          "tags_on_match": [
+            "id:birth-certificate"
+          ]
+        },
+        "id:voter-registration": {
+          "required_any_keywords": [
+            "voter registration",
+            "voter registration card",
+            "voter card",
+            "voter identification",
+            "voter identification card",
+            "voter id",
+            "voter information card",
+            "voter information",
+            "polling location",
+            "precinct",
+            "precinct number"
+          ],
+          "forbidden_keywords": [
+            "vehicle registration",
+            "license plate",
+            "vehicle identification number",
+            "vin"
+          ],
+          "tags_on_match": [
+            "id:voter-registration"
+          ]
+        }
+      },
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "id:ssn-card",
+        "id:drivers-license",
+        "id:state-id",
+        "id:passport",
+        "id:birth-certificate",
+        "person:*",
+        "id:voter-registration"
+      ],
+      "expiration_extraction": {
+        "enabled": true,
+        "trigger_keywords": [
+          "expiration",
+          "expires",
+          "exp.",
+          "valid until",
+          "exp date",
+          "expiry"
+        ],
+        "date_regexes": [
+          "\\b(0[1-9]|1[0-2])[\\/-](0[1-9]|[12][0-9]|3[01])[\\/-](19|20)\\d{2}\\b",
+          "\\b(19|20)\\d{2}-([01]\\d)-([0-3]\\d)\\b",
+          "\\b(0[1-9]|1[0-2])\\s+[A-Za-z]{3,9}\\s+(19|20)\\d{2}\\b"
+        ]
+      }
+    },
+    "Insurance": {
+      "description": "Health/auto/home/other insurance policies or ID cards.",
+      "required_any_keywords": [
+        "insurance",
+        "policy number",
+        "member id",
+        "coverage",
+        "premium",
+        "insured",
+        "deductible"
+      ],
+      "forbidden_keywords": [
+        "invoice",
+        "receipt",
+        "form w-2",
+        "form 1099",
+        "registration",
+        "vehicle registration",
+        "license plate",
+        "vehicle identification number",
+        "vin",
+        "certificate of title",
+        "title number",
+        "vehicle title",
+        "tag number",
+        "vehicle tag"
+      ],
+      "layout_cues": [
+        "policy period with start/end dates",
+        "group number",
+        "member id"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "vehicle",
+        "property",
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": true,
+        "trigger_keywords": [
+          "coverage period",
+          "effective through",
+          "policy period",
+          "expires",
+          "expiration"
+        ],
+        "date_regexes": [
+          "\\b(0[1-9]|1[0-2])[\\/-](0[1-9]|[12][0-9]|3[01])[\\/-](19|20)\\d{2}\\b",
+          "\\b(19|20)\\d{2}-([01]\\d)-([0-3]\\d)\\b"
+        ]
+      }
+    },
+    "Invoice/Bill": {
+      "description": "Bills issued by vendors: line items, amounts due, payment terms.",
+      "required_any_keywords": [
+        "invoice",
+        "amount due",
+        "bill to",
+        "invoice number",
+        "due date"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "tax return",
+        "policy number",
+        "bank statement"
+      ],
+      "layout_cues": [
+        "bill to / ship to blocks",
+        "line items with quantities and unit prices"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "tax",
+        "property",
+        "vehicle",
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Legal/Contract": {
+      "description": "Contracts, legal notices, court documents, formal agreements.",
+      "required_any_keywords": [
+        "agreement",
+        "contract",
+        "hereby",
+        "party of the first part",
+        "terms and conditions",
+        "court",
+        "plaintiff",
+        "defendant",
+        "notary",
+        "witnesseth"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "invoice",
+        "receipt"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "property",
+        "vehicle",
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Medical": {
+      "description": "Medical records, visit summaries, lab results, health bills.",
+      "required_any_keywords": [
+        "patient",
+        "diagnosis",
+        "procedure",
+        "medical record",
+        "clinical",
+        "lab result",
+        "provider",
+        "copay"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "bank statement",
+        "policy number",
+        "invoice"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Property/Real Estate": {
+      "description": "Deeds, leases, mortgage docs, property tax bills.",
+      "required_any_keywords": [
+        "property",
+        "deed",
+        "mortgage",
+        "lease",
+        "rental agreement",
+        "parcel",
+        "property tax",
+        "assessor",
+        "home inspection",
+        "wind mitigation",
+        "mold analysis",
+        "mold report"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "passport",
+        "passaporte",
+        "identity card",
+        "identification card",
+        "license number",
+        "birth certificate",
+        "certificate of live birth",
+        "certidao de nascimento",
+        "carteira de motorista",
+        "carteira nacional de habilitacao",
+        "carteira de identidade",
+        "documento de identidade",
+        "registro geral",
+        "\\bcnh\\b",
+        "flhsmv",
+        "replacement license required",
+        "\\bCLASS:\\s*[A-Z]\\b",
+        "form ssa-89",
+        "ssa-89",
+        "social security administration",
+        "authorization for the social security administration"
+      ],
+      "default_tags_on_match": [
+        "property"
+      ],
+      "applicable_tags_whitelist": [
+        "property",
+        "tax",
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Receipt": {
+      "description": "Point-of-sale or online purchase receipts with totals; no due date.",
+      "required_any_keywords": [
+        "receipt",
+        "subtotal",
+        "sales tax",
+        "total",
+        "thank you for your purchase"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "tax return",
+        "bank statement",
+        "invoice"
+      ],
+      "layout_cues": [
+        "item list with qty/price",
+        "terminal id or cashier id"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "tax",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Tax Document": {
+      "description": "IRS/state tax forms such as W-2, 1099, 1040, schedules.",
+      "required_any_keywords": [
+        "tax year",
+        "internal revenue service",
+        "form w-2",
+        "form 1099",
+        "form 1040",
+        "u.s. individual income tax return",
+        "schedule a",
+        "schedule c"
+      ],
+      "forbidden_keywords": [
+        "invoice",
+        "receipt",
+        "bank statement"
+      ],
+      "subtype_detection": {
+        "W2": {
+          "required_any_keywords": [
+            "form w-2",
+            "wage and tax statement"
+          ],
+          "forbidden_keywords": [],
+          "tags_on_match": [
+            "tax"
+          ]
+        },
+        "1099": {
+          "required_any_keywords": [
+            "form 1099"
+          ],
+          "forbidden_keywords": [],
+          "tags_on_match": [
+            "tax"
+          ]
+        },
+        "Return1040": {
+          "required_any_keywords": [
+            "form 1040",
+            "u.s. individual income tax return"
+          ],
+          "forbidden_keywords": [],
+          "tags_on_match": [
+            "tax"
+          ]
+        }
+      },
+      "default_tags_on_match": [
+        "tax"
+      ],
+      "applicable_tags_whitelist": [
+        "tax",
+        "2024",
+        "2025",
+        "person:*"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Vehicle Document": {
+      "description": "Vehicle titles, registrations, plate renewals, inspections.",
+      "required_any_keywords": [
+        "vehicle",
+        "vehicle identification number",
+        "\\bvin\\b",
+        "vehicle registration",
+        "registration renewal",
+        "registration card",
+        "registration certificate",
+        "plate renewal",
+        "license plate",
+        "tag renewal",
+        "odometer",
+        "certificate of title",
+        "title number",
+        "vehicle title",
+        "title no",
+        "title #",
+        "vehicle inspection",
+        "emissions inspection",
+        "safety inspection"
+      ],
+      "forbidden_keywords": [
+        "invoice",
+        "receipt",
+        "homestead",
+        "property appraiser",
+        "parcel",
+        "property tax",
+        "voter",
+        "voter registration",
+        "election",
+        "ballot",
+        "precinct",
+        "home inspection",
+        "home inspections",
+        "wind mitigation",
+        "windstorm",
+        "mold analysis",
+        "mold report"
+      ],
+      "default_tags_on_match": [
+        "vehicle"
+      ],
+      "applicable_tags_whitelist": [
+        "vehicle",
+        "property",
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": true,
+        "trigger_keywords": [
+          "expires",
+          "expiration",
+          "valid through",
+          "registration expires",
+          "inspection expires"
+        ],
+        "date_regexes": [
+          "\\b(0[1-9]|1[0-2])[\\/-](0[1-9]|[12][0-9]|3[01])[\\/-](19|20)\\d{2}\\b",
+          "\\b(19|20)\\d{2}-([01]\\d)-([0-3]\\d)\\b",
+          "\\b(0[1-9]|1[0-2])\\s+(19|20)\\d{2}\\b"
+        ]
+      }
+    },
+    "Other Documents": {
+      "description": "Fallback for anything not matched.",
+      "required_any_keywords": [],
+      "forbidden_keywords": [],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Government/Immigration": {
+      "description": "Government/immigration notices and forms (USCIS/DHS) that are not identity cards.",
+      "required_any_keywords": [
+        "uscis",
+        "u.s. citizenship and immigration services",
+        "department of homeland security",
+        "notice of action",
+        "notice of intent",
+        "form i-",
+        "i-797",
+        "i-485",
+        "i-130",
+        "i-765",
+        "alien registration",
+        "a-number"
+      ],
+      "forbidden_keywords": [
+        "passport",
+        "passaporte",
+        "driver license",
+        "driver's license",
+        "social security card",
+        "birth certificate",
+        "certidao de nascimento"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Education/School": {
+      "description": "Education records such as transcripts, enrollment, diplomas, and school records.",
+      "required_any_keywords": [
+        "transcript",
+        "semester",
+        "gpa",
+        "university",
+        "college",
+        "high school",
+        "school district",
+        "diploma",
+        "school credits"
+      ],
+      "forbidden_keywords": [
+        "patient",
+        "medical record",
+        "mortgage",
+        "loan",
+        "refinance",
+        "closing costs",
+        "borrower",
+        "lender"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Application/Form": {
+      "description": "General applications and forms not captured by other document types.",
+      "required_any_keywords": [
+        "application for",
+        "application",
+        "intake form",
+        "consent form",
+        "authorization form",
+        "questionnaire",
+        "request for",
+        "enrollment form",
+        "registration form",
+        "authorization for",
+        "form ssa-89",
+        "ssa-89"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "w-2",
+        "tax",
+        "invoice",
+        "receipt",
+        "policy number",
+        "bank statement"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    },
+    "Paystub/Payroll": {
+      "description": "Paystubs, earnings statements, and payroll advice.",
+      "required_any_keywords": [
+        "pay stub",
+        "paystub",
+        "earnings statement",
+        "pay period",
+        "pay begin date",
+        "pay end date",
+        "advice date",
+        "advice #",
+        "pay group",
+        "employee id",
+        "hours and earnings",
+        "gross pay",
+        "net pay",
+        "pay rate",
+        "ytd",
+        "deductions"
+      ],
+      "forbidden_keywords": [
+        "form w-2",
+        "form 1099",
+        "bank statement",
+        "invoice",
+        "receipt"
+      ],
+      "default_tags_on_match": [],
+      "applicable_tags_whitelist": [
+        "person:*",
+        "2024",
+        "2025"
+      ],
+      "expiration_extraction": {
+        "enabled": false
+      }
+    }
+  },
+  "tag_rules": {
+    "2024": {
+      "description": "Year tag for documents explicitly tied to year 2024 (tax year, policy year, service year).",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "\\b2024\\b",
+        "tax year 2024",
+        "policy year 2024",
+        "service year 2024",
+        "coverage 2024"
+      ],
+      "forbidden_keywords": [],
+      "applies_only_to_document_types": [
+        "Tax Document",
+        "Financial/Loan/Investment",
+        "Insurance",
+        "Property/Real Estate",
+        "Receipt",
+        "Medical",
+        "Bank Statement",
+        "Vehicle Document",
+        "Invoice/Bill",
+        "Paystub/Payroll"
+      ]
+    },
+    "2025": {
+      "description": "Year tag for documents explicitly tied to year 2025.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "\\b2025\\b",
+        "tax year 2025",
+        "policy year 2025",
+        "service year 2025",
+        "coverage 2025"
+      ],
+      "forbidden_keywords": [],
+      "applies_only_to_document_types": [
+        "Tax Document",
+        "Financial/Loan/Investment",
+        "Insurance",
+        "Property/Real Estate",
+        "Receipt",
+        "Medical",
+        "Bank Statement",
+        "Vehicle Document",
+        "Invoice/Bill",
+        "Paystub/Payroll"
+      ]
+    },
+    "bank": {
+      "description": "Bank-related docs.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "bank",
+        "credit union",
+        "online banking"
+      ],
+      "forbidden_keywords": [
+        "invoice",
+        "receipt"
+      ],
+      "applies_only_to_document_types": [
+        "Bank Statement",
+        "Financial/Loan/Investment",
+        "Property/Real Estate"
+      ]
+    },
+    "id:birth-certificate": {
+      "description": "Birth certificate only.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "birth certificate",
+        "certificate of live birth",
+        "certidao de nascimento",
+        "registro civil"
+      ],
+      "forbidden_keywords": [],
+      "applies_only_to_document_types": [
+        "Identity Document",
+        "Certificate/Record"
+      ]
+    },
+    "id:drivers-license": {
+      "description": "Driver license card only.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "driver license",
+        "driver's license",
+        "carteira de motorista",
+        "carteira nacional de habilitacao",
+        "\\bcnh\\b",
+        "flhsmv",
+        "replacement license required",
+        "\\bCLASS:\\s*[A-Z]\\b"
+      ],
+      "forbidden_keywords": [
+        "permit",
+        "temporary license"
+      ],
+      "applies_only_to_document_types": [
+        "Identity Document"
+      ]
+    },
+    "id:state-id": {
+      "description": "Non-driver state ID card.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "carteira de identidade",
+        "documento de identidade",
+        "registro geral",
+        "identification card",
+        "identity card"
+      ],
+      "forbidden_keywords": [],
+      "applies_only_to_document_types": [
+        "Identity Document"
+      ]
+    },
+    "id:passport": {
+      "description": "Passport only.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "passport",
+        "passaporte"
+      ],
+      "forbidden_keywords": [
+        "passport application",
+        "birth certificate",
+        "certidao de nascimento",
+        "registro civil"
+      ],
+      "applies_only_to_document_types": [
+        "Identity Document"
+      ]
+    },
+    "id:ssn-card": {
+      "description": "Social Security card only (not statements).",
+      "match_type": "rules_only",
+      "required_all_keywords": [
+        "social security administration"
+      ],
+      "forbidden_keywords": [
+        "benefit statement",
+        "social security statement",
+        "ssa statement",
+        "form w-2",
+        "w-2",
+        "wage and tax statement",
+        "ssa-1099",
+        "1099",
+        "statement"
+      ],
+      "applies_only_to_document_types": [
+        "Identity Document"
+      ],
+      "required_any_keywords": [
+        "this number has been established",
+        "found card",
+        "ssa-3000",
+        "form ssa-3000"
+      ]
+    },
+    "person:alice": {
+      "description": "Docs explicitly naming Alice.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "\\bAlice\\b"
+      ],
+      "forbidden_keywords": [
+        "Alice's",
+        "Alices"
+      ],
+      "applies_only_to_document_types": [
+        "Bank Statement",
+        "Certificate/Record",
+        "Financial/Loan/Investment",
+        "Identity Document",
+        "Insurance",
+        "Invoice/Bill",
+        "Legal/Contract",
+        "Medical",
+        "Property/Real Estate",
+        "Receipt",
+        "Tax Document",
+        "Vehicle Document",
+        "Other Documents",
+        "Government/Immigration",
+        "Education/School",
+        "Application/Form",
+        "Paystub/Payroll"
+      ]
+    },
+    "person:andre": {
+      "description": "Docs explicitly naming Andre.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "\\bAndre\\b"
+      ],
+      "forbidden_keywords": [
+        "Andre's",
+        "Andres"
+      ],
+      "applies_only_to_document_types": [
+        "Bank Statement",
+        "Certificate/Record",
+        "Financial/Loan/Investment",
+        "Identity Document",
+        "Insurance",
+        "Invoice/Bill",
+        "Legal/Contract",
+        "Medical",
+        "Property/Real Estate",
+        "Receipt",
+        "Tax Document",
+        "Vehicle Document",
+        "Other Documents",
+        "Government/Immigration",
+        "Education/School",
+        "Application/Form",
+        "Paystub/Payroll"
+      ]
+    },
+    "person:damaris": {
+      "description": "Docs explicitly naming Damaris.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "\\bDamaris\\b"
+      ],
+      "forbidden_keywords": [
+        "Damaris's"
+      ],
+      "applies_only_to_document_types": [
+        "Bank Statement",
+        "Certificate/Record",
+        "Financial/Loan/Investment",
+        "Identity Document",
+        "Insurance",
+        "Invoice/Bill",
+        "Legal/Contract",
+        "Medical",
+        "Property/Real Estate",
+        "Receipt",
+        "Tax Document",
+        "Vehicle Document",
+        "Other Documents",
+        "Government/Immigration",
+        "Education/School",
+        "Application/Form",
+        "Paystub/Payroll"
+      ]
+    },
+    "person:rosilene": {
+      "description": "Docs explicitly naming Rosilene.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "\\bRosilene\\b"
+      ],
+      "forbidden_keywords": [
+        "Rosilene's"
+      ],
+      "applies_only_to_document_types": [
+        "Bank Statement",
+        "Certificate/Record",
+        "Financial/Loan/Investment",
+        "Identity Document",
+        "Insurance",
+        "Invoice/Bill",
+        "Legal/Contract",
+        "Medical",
+        "Property/Real Estate",
+        "Receipt",
+        "Tax Document",
+        "Vehicle Document",
+        "Other Documents",
+        "Government/Immigration",
+        "Education/School",
+        "Application/Form",
+        "Paystub/Payroll"
+      ]
+    },
+    "property": {
+      "description": "Real estate/parcel-related docs.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "property",
+        "parcel",
+        "lot",
+        "real estate",
+        "mortgage",
+        "deed"
+      ],
+      "forbidden_keywords": [],
+      "applies_only_to_document_types": [
+        "Property/Real Estate",
+        "Financial/Loan/Investment",
+        "Insurance",
+        "Legal/Contract",
+        "Tax Document"
+      ]
+    },
+    "tax": {
+      "description": "Tax-related docs.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "tax",
+        "internal revenue service",
+        "tax year",
+        "taxable"
+      ],
+      "forbidden_keywords": [],
+      "applies_only_to_document_types": [
+        "Tax Document",
+        "Property/Real Estate",
+        "Financial/Loan/Investment",
+        "Receipt",
+        "Invoice/Bill"
+      ]
+    },
+    "vehicle": {
+      "description": "Vehicle-related docs.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "vehicle",
+        "vehicle identification number",
+        "\\bvin\\b",
+        "vehicle registration",
+        "registration renewal",
+        "registration card",
+        "registration certificate",
+        "plate renewal",
+        "license plate",
+        "tag renewal",
+        "odometer",
+        "certificate of title",
+        "title number",
+        "vehicle title",
+        "title no",
+        "title #",
+        "vehicle inspection",
+        "emissions inspection",
+        "safety inspection"
+      ],
+      "forbidden_keywords": [],
+      "applies_only_to_document_types": [
+        "Insurance",
+        "Property/Real Estate",
+        "Financial/Loan/Investment",
+        "Legal/Contract",
+        "Vehicle Document",
+        "Other Documents"
+      ]
+    },
+    "id:voter-registration": {
+      "description": "Voter registration card.",
+      "match_type": "rules_only",
+      "required_any_keywords": [
+        "voter registration",
+        "voter registration card",
+        "voter card",
+        "voter identification",
+        "voter identification card",
+        "voter id",
+        "voter information card",
+        "voter information",
+        "polling location",
+        "precinct",
+        "precinct number"
+      ],
+      "forbidden_keywords": [
+        "vehicle registration",
+        "license plate",
+        "vehicle identification number",
+        "vin"
+      ],
+      "applies_only_to_document_types": [
+        "Identity Document"
+      ]
+    }
+  },
+  "ml_fallback": {
+    "enabled": true,
+    "document_type_classification": {
+      "use_when_no_rule_matches": true,
+      "min_confidence_to_auto_assign": 0.9,
+      "human_review_if_between": [
+        0.7,
+        0.9
+      ],
+      "default_if_low_confidence": "Other Documents",
+      "forbidden_output_labels": [
+        "Identity Document:ssn-card"
+      ]
+    },
+    "auxiliary_tag_suggestions": {
+      "enabled": true,
+      "min_confidence_to_suggest": 0.9,
+      "auto_apply_tags": [],
+      "never_ml_generate_tags_with_prefixes": [
+        "person:",
+        "id:"
+      ],
+      "allow_ml_for_tags": [
+        "2024",
+        "2025",
+        "property",
+        "vehicle",
+        "bank",
+        "tax"
+      ]
+    }
+  },
+  "expiration_validation": {
+    "rules": [
+      "Only extract if a trigger keyword is within 2 lines of the date.",
+      "Prefer future dates; ignore dates older than today unless explicitly labeled 'expired'.",
+      "Reject years beyond +20 years or before 2000.",
+      "If multiple candidates, choose the nearest to the trigger keyword; if tie, choose earliest future date.",
+      "If no trigger keyword, do not extract."
+    ]
+  },
+  "false_positive_guards": {
+    "general": [
+      "Require at least two independent signals for identity and tax forms (keyword + layout/form markers).",
+      "Do not tag receipts/invoices with person:* unless the exact name appears as a standalone word.",
+      "Do not apply id:* tags unless document type is Identity Document.",
+      "Disallow year tags unless the year is tied to tax/policy/service context or is the only year present."
+    ],
+    "name_detection": [
+      "Use word boundaries; ignore possessives (\"Alice's\") and plurals.",
+      "Prefer names near address blocks, signature lines, or labeled fields (Name:, Insured:, Borrower:, Taxpayer:).",
+      "If the name appears only in vendor/store name, do not tag."
+    ],
+    "ssn_card_specific": [
+      "Require both 'Social Security' and 'Social Security card' and absence of 'statement'/'benefits'.",
+      "If the document has transaction tables or balances, reject id:ssn-card."
+    ]
+  }
+}

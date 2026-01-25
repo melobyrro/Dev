@@ -1,0 +1,7 @@
+services:
+  immich-machine-learning:
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:3003/openapi.json', timeout=2); print('ok')\" >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

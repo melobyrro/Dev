@@ -1,0 +1,4 @@
+services:
+  qbittorrent:
+    volumes:
+      - /mnt/ByrroServer/ByrroMedia:/data:rw

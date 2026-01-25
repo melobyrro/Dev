@@ -1,0 +1,18 @@
+services:
+  vaultwarden:
+    image: vaultwarden/server:latest
+    container_name: vaultwarden
+    restart: unless-stopped
+    environment:
+      - DOMAIN=https://vault.byrroserver.com
+      - SIGNUPS_ALLOWED=true  # Set to false after creating your account
+      - ADMIN_TOKEN=${ADMIN_TOKEN}
+      - TZ=America/New_York
+    volumes:
+      - /mnt/ByrroServer/docker-data/vaultwarden:/data
+    networks:
+      - byrro-net
+
+networks:
+  byrro-net:
+    external: true
