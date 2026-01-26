@@ -54,6 +54,34 @@ The `/done` skill now includes:
 
 For details, see `~/.claude/skills/done/SKILL.md`
 
+### Inline Usage Status Display
+Always-visible statusLine showing token usage across three metrics:
+- **S: ~X% (H:MMa/p)** - 5-hour session percentage with reset time (approximate)
+- **Ctx: Y%** - Context window percentage (accurate, real-time)
+- **W: ~Z% (M/D)** - Weekly usage percentage with reset date (approximate)
+
+**Example:** `S: ~51% (5:59p) | Ctx: 39% | W: ~69% (1/31)`
+
+**Configuration:**
+- `~/.claude/usage-limits.conf` - Token limits and reset times (calibrate against `/usage`)
+- `~/.claude/scripts/usage-status.sh` - Display logic
+- `~/.claude/settings.json` - StatusLine command configuration
+
+**Calibration:**
+1. Run `/usage` to see actual percentages and reset times
+2. Update `~/.claude/usage-limits.conf` with:
+   - `SESSION_RESET_TIME` - From "/usage Current session · Resets X"
+   - `WEEKLY_RESET_DATE` - From "/usage Current week · Resets X"
+   - `SESSION_5H_LIMIT_TOKENS` - Adjust if session % is off
+   - `WEEKLY_LIMIT_TOKENS` - Adjust if weekly % is off
+
+**Limitations:**
+- 5-hour session % is approximate (uses today's tokens from stats-cache.json)
+- Weekly % is approximate (sums last 7 days vs. configured limit)
+- Exact data only available via `/usage` (server-side with SSO)
+
+**Created:** 2026-01-26
+
 ## ChatGPT Integration
 - ChatGPT writes plans to `PLANS/YYYY-MM-DD-<topic>.md`
 - Read PLANS/ for pending work from ChatGPT
