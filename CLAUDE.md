@@ -9,25 +9,28 @@
 
 ## Key Documentation
 Before starting work, read these files for context:
+- `home-server/GITOPS.md` - **GitOps workflow rules** (single source of truth)
 - `home-server/AGENTS.md` - SSH access, monitoring stack, service details
 - `home-server/architecture.md` - VPN, WireGuard, network topology
 
-## Sync Protocol (Automated via Hooks)
+## Sync Protocol (GitOps)
 
-**User-level hooks (`~/.claude/settings.json`):**
+> **Golden Rule:** Only edit files on Mac in this repo. Everything else is deployment.
+
+**Automated hooks:**
 - **Session start:** Git pull runs automatically - check for errors before proceeding
-
-**Project-level hooks (`.claude/settings.json`):**
 - **After git push:** VM deployment triggers automatically (pulls to VM + deploys configs)
 
-**Manual actions:**
-- Before ending a session with meaningful changes, ASK the user if they want to commit
-- If user approves commit, ASK if they want to push to GitHub
-- Never auto-commit or auto-push without explicit user approval
+**Ending a session:** Use `/done` to:
+1. Review uncommitted changes
+2. Commit with a summary
+3. Push to GitHub
+4. Wait for VM deploy to complete
+5. Confirm success before exiting
 
 **If hooks fail:** Claude will see the error output and can help resolve conflicts or connection issues.
 
-**New project setup:** Claude Code only reads `.claude/settings.json` from the current directory (no parent traversal). For project-specific hooks, create `.claude/settings.json` in the project root.
+**Full workflow details:** See `home-server/GITOPS.md`
 
 ## ChatGPT Integration
 - ChatGPT writes plans to `PLANS/YYYY-MM-DD-<topic>.md`
