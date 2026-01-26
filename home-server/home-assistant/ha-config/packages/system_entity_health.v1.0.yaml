@@ -1,8 +1,9 @@
 # System-Wide Entity Health Monitoring Package
 # Scans ALL entities across monitored domains for unavailable/stale states
 # Location: packages/system_entity_health.v1.0.yaml
-# Version: 1.0
+# Version: 1.1
 # Created: 2026-01-25
+# Updated: 2026-01-25 - Lowered thresholds, added auto-healing triggers
 
 # ============================================================
 # TEMPLATE SENSORS
@@ -94,19 +95,19 @@ template:
 # ============================================================
 
 automation:
-  # Alert when unavailable entity count is high
-  - alias: "System Health: High Unavailable Entity Count"
-    id: system_health_high_unavailable_count
+  # Alert when ANY entity becomes unavailable
+  - alias: "System Health: Unavailable Entity Alert"
+    id: system_health_unavailable_entity_alert
     description: >
-      Notify when more than 10 entities are unavailable for 30+ minutes.
-      Indicates potential integration or network issues.
+      Notify when any entity becomes unavailable for 5+ minutes.
+      Immediate awareness of integration issues.
     mode: single
     trigger:
       - platform: numeric_state
         entity_id: sensor.system_unavailable_entities
-        above: 10
+        above: 0
         for:
-          minutes: 30
+          minutes: 5
     action:
       - service: notify.mobile_app_andre_iphone
         data:
@@ -125,26 +126,20 @@ automation:
           message: >
             High unavailable count: {{ states('sensor.system_unavailable_entities') }} entities
 
-  # Alert when entity health returns to normal
+  # Alert when entity health returns to normal (all entities available)
   - alias: "System Health: Entity Health Recovered"
     id: system_health_entity_health_recovered
-    description: "Notify when unavailable count drops below threshold"
+    description: "Notify when all entities are available again"
     mode: single
     trigger:
       - platform: numeric_state
         entity_id: sensor.system_unavailable_entities
-        below: 5
-    condition:
-      # Only fire if we previously had an alert (were above 10)
-      - condition: template
-        value_template: >
-          {{ states('sensor.system_unavailable_entities') | int(0) < 5 }}
+        below: 1
     action:
       - service: notify.mobile_app_andre_iphone
         data:
           title: "Entity Health Recovered"
-          message: >
-            Unavailable entities now: {{ states('sensor.system_unavailable_entities') }}
+          message: "All monitored entities are now available"
 
   # Daily entity health summary (only if issues exist)
   - alias: "System Health: Daily Entity Summary"
@@ -170,3 +165,60 @@ automation:
             {% if stale > 0 %}{{ stale }} stale entities (>24h).{% endif %}
           data:
             url: /lovelace/system-health
+
+  # ============================================================
+  # AUTO-HEALING TRIGGERS
+  # Link entity health monitoring to existing self-healing automations
+  # ============================================================
+
+  # Auto-trigger Jose recovery when battery sensor unavailable
+  - alias: "System Health: Auto-Trigger Jose Recovery"
+    id: system_health_auto_trigger_jose_recovery
+    description: >
+      Triggers Jose self-healing when sensor.jose_battery is unavailable for 10 min.
+      Faster than the 2-hour watchdog threshold for quicker recovery.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.jose_battery
+        to: "unavailable"
+        for:
+          minutes: 10
+    condition:
+      - condition: state
+        entity_id: input_boolean.ecovacs_recovery_enabled
+        state: "on"
+    action:
+      - service: logbook.log
+        data:
+          name: "WATCHDOG_AUTO_TRIGGER"
+          message: "Jose unavailable for 10 min - triggering recovery"
+      - service: automation.trigger
+        target:
+          entity_id: automation.jose_connection_watchdog
+
+  # Auto-trigger EV9 recovery when battery sensor unavailable
+  - alias: "System Health: Auto-Trigger EV9 Recovery"
+    id: system_health_auto_trigger_ev9_recovery
+    description: >
+      Triggers EV9 self-healing when sensor.ev9_ev_battery_level is unavailable for 10 min.
+      Faster than the 2-hour watchdog threshold for quicker recovery.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.ev9_ev_battery_level
+        to: "unavailable"
+        for:
+          minutes: 10
+    condition:
+      - condition: state
+        entity_id: input_boolean.ev9_connection_watchdog_enabled
+        state: "on"
+    action:
+      - service: logbook.log
+        data:
+          name: "WATCHDOG_AUTO_TRIGGER"
+          message: "EV9 unavailable for 10 min - triggering recovery"
+      - service: automation.trigger
+        target:
+          entity_id: automation.ev9_connection_watchdog
