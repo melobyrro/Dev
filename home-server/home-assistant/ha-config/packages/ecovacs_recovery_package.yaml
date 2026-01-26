@@ -114,7 +114,7 @@ automation:
           {% if last in ['unknown', 'unavailable', ''] %}
             true
           {% else %}
-            {{ (now() - last | as_datetime).total_seconds() > 3600 }}
+            {{ (now() - as_local(last | as_datetime)).total_seconds() > 3600 }}
           {% endif %}
     action:
       # Update tracking
