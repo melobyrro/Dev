@@ -41,3 +41,83 @@ Before starting work, read these files for context:
 - `home-server/` - Home automation, Docker infrastructure knowledge
 - `CultoTranscript/` - Sermon transcription platform
 - `claude-config-auditor/` - Configuration auditing tool
+
+## MCP Server Configuration
+
+### Approved MCP Servers
+This system uses these MCP servers and integrations:
+- **ref** - Documentation search and reference tools
+- **sequential-thinking** - Structured problem-solving tool
+- **chrome-devtools** - Chrome DevTools integration
+- **superpowers** - Enhanced capabilities plugin
+- **claude-in-chrome** - Browser automation integration
+
+### Configuration Files
+MCP servers are configured in multiple locations with specific precedence:
+
+1. **Global Configuration**
+   - `~/.claude.json` (mcpServers section) - Global + project overrides
+   - `~/.claude/settings.json` (mcpServers section) - Global settings
+   - For global availability, servers MUST be in BOTH files
+
+2. **Project-Specific Configuration**
+   - `<project>/.mcp.json` - Project-level supplemental servers
+   - Examples: `/Users/andrebyrro/Dev/.mcp.json`, `/Users/andrebyrro/Dev/home-server/.mcp.json`
+
+### Configuration Structure
+
+**MCP Server Entry (in .json files):**
+```json
+"mcpServers": {
+  "server-name": {
+    "command": "npx",
+    "args": ["-y", "package-name"],
+    "env": {}
+  }
+}
+```
+
+**Plugin Entry (in settings.json only):**
+```json
+"enabledPlugins": {
+  "plugin-name@marketplace": true
+}
+```
+
+### Maintenance Guidelines
+
+**Adding a New MCP Server:**
+1. Add to `~/.claude.json` mcpServers
+2. Add to `~/.claude/settings.json` mcpServers
+3. Optionally add to project .mcp.json files
+4. Restart Claude Code
+
+**Removing an MCP Server:**
+1. Remove from ALL config files:
+   - `~/.claude.json` (global mcpServers + any project overrides)
+   - `~/.claude/settings.json`
+   - Project .mcp.json files
+   - Any disabledMcpServers arrays in ~/.claude.json projects
+2. Restart Claude Code
+
+**Config File Backups:**
+- Before modifying: `cp ~/.claude.json ~/.claude.json.backup-$(date +%Y%m%d-%H%M%S)`
+- Rollback: `cp ~/.claude.json.backup-YYYYMMDD-HHMMSS ~/.claude.json`
+
+### Verifying Configuration
+
+**List global MCP servers:**
+```bash
+jq -r '.mcpServers | keys[]' ~/.claude.json
+jq -r '.mcpServers | keys[]' ~/.claude/settings.json
+```
+
+**Check for project overrides:**
+```bash
+jq -r '.projects | to_entries[] | select(.value.mcpServers | length > 0) | "\(.key): \(.value.mcpServers | keys | join(", "))"' ~/.claude.json
+```
+
+**Verify project .mcp.json:**
+```bash
+jq -r '.mcpServers | keys[]' <project>/.mcp.json
+```
