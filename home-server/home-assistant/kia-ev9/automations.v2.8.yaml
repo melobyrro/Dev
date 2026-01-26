@@ -1,6 +1,11 @@
 # Kia EV9 Automations
-# Version: 2.7
-# Last Updated: 2026-01-24
+# Version: 2.8
+# Last Updated: 2026-01-26
+#
+# CHANGES from v2.7:
+# - Constitutional compliance (safe subset):
+#   - Task 5: Timer event trigger → state trigger (self-healing after HA restart)
+#   - Task 6: Mode justification comments on all automations
 #
 # CHANGES from v2.6.1:
 # - Per-schedule smart rate: Each schedule now uses its own rate from input_number.ev9_schedule_X_rate
@@ -70,7 +75,7 @@
           push:
             sound: default
             interruption-level: active
-  mode: single
+  mode: single  # Prevents duplicate notifications if charging state flaps
 
 - id: ev9_low_battery_alert
   alias: "EV9: Low Battery Alert"
@@ -103,7 +108,7 @@
           push:
             sound: default
             interruption-level: time-sensitive
-  mode: single
+  mode: single  # Prevents duplicate alerts if battery level oscillates
 
 # ============================================================
 # CHARGING INTERRUPTION MONITORING
@@ -160,7 +165,7 @@
               title: "Restart Charging"
             - action: EV9_FORCE_UPDATE
               title: "Refresh Status"
-  mode: single
+  mode: single  # Prevents alert spam during overnight charging issues
 
 - id: ev9_restart_charge_from_notification
   alias: "EV9: Restart Charge from Notification"
@@ -188,7 +193,7 @@
       data:
         title: "EV9 Charging Restarted"
         message: "Sent command to restart charging. Check status in a few minutes."
-  mode: single
+  mode: single  # One restart command at a time to avoid API conflicts
 
 # ============================================================
 # LOW CHARGING POWER ALERT
@@ -235,7 +240,7 @@
           actions:
             - action: EV9_RESTART_CHARGE
               title: "Restart Charging"
-  mode: single
+  mode: single  # Prevents alert spam if charging power fluctuates
 
 # ============================================================
 # SECURITY NOTIFICATIONS
@@ -275,7 +280,7 @@
             - action: LOCK_EV9
               title: "Lock Now"
               destructive: false
-  mode: single
+  mode: single  # One alert at a time for unlocked state
 
 - id: ev9_lock_from_notification
   alias: "EV9: Lock from Notification Action"
@@ -298,7 +303,7 @@
       data:
         title: "EV9 Locked"
         message: "Your EV9 has been locked."
-  mode: single
+  mode: single  # One lock command per notification tap
 
 # ============================================================
 # WALK-AWAY LOCK (v2.0: Distance-Based, AUT-09)
@@ -412,7 +417,7 @@
                   push:
                     sound: default
                     interruption-level: time-sensitive
-  mode: single
+  mode: single  # One lock attempt at a time to avoid API conflicts
 
 # ============================================================
 # TIMEOUT FAILSAFE LOCK (v2.0: AUT-10)
@@ -515,7 +520,7 @@
                   push:
                     sound: default
                     interruption-level: time-sensitive
-  mode: single
+  mode: single  # One lock attempt at a time to avoid API conflicts
 
 # ============================================================
 # AUTO-CLOSE WINDOWS
@@ -555,7 +560,7 @@
       data:
         title: "EV9 Windows Closed"
         message: "Auto-close windows activated after leaving home."
-  mode: single
+  mode: single  # One close command per zone exit
 
 # ============================================================
 # TRUNK LEFT OPEN ALERT
@@ -589,7 +594,7 @@
           push:
             sound: default
             interruption-level: time-sensitive
-  mode: single
+  mode: single  # Prevents alert spam if trunk state flaps
 
 # ============================================================
 # CLIMATE TIMER AUTO-STOP
@@ -599,10 +604,11 @@
   alias: "EV9: Climate Timer Auto-Stop"
   description: "Stop climate control when timer finishes"
   trigger:
-    - platform: event
-      event_type: timer.finished
-      event_data:
-        entity_id: timer.ev9_climate_timer
+    # State trigger instead of event - survives HA restart (constitutional compliance)
+    - platform: state
+      entity_id: timer.ev9_climate_timer
+      to: "idle"
+      from: "active"
   action:
     - service: python_script.shift_event_log
       data:
@@ -616,7 +622,7 @@
       data:
         title: "EV9 Climate Timer Finished"
         message: "Climate control stopped automatically after timer expired."
-  mode: single
+  mode: single  # One stop command per timer expiry
 
 # ============================================================
 # PRE-CONDITIONING AUTOMATION (v2.7: Per-Schedule Smart Rate)
@@ -812,7 +818,7 @@
           Outside: {{ outside_temp | round(0) }}°F -> Target: {{ target_temp | round(0) }}°F ({{ climate_mode }})
           Rate: {{ smart_rate }} min/°F, Runtime: {{ runtime_minutes }} min
           Departure: {{ departure_formatted }}
-  mode: single
+  mode: single  # Prevents overlapping schedule evaluations
 
 # ============================================================
 # DATA REFRESH
@@ -836,7 +842,7 @@
     - service: kia_uvo.force_update
       data:
         device_id: "{{ states('input_text.ev9_device_id') }}"
-  mode: single
+  mode: single  # One update per plug event
 
 - id: ev9_force_update_from_notification
   alias: "EV9: Force Update from Notification"
@@ -859,7 +865,7 @@
       data:
         title: "EV9 Status Refreshing"
         message: "Requested fresh data from vehicle. Check back in 1-2 minutes."
-  mode: single
+  mode: single  # One update per notification tap
 
 # ============================================================
 # CONNECTION WATCHDOG WITH EMAIL OTP (v2.4)
@@ -994,7 +1000,7 @@
             data:
               push:
                 interruption-level: critical
-  mode: single
+  mode: single  # Only one recovery attempt at a time
 
 # ============================================================
 # OTP EMAIL RECEIVED (v2.4)
@@ -1115,7 +1121,7 @@
             entity_prefix: input_text.ev9_event
             max_events: 10
             new_event: "{{ now().strftime('%H:%M') }} - WATCHDOG_ERROR: Could not extract OTP from email"
-  mode: single
+  mode: single  # Process one OTP email at a time
 
 # ============================================================
 # OTP TIMEOUT (v2.4)
@@ -1177,4 +1183,4 @@
         data:
           push:
             interruption-level: time-sensitive
-  mode: single
+  mode: single  # One timeout check at a time

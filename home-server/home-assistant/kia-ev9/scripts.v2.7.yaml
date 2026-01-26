@@ -1,6 +1,11 @@
 # Kia EV9 Scripts
-# Version: 2.6
-# Last Updated: 2026-01-25
+# Version: 2.7
+# Last Updated: 2026-01-26
+#
+# CHANGES from v2.6:
+# - Constitutional compliance (safe subset):
+#   - Task 4: Idempotency guard - skip if climate already running
+#   - Task 7: Error logging with response_variable for API calls
 #
 # CHANGES from v2.5:
 # - ev9_start_climate_with_timer now includes response verification:
@@ -41,6 +46,29 @@ ev9_start_climate_with_timer:
         target_temp: "{{ states('input_number.ev9_target_temperature') | int(72) }}"
         duration_min: "{{ states('input_number.ev9_climate_duration') | int(15) }}"
         device_id: "{{ states('input_text.ev9_device_id') }}"
+        is_already_running: "{{ is_state('binary_sensor.ev9_air_conditioner', 'on') }}"
+
+    # Idempotency guard - skip if climate already running (constitutional compliance)
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ is_already_running }}"
+          sequence:
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - CLIMATE_SKIPPED: Already running, starting timer only"
+            - service: timer.start
+              data:
+                duration: "{{ duration_min * 60 }}"
+              target:
+                entity_id: timer.ev9_climate_timer
+            - service: notify.mobile_app_andre_iphone
+              data:
+                title: "EV9 Climate Already Running"
+                message: "Climate was already running. Timer set for {{ duration_min }} min."
+            - stop: "Climate already running - skipped duplicate start"
 
     # Attempt 1: Start climate
     - service: kia_uvo.start_climate
@@ -48,6 +76,20 @@ ev9_start_climate_with_timer:
         device_id: "{{ device_id }}"
         climate: true
         temperature: "{{ target_temp }}"
+      continue_on_error: true
+      response_variable: climate_attempt1
+
+    # Error logging for API call (constitutional compliance)
+    - choose:
+        - conditions:
+            - condition: template
+              value_template: "{{ climate_attempt1 is not defined or (climate_attempt1.error is defined) }}"
+          sequence:
+            - service: python_script.shift_event_log
+              data:
+                entity_prefix: input_text.ev9_event
+                max_events: 10
+                new_event: "{{ now().strftime('%H:%M') }} - CLIMATE_API_ERROR: Command may have failed (attempt 1)"
 
     - service: python_script.shift_event_log
       data:
@@ -102,6 +144,19 @@ ev9_start_climate_with_timer:
             device_id: "{{ device_id }}"
             climate: true
             temperature: "{{ target_temp }}"
+          continue_on_error: true
+          response_variable: climate_attempt2
+        # Error logging for retry API call (constitutional compliance)
+        - choose:
+            - conditions:
+                - condition: template
+                  value_template: "{{ climate_attempt2 is not defined or (climate_attempt2.error is defined) }}"
+              sequence:
+                - service: python_script.shift_event_log
+                  data:
+                    entity_prefix: input_text.ev9_event
+                    max_events: 10
+                    new_event: "{{ now().strftime('%H:%M') }} - CLIMATE_API_ERROR: Command may have failed (attempt 2)"
         - delay:
             seconds: 120
         - service: kia_uvo.force_update
