@@ -181,7 +181,9 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.jose_battery
-        to: "unavailable"
+        to:
+          - "unavailable"
+          - "unknown"
         for:
           minutes: 10
     condition:
@@ -207,7 +209,9 @@ automation:
     trigger:
       - platform: state
         entity_id: sensor.ev9_ev_battery_level
-        to: "unavailable"
+        to:
+          - "unavailable"
+          - "unknown"
         for:
           minutes: 10
     condition:
