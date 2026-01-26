@@ -104,6 +104,12 @@ lovelace:
       icon: mdi:cctv
       show_in_sidebar: true
       filename: dashboards/wyze_cameras.yaml
+    claude-config:
+      mode: yaml
+      title: Claude Config
+      icon: mdi:robot
+      show_in_sidebar: true
+      filename: dashboards/claude_config.yaml
 
 automation: !include automations.v3.0.yaml
 script: !include scripts.v3.0.yaml
@@ -2348,6 +2354,18 @@ rest_command:
       Content-Type: application/json
     payload: >
       {"visit":{"ended_at":"{{ ended_at }}"}}
+  claude_config_force_scan:
+    url: "http://192.168.1.11:5678/webhook/scan-repos"
+    method: POST
+    timeout: 120
+    content_type: "application/json"
+    payload: '{"source": "home_assistant"}'
+  claude_config_generate_report:
+    url: "http://192.168.1.11:5678/webhook/generate-report"
+    method: POST
+    timeout: 300
+    content_type: "application/json"
+    payload: '{"source": "home_assistant"}'
 
 shell_command:
   hardlink_other_trigger: "/bin/sh -c \"date +%s > /config/hardlink_other_trigger\""

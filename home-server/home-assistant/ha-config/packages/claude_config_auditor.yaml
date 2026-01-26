@@ -187,20 +187,11 @@ input_boolean:
     initial: true
 
 # ============================================
-# REST COMMANDS
-# ============================================
-
-rest_command:
-  claude_config_force_scan:
-    url: "http://192.168.1.11:5678/webhook/scan-repos"
-    method: POST
-    timeout: 120
-    content_type: "application/json"
-    payload: '{"source": "home_assistant"}'
-
 # ============================================
 # AUTOMATIONS
 # ============================================
+# NOTE: rest_command definitions moved to main configuration.yaml
+# to resolve YAML merge conflicts
 
 automation:
   - id: claude_config_critical_alert
