@@ -1,0 +1,53 @@
+type: vertical-stack
+title: "Claude Code Recommendations"
+cards:
+  - type: markdown
+    content: |
+      # Recommendation Manager
+      View and manage your Claude Code feature recommendations.
+
+      These are personalized suggestions to improve your Claude Code workflow.
+
+  - type: entities
+    title: "Active Recommendations"
+    entities:
+      - entity_id: sensor.claude_recommendation_status
+        name: "Recommendation System"
+        icon: mdi:lightbulb-on-outline
+    show_empty: false
+
+  - type: markdown
+    content: |
+      ## Available Recommendations
+
+      ### Automation
+      - **SessionStart Hooks** - Auto-run commands at session start
+      - **Manual-Only Skills** - Control automatic skill invocation
+
+      ### Security
+      - **Permission Deny Rules** - Block access to sensitive files
+
+      ### Integration
+      - **GitHub MCP Server** - Live GitHub PR/issue access
+
+      ### Performance
+      - **MCP Tool Search** - Reduce context usage
+
+      ---
+
+      **Actions**: Click buttons in your recommendation emails to:
+      - ✓ Mark Complete - Hide permanently
+      - ⏰ Remind in 7 Days - Show again later
+      - ✗ Dismiss - Hide permanently
+
+  - type: entities
+    title: "Actions"
+    entities:
+      - entity_id: button.claude_config_generate_report
+        name: "Send Email Report Now"
+        icon: mdi:email-send
+        tap_action:
+          action: call-service
+          service: button.press
+          service_data:
+            entity_id: button.claude_config_generate_report

@@ -1,6 +1,6 @@
 # Claude Config Auditor — Requirements
-**Version:** v1.0
-**Last Updated:** 2026-01-24
+**Version:** v1.1
+**Last Updated:** 2026-01-26
 **Owner:** Andre Byrro
 
 ## 1) Purpose
@@ -23,6 +23,7 @@ Monitor Claude Code configuration files across projects on the Mac, collect best
 | `sensor.claude_config_pass_count` | sensor | Count of passing checks |
 | `sensor.claude_config_last_sync` | sensor | Timestamp of last sync |
 | `sensor.claude_config_pending_candidates` | sensor | Number of pending rule candidates |
+| `sensor.claude_recommendation_status` | sensor | Recommendation tracking (active/dismissed/reminded/completed) |
 | `sensor.claude_config_audit_age` | sensor | Hours since last sync |
 | `binary_sensor.claude_config_audit_stale` | binary_sensor | True when audit data > 8 hours old |
 | `binary_sensor.claude_config_has_critical` | binary_sensor | True when critical issues exist |

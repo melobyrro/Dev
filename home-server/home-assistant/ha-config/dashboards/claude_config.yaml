@@ -1,0 +1,120 @@
+title: Claude Config
+views:
+  - title: Main
+    path: main
+    icon: mdi:robot
+    badges: []
+    cards:
+      - type: vertical-stack
+        cards:
+          - type: markdown
+            content: |
+              ## Claude Code Configuration Auditor
+              Monitors Claude Code configuration files across your GitHub repositories.
+          - type: horizontal-stack
+            cards:
+              - type: entity
+                entity: sensor.claude_config_audit_status
+                name: Status
+              - type: entity
+                entity: sensor.claude_config_health_score
+                name: Health
+              - type: entity
+                entity: sensor.claude_config_projects_count
+                name: Projects
+
+      - type: vertical-stack
+        title: Discovery Summary
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: entity
+                entity: sensor.claude_config_files_discovered
+                name: Files Found
+                icon: mdi:file-document-multiple
+              - type: entity
+                entity: sensor.claude_config_commands_count
+                name: Commands
+                icon: mdi:console
+              - type: entity
+                entity: sensor.claude_config_skills_count
+                name: Skills
+                icon: mdi:robot
+          - type: entities
+            title: Discovered Items
+            entities:
+              - entity: sensor.claude_config_commands_list
+                name: Commands
+              - entity: sensor.claude_config_skills_list
+                name: Skills
+
+      - type: vertical-stack
+        title: Issues
+        cards:
+          - type: horizontal-stack
+            cards:
+              - type: entity
+                entity: sensor.claude_config_critical_count
+                name: Critical
+                icon: mdi:alert-circle
+              - type: entity
+                entity: sensor.claude_config_error_count
+                name: Errors
+                icon: mdi:alert
+              - type: entity
+                entity: sensor.claude_config_warning_count
+                name: Warnings
+                icon: mdi:alert-outline
+              - type: entity
+                entity: sensor.claude_config_info_count
+                name: Info
+                icon: mdi:information
+
+      - type: vertical-stack
+        title: Sync Status
+        cards:
+          - type: entities
+            entities:
+              - entity: sensor.claude_config_last_sync
+                name: Last Sync
+              - entity: sensor.claude_config_audit_age
+                name: Audit Age
+              - entity: binary_sensor.claude_config_audit_stale
+                name: Data Stale
+          - type: horizontal-stack
+            cards:
+              - type: button
+                name: Force Scan
+                icon: mdi:refresh
+                tap_action:
+                  action: call-service
+                  service: rest_command.claude_config_force_scan
+              - type: button
+                name: Email Report
+                icon: mdi:email-outline
+                tap_action:
+                  action: call-service
+                  service: rest_command.claude_config_generate_report
+
+      - type: vertical-stack
+        title: Notifications
+        cards:
+          - type: entities
+            entities:
+              - entity: input_boolean.claude_config_notify_critical
+                name: Notify on Critical Issues
+              - entity: input_boolean.claude_config_notify_stale
+                name: Notify on Stale Data
+
+      - type: markdown
+        title: Quick Links
+        content: |
+          - [n8n Workflows](http://192.168.1.11:5678)
+          - [Status API](http://192.168.1.11:5678/webhook/status-api)
+
+  - title: Recommendations
+    path: recommendations
+    icon: mdi:lightbulb
+    badges: []
+    cards:
+      - !include claude_config_recommendations.yaml

@@ -141,6 +141,47 @@ template:
         icon: mdi:lightbulb-outline
         state: "{{ state_attr('sensor.claude_config_audit_raw', 'pending_candidates') | default(0) }}"
 
+      - name: "Claude Recommendation Status"
+        unique_id: claude_recommendation_status
+        icon: mdi:lightbulb-on
+        state: >
+          {% set recommendations = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+          {% if recommendations %}
+            {{ recommendations.values() | selectattr('state', 'equalto', 'open') | list | length }} active
+          {% else %}
+            5 active
+          {% endif %}
+        attributes:
+          total_recommendations: 5
+          active: >
+            {% set recommendations = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if recommendations %}
+              {{ recommendations.values() | selectattr('state', 'equalto', 'open') | list | length }}
+            {% else %}
+              5
+            {% endif %}
+          dismissed: >
+            {% set recommendations = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if recommendations %}
+              {{ recommendations.values() | selectattr('state', 'equalto', 'dismissed') | list | length }}
+            {% else %}
+              0
+            {% endif %}
+          reminded: >
+            {% set recommendations = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if recommendations %}
+              {{ recommendations.values() | selectattr('state', 'equalto', 'reminded') | list | length }}
+            {% else %}
+              0
+            {% endif %}
+          completed: >
+            {% set recommendations = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if recommendations %}
+              {{ recommendations.values() | selectattr('state', 'equalto', 'completed') | list | length }}
+            {% else %}
+              0
+            {% endif %}
+
       - name: "Claude Config Audit Age"
         unique_id: claude_config_audit_age
         icon: mdi:timer-sand
