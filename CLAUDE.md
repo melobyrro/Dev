@@ -32,6 +32,28 @@ Before starting work, read these files for context:
 
 **Full workflow details:** See `home-server/GITOPS.md`
 
+## Session Workflows
+
+### Git Pull Feedback (Enhanced)
+At every session start, Claude automatically checks for git pull results and displays them:
+- **Success with commits**: Shows commit messages that were pulled
+- **Already up to date**: Brief confirmation
+- **Skipped**: Explains uncommitted changes blocked the pull
+- **Failed**: Shows actual error details and resolution steps
+
+The hook writes results to `/tmp/claude-git-pull-result-{HASH}.txt` which Claude reads and displays.
+
+For details, see `~/.claude/docs/session-start-behavior.md`
+
+### `/done` Command (Enhanced)
+The `/done` skill now includes:
+- **Context-aware file selection**: Categorizes files as "Relevant to current work" vs "Other changes" based on session topic
+- **Documentation discovery**: Finds related `requirements.md`, `CLAUDE.md`, and `docs/plans/*.md` files
+- **Lightweight doc review**: Offers to review/update docs before committing
+- **Enhanced commit messages**: Documents both code and doc changes
+
+For details, see `~/.claude/skills/done/SKILL.md`
+
 ## ChatGPT Integration
 - ChatGPT writes plans to `PLANS/YYYY-MM-DD-<topic>.md`
 - Read PLANS/ for pending work from ChatGPT
