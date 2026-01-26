@@ -21,6 +21,8 @@ echo "Current commit: $(git log --oneline -1)"
 # Step 2: Deploy Home Assistant config
 echo ""
 echo "=== Step 2: Deploying Home Assistant config ==="
+# Note: --filter='P <file>' protects files from deletion when using --delete
+# This is critical for gitignored secrets that exist on VM but not in repo
 rsync -av --delete \
     --exclude='.storage' \
     --exclude='*.db' \
