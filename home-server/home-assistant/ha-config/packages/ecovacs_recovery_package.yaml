@@ -1,8 +1,8 @@
 # Jose (Ecovacs) Integration Auto-Recovery Package
 # Monitors vacuum connectivity and automatically reconnects when needed
 # Location: packages/ecovacs_recovery_package.yaml
-# Version: 1.1
-# Updated: 2026-01-24
+# Version: 1.2
+# Updated: 2026-01-25
 #
 # Tiered Recovery Approach:
 #   1. First attempt: Reload config entry (gentle - fixes temporary issues)
@@ -10,6 +10,10 @@
 #
 # Recovery State Machine: idle → recovering → (idle|failed)
 # Event Log Prefix: WATCHDOG_ (standard across all self-healing integrations)
+#
+# Flap Detection (v1.2):
+#   Detects connection instability (rapid state changes) and triggers recovery
+#   even if the connection never stays offline for the full 10-minute threshold.
 
 # Shell commands for integration management
 shell_command:
@@ -58,10 +62,21 @@ input_number:
     step: 1
     initial: 0
     icon: mdi:counter
+  jose_flap_count:
+    name: "Jose Flap Count"
+    min: 0
+    max: 20
+    step: 1
+    initial: 0
+    icon: mdi:swap-horizontal
 
 input_datetime:
   ecovacs_last_recovery:
     name: "Jose Last Recovery Attempt"
+    has_date: true
+    has_time: true
+  jose_flap_window_start:
+    name: "Jose Flap Window Start"
     has_date: true
     has_time: true
 
@@ -83,11 +98,15 @@ automation:
       - condition: state
         entity_id: input_boolean.ecovacs_recovery_enabled
         state: "on"
-      # Only if vacuum has been unknown/unavailable for more than 10 minutes
+      # Only if vacuum is offline AND either:
+      #   - Has been offline for more than 10 minutes, OR
+      #   - Connection is flapping (3+ state changes in 15 minutes)
       - condition: template
         value_template: >
-          {{ states('sensor.jose_battery') in ['unknown', 'unavailable'] and
-             (now() - states.sensor.jose_battery.last_changed).total_seconds() > 600 }}
+          {% set is_offline = states('sensor.jose_battery') in ['unknown', 'unavailable'] %}
+          {% set offline_long = (now() - states.sensor.jose_battery.last_changed).total_seconds() > 600 %}
+          {% set is_flapping = states('input_number.jose_flap_count') | int >= 3 %}
+          {{ is_offline and (offline_long or is_flapping) }}
       # Don't attempt recovery more than once per hour
       - condition: template
         value_template: >
@@ -255,10 +274,50 @@ automation:
               title: "Jose Vacuum"
               message: "Still offline (attempt {{ states('input_number.ecovacs_recovery_attempts') }}). Ecovacs cloud may be down. Check native app."
 
+  # Track connection flaps to detect instability
+  - alias: "Jose: Track Connection Flaps"
+    id: jose_track_connection_flaps
+    description: >
+      Counts state changes within a 15-minute window to detect connection instability.
+      If 3+ flaps occur while offline, triggers recovery even without 10-min threshold.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: sensor.jose_battery
+    condition:
+      - condition: state
+        entity_id: input_boolean.ecovacs_recovery_enabled
+        state: "on"
+    action:
+      # Reset window if >15 minutes since last flap or window hasn't started
+      - if:
+          - condition: template
+            value_template: >
+              {% set window_start = states('input_datetime.jose_flap_window_start') %}
+              {{ window_start in ['unknown', 'unavailable', ''] or
+                 (now() - (as_local(window_start | as_datetime))).total_seconds() > 900 }}
+        then:
+          - service: input_datetime.set_datetime
+            target:
+              entity_id: input_datetime.jose_flap_window_start
+            data:
+              datetime: "{{ now().strftime('%Y-%m-%d %H:%M:%S') }}"
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.jose_flap_count
+            data:
+              value: 1
+        else:
+          - service: input_number.set_value
+            target:
+              entity_id: input_number.jose_flap_count
+            data:
+              value: "{{ (states('input_number.jose_flap_count') | int) + 1 }}"
+
   # Reset attempt counter when vacuum comes back online
   - alias: "Jose: Reset Recovery Counter"
     id: jose_reset_recovery_counter
-    description: "Resets recovery attempt counter when Jose comes back online"
+    description: "Resets recovery attempt counter and flap count when Jose comes back online"
     mode: single
     trigger:
       - platform: state
@@ -273,6 +332,11 @@ automation:
       - service: input_number.set_value
         target:
           entity_id: input_number.ecovacs_recovery_attempts
+        data:
+          value: 0
+      - service: input_number.set_value
+        target:
+          entity_id: input_number.jose_flap_count
         data:
           value: 0
       - service: input_text.set_value

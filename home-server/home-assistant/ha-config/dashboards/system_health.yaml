@@ -1,8 +1,9 @@
 # System Health Dashboard View
 # Add to an existing dashboard or create as standalone
 # Location: dashboards/system_health.yaml
-# Version: 1.0
+# Version: 1.1
 # Created: 2026-01-24
+# Updated: 2026-01-25 - Added system-wide entity and automation health
 
 title: System Health
 path: system-health
@@ -12,9 +13,93 @@ max_columns: 2
 
 sections:
   # ============================================================
-  # LEFT COLUMN: Status Overview
+  # SYSTEM-WIDE HEALTH OVERVIEW (NEW)
   # ============================================================
   - type: grid
+    title: System Overview
+    cards:
+      # Entity Health Summary
+      - type: tile
+        entity: sensor.entity_health_summary
+        name: Entity Health
+        color: >
+          {% if is_state('sensor.entity_health_summary', 'healthy') %}
+            green
+          {% elif is_state('sensor.entity_health_summary', 'critical') %}
+            red
+          {% else %}
+            orange
+          {% endif %}
+        icon: mdi:heart-pulse
+        tap_action:
+          action: more-info
+
+      # Automation Health Summary
+      - type: tile
+        entity: sensor.automation_health_summary
+        name: Automation Health
+        color: >
+          {% if is_state('sensor.automation_health_summary', 'healthy') %}
+            green
+          {% elif 'error' in states('sensor.automation_health_summary') %}
+            red
+          {% else %}
+            orange
+          {% endif %}
+        icon: mdi:robot
+        tap_action:
+          action: more-info
+
+      # Unavailable Entities Count
+      - type: tile
+        entity: sensor.system_unavailable_entities
+        name: Unavailable
+        color: >
+          {% set count = states('sensor.system_unavailable_entities') | int(0) %}
+          {% if count > 10 %}red
+          {% elif count > 0 %}orange
+          {% else %}green{% endif %}
+        icon: mdi:alert-circle-outline
+        tap_action:
+          action: more-info
+
+      # Automation Errors Today
+      - type: tile
+        entity: counter.automation_errors_today
+        name: Errors Today
+        color: >
+          {% set count = states('counter.automation_errors_today') | int(0) %}
+          {% if count > 5 %}red
+          {% elif count > 0 %}orange
+          {% else %}green{% endif %}
+        icon: mdi:alert-octagon-outline
+        tap_action:
+          action: more-info
+
+      # Unavailable by Domain
+      - type: markdown
+        title: "Unavailable by Domain"
+        content: |
+          {% set data = state_attr('sensor.system_unavailable_entities', 'by_domain') %}
+          {% if data and data | length > 0 %}
+          {% for domain, count in data.items() %}
+          - **{{ domain }}**: {{ count }}
+          {% endfor %}
+          {% else %}
+          All monitored domains healthy
+          {% endif %}
+
+      # Last Automation Error
+      - type: markdown
+        title: "Last Automation Error"
+        content: |
+          {{ states('input_text.last_automation_error') or 'No errors recorded' }}
+
+  # ============================================================
+  # LEFT COLUMN: Integration Status Overview
+  # ============================================================
+  - type: grid
+    title: Integration Status
     cards:
       # Overall Health Summary
       - type: tile
@@ -222,3 +307,98 @@ sections:
 
           ---
           *Last checked: {{ now().strftime('%H:%M') }}*
+
+  # ============================================================
+  # WATCHMAN / CONFIGURATION HEALTH (Requires HACS Watchman)
+  # ============================================================
+  - type: grid
+    title: Configuration Health
+    cards:
+      # Watchman Missing Entities (only shows if Watchman installed)
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.watchman_missing_entities
+            state_not: unavailable
+        card:
+          type: tile
+          entity: sensor.watchman_missing_entities
+          name: Missing Entities
+          color: >
+            {% set count = states('sensor.watchman_missing_entities') | int(0) %}
+            {% if count > 5 %}red
+            {% elif count > 0 %}orange
+            {% else %}green{% endif %}
+          icon: mdi:link-off
+          tap_action:
+            action: more-info
+
+      # Watchman Missing Services (only shows if Watchman installed)
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.watchman_missing_services
+            state_not: unavailable
+        card:
+          type: tile
+          entity: sensor.watchman_missing_services
+          name: Missing Services
+          color: >
+            {% set count = states('sensor.watchman_missing_services') | int(0) %}
+            {% if count > 0 %}orange
+            {% else %}green{% endif %}
+          icon: mdi:puzzle-outline
+          tap_action:
+            action: more-info
+
+      # Run Watchman Report Button
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.watchman_missing_entities
+            state_not: unavailable
+        card:
+          type: custom:mushroom-template-card
+          primary: Run Watchman Report
+          icon: mdi:magnify-scan
+          icon_color: blue
+          tap_action:
+            action: call-service
+            service: watchman.report
+
+      # Install Watchman Message (shows if not installed)
+      - type: conditional
+        conditions:
+          - condition: state
+            entity: sensor.watchman_missing_entities
+            state: unavailable
+        card:
+          type: markdown
+          content: |
+            **Watchman Not Installed**
+
+            Install via HACS to detect broken entity references in your configuration.
+
+            1. Open HACS → Integrations
+            2. Search "Watchman"
+            3. Install and restart HA
+
+      # Stale Entities Summary
+      - type: tile
+        entity: sensor.system_stale_entities
+        name: Stale Entities (24h+)
+        color: >
+          {% set count = states('sensor.system_stale_entities') | int(0) %}
+          {% if count > 20 %}orange
+          {% else %}green{% endif %}
+        icon: mdi:clock-alert-outline
+        tap_action:
+          action: more-info
+
+      # Automation Stats
+      - type: markdown
+        title: "Automation Stats"
+        content: |
+          **Total:** {{ state_attr('sensor.automation_health_summary', 'total') or '?' }}
+          **Never triggered:** {{ state_attr('sensor.automation_health_summary', 'never_triggered_count') or '0' }}
+          **Stale (7d+):** {{ state_attr('sensor.automation_health_summary', 'stale_7d_count') or '0' }}

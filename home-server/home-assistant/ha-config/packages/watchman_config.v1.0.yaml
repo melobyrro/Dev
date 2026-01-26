@@ -1,0 +1,112 @@
+# Watchman Integration Configuration
+# Provides dead entity reference detection via HACS Watchman integration
+# Location: packages/watchman_config.v1.0.yaml
+# Version: 1.0
+# Created: 2026-01-25
+#
+# PREREQUISITES:
+# 1. Install Watchman via HACS UI (search "Watchman")
+# 2. Add to configuration.yaml:
+#
+#    watchman:
+#      report_path: /config/watchman_report.txt
+#      included_folders:
+#        - /config/packages
+#        - /config/automations.yaml
+#        - /config/dashboards
+#      check_lovelace: true
+#      columns_width: 30
+#
+# 3. Restart Home Assistant
+# 4. The automations below will then work
+
+# ============================================================
+# AUTOMATIONS
+# ============================================================
+
+automation:
+  # Daily Watchman report at 6 AM
+  - alias: "Watchman: Daily Report"
+    id: watchman_daily_report
+    description: >
+      Runs Watchman report daily and notifies if missing entities/services found.
+      REQUIRES: Watchman installed via HACS.
+    mode: single
+    trigger:
+      - platform: time
+        at: "06:00:00"
+    condition:
+      # Only run if Watchman is actually installed
+      - condition: template
+        value_template: >
+          {{ states('sensor.watchman_missing_entities') is not none }}
+    action:
+      - service: watchman.report
+      - delay:
+          seconds: 30
+      - condition: template
+        value_template: >
+          {{ states('sensor.watchman_missing_entities') | int(0) > 0 or
+             states('sensor.watchman_missing_services') | int(0) > 0 }}
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Watchman Report"
+          message: >
+            {% set entities = states('sensor.watchman_missing_entities') | int(0) %}
+            {% set services = states('sensor.watchman_missing_services') | int(0) %}
+            {% if entities > 0 %}{{ entities }} missing entities. {% endif %}
+            {% if services > 0 %}{{ services }} missing services.{% endif %}
+            Check /config/watchman_report.txt for details.
+          data:
+            url: /lovelace/system-health
+      - service: logbook.log
+        data:
+          name: "WATCHDOG_WATCHMAN"
+          message: >
+            Daily report: {{ states('sensor.watchman_missing_entities') | int(0) }} missing entities,
+            {{ states('sensor.watchman_missing_services') | int(0) }} missing services
+
+  # Alert on significant increase in missing entities
+  - alias: "Watchman: New Missing Entities Alert"
+    id: watchman_new_missing_entities_alert
+    description: "Alert when missing entity count increases"
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.watchman_missing_entities
+        above: 5
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('sensor.watchman_missing_entities') is not none }}
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Watchman: Missing Entities"
+          message: >
+            {{ states('sensor.watchman_missing_entities') }} entities referenced but don't exist.
+            Check watchman_report.txt for details.
+          data:
+            push:
+              interruption-level: time-sensitive
+            url: /lovelace/system-health
+
+  # Run report after HA restart (give time for entities to load)
+  - alias: "Watchman: Post-Restart Report"
+    id: watchman_post_restart_report
+    description: "Run Watchman report 5 minutes after HA starts"
+    mode: single
+    trigger:
+      - platform: homeassistant
+        event: start
+    action:
+      - delay:
+          minutes: 5
+      - condition: template
+        value_template: >
+          {{ states('sensor.watchman_missing_entities') is not none }}
+      - service: watchman.report
+      - service: logbook.log
+        data:
+          name: "WATCHDOG_WATCHMAN"
+          message: "Post-restart report triggered"

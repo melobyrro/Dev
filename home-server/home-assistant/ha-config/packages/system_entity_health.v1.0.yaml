@@ -1,0 +1,172 @@
+# System-Wide Entity Health Monitoring Package
+# Scans ALL entities across monitored domains for unavailable/stale states
+# Location: packages/system_entity_health.v1.0.yaml
+# Version: 1.0
+# Created: 2026-01-25
+
+# ============================================================
+# TEMPLATE SENSORS
+# ============================================================
+
+template:
+  - sensor:
+      # Count of all unavailable entities across monitored domains
+      - name: "System Unavailable Entities"
+        unique_id: system_unavailable_entities
+        icon: mdi:alert-circle
+        state: >
+          {% set domains = ['sensor', 'binary_sensor', 'switch', 'light',
+                            'climate', 'vacuum', 'lock', 'fan', 'cover',
+                            'media_player', 'camera'] %}
+          {{ states | selectattr('domain', 'in', domains)
+                    | selectattr('state', 'in', ['unavailable', 'unknown'])
+                    | list | count }}
+        attributes:
+          entities: >
+            {% set domains = ['sensor', 'binary_sensor', 'switch', 'light',
+                              'climate', 'vacuum', 'lock', 'fan', 'cover',
+                              'media_player', 'camera'] %}
+            {{ states | selectattr('domain', 'in', domains)
+                      | selectattr('state', 'in', ['unavailable', 'unknown'])
+                      | map(attribute='entity_id') | list }}
+          by_domain: >
+            {% set domains = ['sensor', 'binary_sensor', 'switch', 'light',
+                              'climate', 'vacuum', 'lock', 'fan', 'cover',
+                              'media_player', 'camera'] %}
+            {% set ns = namespace(result={}) %}
+            {% for domain in domains %}
+              {% set count = states | selectattr('domain', 'eq', domain)
+                                    | selectattr('state', 'in', ['unavailable', 'unknown'])
+                                    | list | count %}
+              {% if count > 0 %}
+                {% set ns.result = dict(ns.result, **{domain: count}) %}
+              {% endif %}
+            {% endfor %}
+            {{ ns.result }}
+          last_scan: "{{ now().isoformat() }}"
+
+      # Count of stale entities (no update in threshold hours)
+      - name: "System Stale Entities"
+        unique_id: system_stale_entities
+        icon: mdi:clock-alert
+        state: >
+          {% set threshold_hours = 24 %}
+          {% set domains = ['sensor', 'binary_sensor'] %}
+          {% set threshold_ts = now() - timedelta(hours=threshold_hours) %}
+          {{ states | selectattr('domain', 'in', domains)
+                    | rejectattr('state', 'in', ['unavailable', 'unknown'])
+                    | selectattr('last_changed', 'lt', threshold_ts)
+                    | list | count }}
+        attributes:
+          entities: >
+            {% set threshold_hours = 24 %}
+            {% set domains = ['sensor', 'binary_sensor'] %}
+            {% set threshold_ts = now() - timedelta(hours=threshold_hours) %}
+            {{ states | selectattr('domain', 'in', domains)
+                      | rejectattr('state', 'in', ['unavailable', 'unknown'])
+                      | selectattr('last_changed', 'lt', threshold_ts)
+                      | map(attribute='entity_id') | list }}
+          threshold_hours: 24
+          last_scan: "{{ now().isoformat() }}"
+
+      # Entity health summary for dashboard
+      - name: "Entity Health Summary"
+        unique_id: entity_health_summary
+        icon: mdi:heart-pulse
+        state: >
+          {% set unavailable = states('sensor.system_unavailable_entities') | int(0) %}
+          {% set stale = states('sensor.system_stale_entities') | int(0) %}
+          {% if unavailable > 10 %}
+            critical
+          {% elif unavailable > 5 %}
+            warning
+          {% elif unavailable > 0 or stale > 0 %}
+            degraded
+          {% else %}
+            healthy
+          {% endif %}
+        attributes:
+          unavailable_count: "{{ states('sensor.system_unavailable_entities') | int(0) }}"
+          stale_count: "{{ states('sensor.system_stale_entities') | int(0) }}"
+
+# ============================================================
+# AUTOMATIONS
+# ============================================================
+
+automation:
+  # Alert when unavailable entity count is high
+  - alias: "System Health: High Unavailable Entity Count"
+    id: system_health_high_unavailable_count
+    description: >
+      Notify when more than 10 entities are unavailable for 30+ minutes.
+      Indicates potential integration or network issues.
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.system_unavailable_entities
+        above: 10
+        for:
+          minutes: 30
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Entity Health Warning"
+          message: >
+            {{ states('sensor.system_unavailable_entities') }} entities unavailable.
+            {% set by_domain = state_attr('sensor.system_unavailable_entities', 'by_domain') %}
+            {% if by_domain %}Top domains: {{ by_domain }}{% endif %}
+          data:
+            push:
+              interruption-level: time-sensitive
+            url: /lovelace/system-health
+      - service: logbook.log
+        data:
+          name: "WATCHDOG_ENTITY_HEALTH"
+          message: >
+            High unavailable count: {{ states('sensor.system_unavailable_entities') }} entities
+
+  # Alert when entity health returns to normal
+  - alias: "System Health: Entity Health Recovered"
+    id: system_health_entity_health_recovered
+    description: "Notify when unavailable count drops below threshold"
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: sensor.system_unavailable_entities
+        below: 5
+    condition:
+      # Only fire if we previously had an alert (were above 10)
+      - condition: template
+        value_template: >
+          {{ states('sensor.system_unavailable_entities') | int(0) < 5 }}
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Entity Health Recovered"
+          message: >
+            Unavailable entities now: {{ states('sensor.system_unavailable_entities') }}
+
+  # Daily entity health summary (only if issues exist)
+  - alias: "System Health: Daily Entity Summary"
+    id: system_health_daily_entity_summary
+    description: "Send daily summary of entity health at 8 AM if issues exist"
+    mode: single
+    trigger:
+      - platform: time
+        at: "08:00:00"
+    condition:
+      - condition: template
+        value_template: >
+          {{ states('sensor.system_unavailable_entities') | int(0) > 0 or
+             states('sensor.system_stale_entities') | int(0) > 0 }}
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Daily Entity Health Report"
+          message: >
+            {% set unavailable = states('sensor.system_unavailable_entities') | int(0) %}
+            {% set stale = states('sensor.system_stale_entities') | int(0) %}
+            {% if unavailable > 0 %}{{ unavailable }} unavailable entities. {% endif %}
+            {% if stale > 0 %}{{ stale }} stale entities (>24h).{% endif %}
+          data:
+            url: /lovelace/system-health

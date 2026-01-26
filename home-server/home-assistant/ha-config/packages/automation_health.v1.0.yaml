@@ -1,0 +1,184 @@
+# Automation Health Monitoring Package
+# Tracks automation errors, stale automations, and execution health
+# Location: packages/automation_health.v1.0.yaml
+# Version: 1.0
+# Created: 2026-01-25
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+counter:
+  automation_errors_today:
+    name: "Automation Errors Today"
+    initial: 0
+    step: 1
+    icon: mdi:alert-circle
+
+input_text:
+  last_automation_error:
+    name: "Last Automation Error"
+    max: 255
+    icon: mdi:alert
+    initial: "None"
+
+# ============================================================
+# TEMPLATE SENSORS
+# ============================================================
+
+template:
+  - sensor:
+      # Summary of automation health
+      - name: "Automation Health Summary"
+        unique_id: automation_health_summary
+        icon: mdi:robot
+        state: >
+          {% set automations = states.automation | list %}
+          {% set never = automations | selectattr('attributes.last_triggered', 'none') | list | count %}
+          {% set threshold = now() - timedelta(days=7) %}
+          {% set stale = automations | rejectattr('attributes.last_triggered', 'none')
+                                     | selectattr('attributes.last_triggered', 'lt', threshold)
+                                     | list | count %}
+          {% set errors = states('counter.automation_errors_today') | int(0) %}
+          {% if errors > 5 %}
+            {{ errors }} errors today
+          {% elif never > 10 %}
+            {{ never }} never triggered
+          {% elif stale > 20 %}
+            {{ stale }} stale (7d+)
+          {% else %}
+            healthy
+          {% endif %}
+        attributes:
+          total: "{{ states.automation | list | count }}"
+          errors_today: "{{ states('counter.automation_errors_today') | int(0) }}"
+          never_triggered_count: >
+            {{ states.automation | selectattr('attributes.last_triggered', 'none') | list | count }}
+          never_triggered: >
+            {{ states.automation | selectattr('attributes.last_triggered', 'none')
+                                 | map(attribute='entity_id') | list }}
+          stale_7d_count: >
+            {% set threshold = now() - timedelta(days=7) %}
+            {{ states.automation | rejectattr('attributes.last_triggered', 'none')
+                                 | selectattr('attributes.last_triggered', 'lt', threshold)
+                                 | list | count }}
+          stale_7d: >
+            {% set threshold = now() - timedelta(days=7) %}
+            {{ states.automation | rejectattr('attributes.last_triggered', 'none')
+                                 | selectattr('attributes.last_triggered', 'lt', threshold)
+                                 | map(attribute='entity_id') | list }}
+          last_error: "{{ states('input_text.last_automation_error') }}"
+
+      # Errors today as a sensor (for dashboard display)
+      - name: "Automation Errors Today"
+        unique_id: automation_errors_today_sensor
+        icon: mdi:alert-octagon
+        state: "{{ states('counter.automation_errors_today') | int(0) }}"
+        unit_of_measurement: "errors"
+
+# ============================================================
+# AUTOMATIONS
+# ============================================================
+
+automation:
+  # Detect automation errors from system log
+  - alias: "System Health: Automation Error Detector"
+    id: system_health_automation_error_detector
+    description: >
+      Monitors system_log events for automation errors and warnings.
+      Increments daily error counter and stores last error message.
+    mode: queued
+    max: 10
+    trigger:
+      - platform: event
+        event_type: system_log_event
+    condition:
+      - condition: template
+        value_template: >
+          {{ 'automation' in (trigger.event.data.name | default('') | lower) and
+             trigger.event.data.level in ['ERROR', 'WARNING'] }}
+    action:
+      - service: counter.increment
+        target:
+          entity_id: counter.automation_errors_today
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.last_automation_error
+        data:
+          value: >
+            {{ now().strftime('%H:%M') }} - {{ trigger.event.data.message[:200] | default('Unknown error') }}
+      - service: logbook.log
+        data:
+          name: "WATCHDOG_AUTOMATION_ERROR"
+          message: >
+            {{ trigger.event.data.name | default('Unknown') }}: {{ trigger.event.data.message[:200] | default('') }}
+
+  # Reset daily error counter at midnight
+  - alias: "System Health: Reset Daily Error Counter"
+    id: system_health_reset_daily_error_counter
+    description: "Resets the automation error counter at midnight"
+    mode: single
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    action:
+      - service: counter.reset
+        target:
+          entity_id: counter.automation_errors_today
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.last_automation_error
+        data:
+          value: "None"
+
+  # Alert on high error count
+  - alias: "System Health: High Automation Error Count"
+    id: system_health_high_automation_error_count
+    description: "Notify when automation errors exceed threshold"
+    mode: single
+    trigger:
+      - platform: numeric_state
+        entity_id: counter.automation_errors_today
+        above: 5
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Automation Errors"
+          message: >
+            {{ states('counter.automation_errors_today') }} automation errors today.
+            Last: {{ states('input_text.last_automation_error') }}
+          data:
+            push:
+              interruption-level: time-sensitive
+            url: /lovelace/system-health
+
+  # Daily automation health summary
+  - alias: "System Health: Daily Automation Summary"
+    id: system_health_daily_automation_summary
+    description: "Send daily summary of automation health at 8:05 AM if issues exist"
+    mode: single
+    trigger:
+      - platform: time
+        at: "08:05:00"
+    condition:
+      - condition: template
+        value_template: >
+          {% set errors = states('counter.automation_errors_today') | int(0) %}
+          {% set never = state_attr('sensor.automation_health_summary', 'never_triggered_count') | int(0) %}
+          {% set stale = state_attr('sensor.automation_health_summary', 'stale_7d_count') | int(0) %}
+          {{ errors > 0 or never > 10 or stale > 20 }}
+    action:
+      - service: notify.mobile_app_andre_iphone
+        data:
+          title: "Daily Automation Health"
+          message: >
+            {% set errors = states('counter.automation_errors_today') | int(0) %}
+            {% set never = state_attr('sensor.automation_health_summary', 'never_triggered_count') | int(0) %}
+            {% set stale = state_attr('sensor.automation_health_summary', 'stale_7d_count') | int(0) %}
+            {% set total = state_attr('sensor.automation_health_summary', 'total') | int(0) %}
+            {{ total }} total automations.
+            {% if errors > 0 %}{{ errors }} errors yesterday. {% endif %}
+            {% if never > 10 %}{{ never }} never triggered. {% endif %}
+            {% if stale > 20 %}{{ stale }} stale (>7d).{% endif %}
+          data:
+            url: /lovelace/system-health
