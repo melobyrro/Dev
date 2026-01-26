@@ -29,6 +29,7 @@ rsync -av --delete \
     --exclude='*.log' \
     --exclude='*.log.*' \
     --exclude='secrets.yaml' \
+    --filter='P SERVICE_ACCOUNT.json' \
     --exclude='.HA_VERSION' \
     --exclude='home-assistant.log' \
     --exclude='home-assistant.log.1' \
