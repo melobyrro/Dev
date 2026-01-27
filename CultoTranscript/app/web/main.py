@@ -54,7 +54,7 @@ if BACKEND_AVAILABLE:
 if BACKEND_AVAILABLE:
     app.add_middleware(
         CSRFMiddleware,
-        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast", "/api/channels/", "/api/websub/callback"]
+        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast", "/api/channels/", "/api/websub/callback", "/api/schedule-config"]
     )
 
 # Add auth middleware (added first so it runs second)
