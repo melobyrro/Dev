@@ -1,0 +1,2 @@
+#!/usr/bin/env bash
+exec node /Users/andrebyrro/Dev/web-automation/bin/web-validate "$@"

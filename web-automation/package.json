@@ -1,0 +1,23 @@
+{
+  "name": "web-automation",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "CDP-based web automation CLI for authenticated validation",
+  "bin": {
+    "web-validate": "./bin/web-validate"
+  },
+  "scripts": {
+    "start": "node bin/web-validate"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": ["cdp", "chrome", "automation", "cli", "validation"],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "puppeteer-core": "^24.36.0",
+    "zod": "^4.3.6"
+  }
+}

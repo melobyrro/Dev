@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Run artifacts (screenshots, reports, HTML)
+runs/
+
+# CDP profile directory (contains session data)
+.chrome-cdp-profile/
+
+# Environment files
+.env
+.env.local
+
+# OS files
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
