@@ -190,28 +190,8 @@ async def index(request: Request, user: str = Depends(get_current_user)):
 
 @app.get("/admin", response_class=HTMLResponse)
 async def admin_page(request: Request, user: str = Depends(require_auth)):
-    """Unified admin page with tabs - requires authentication"""
-    from app.common.database import get_db_session
-    from app.common.models import Channel
-
-    # Get channel_id from session (multi-tenant mode)
-    session_channel_id = request.session.get("channel_id", 1)
-
-    with next(get_db_session()) as db:
-        # Get all active channels for selector dropdown
-        channels = db.query(Channel).filter(Channel.active == True).all()
-        # Get the current channel from session
-        channel = db.query(Channel).filter(Channel.id == session_channel_id).first()
-        if not channel and channels:
-            channel = channels[0]  # Fallback to first channel
-
-    return templates.TemplateResponse("admin.html", {
-        "request": request,
-        "user": user,
-        "channel": channel,
-        "channels": channels,
-        "current_channel_id": channel.id if channel else 1
-    })
+    """Admin page - serves React SPA"""
+    return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.get("/admin/import", response_class=HTMLResponse)
