@@ -30,22 +30,25 @@ class Channel(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(500), nullable=False)
-    youtube_url = Column(String(500), nullable=False)
-    channel_id = Column(String(100), unique=True, nullable=False)
+    youtube_url = Column(String(500))
+    channel_id = Column(String(100), unique=True)
     youtube_channel_id = Column(String(100), comment='YouTube channel ID extracted from channel URL')
     created_by = Column(Integer, ForeignKey("users.id"))
-    schedule_cron = Column(String(100))
     active = Column(Boolean, default=True)
     default_speaker = Column(String(255), nullable=True, comment='Default speaker name for videos from this channel')
-    last_checked_at = Column(DateTime(timezone=True))
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    last_checked_at = Column(DateTime)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+    subdomain = Column(String(50), unique=True)
+    min_video_duration_sec = Column(Integer, default=300)
+    max_video_duration_sec = Column(Integer, default=9000)
 
     # Relationships
     creator = relationship("User", back_populates="channels")
     videos = relationship("Video", back_populates="channel", cascade="all, delete-orphan")
     jobs = relationship("Job", back_populates="channel")
     youtube_subscription = relationship("YouTubeSubscription", back_populates="channel", uselist=False, cascade="all, delete-orphan")
+    schedule_configs = relationship("ScheduleConfig", back_populates="channel", cascade="all, delete-orphan")
 
 
 class Video(Base):
@@ -485,16 +488,63 @@ class ChatbotCache(Base):
     last_accessed = Column(DateTime(timezone=True), comment='Last time this cache entry was accessed')
 
 
+class ChurchApiKey(Base):
+    """Per-church API keys for AI services"""
+    __tablename__ = 'church_api_keys'
+
+    id = Column(Integer, primary_key=True)
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), unique=True, index=True)
+    api_key = Column(Text, nullable=False)
+    key_suffix = Column(String(10), nullable=True, comment='Last 5 characters for verification display')
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    updated_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+
+    channel = relationship("Channel")
+    updated_by_user = relationship("User")
+
+    def __repr__(self):
+        suffix = self.key_suffix or (self.api_key[-5:] if self.api_key else "***")
+        return f"<ChurchApiKey(channel_id={self.channel_id}, key_suffix='{suffix}')>"
+
+
+class ChurchMember(Base):
+    """Many-to-many relationship between users and churches with roles"""
+    __tablename__ = "church_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=False)
+    role = Column(String(20), nullable=False)  # 'owner', 'admin', 'user'
+    invited_by = Column(Integer, ForeignKey("users.id"))
+    invited_at = Column(DateTime(timezone=True), server_default=func.now())
+    accepted_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationships
+    user = relationship("User", foreign_keys=[user_id])
+    channel = relationship("Channel", foreign_keys=[channel_id])
+    inviter = relationship("User", foreign_keys=[invited_by])
+
+    __table_args__ = (
+        CheckConstraint("role IN ('owner', 'admin', 'user')", name='check_role'),
+    )
+
+
 class ScheduleConfig(Base):
     __tablename__ = "schedule_config"
 
     id = Column(Integer, primary_key=True, index=True)
-    schedule_type = Column(String(50), nullable=False, unique=True, comment='Type of scheduled job (e.g., weekly_check, daily_check)')
+    channel_id = Column(Integer, ForeignKey("channels.id", ondelete="CASCADE"), nullable=False, index=True)
+    schedule_type = Column(String(50), nullable=False, comment='Type of scheduled job (e.g., weekly_check, daily_check)')
     day_of_week = Column(Integer, nullable=True, comment='Day of week (0=Monday, 1=Tuesday, ..., 6=Sunday). NULL for daily schedules.')
     time_of_day = Column(String(8), nullable=False, comment='Time of day to run in HH:MM:SS format')
     enabled = Column(Boolean, default=True, nullable=False, comment='Whether this schedule is active')
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    # Relationship
+    channel = relationship("Channel", back_populates="schedule_configs")
 
 
 class Speaker(Base):

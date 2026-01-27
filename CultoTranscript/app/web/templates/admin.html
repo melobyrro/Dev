@@ -420,9 +420,42 @@
 
 {% block content %}
 <div class="card" style="margin-top: 2rem;">
-    <h1>🔐 Painel Administrativo</h1>
-    <p style="color: var(--text-muted); margin-top: 0.5rem;">Gerencie importações, agendamentos e configurações do sistema.</p>
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+        <div>
+            <h1>🔐 Painel Administrativo</h1>
+            <p style="color: var(--text-muted); margin-top: 0.5rem;">Gerencie importações, agendamentos e configurações do sistema.</p>
+        </div>
+        <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <label for="channelSelector" style="font-weight: 600;">Igreja:</label>
+            <select id="channelSelector" onchange="switchChannel(this.value)" style="padding: 0.5rem; border-radius: 4px; border: 1px solid var(--border); background: var(--surface); color: var(--text);">
+                {% for ch in channels %}
+                <option value="{{ ch.id }}" {% if ch.id == current_channel_id %}selected{% endif %}>{{ ch.title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </div>
 </div>
+
+<script>
+// Current channel ID (from server)
+let currentChannelId = {{ current_channel_id }};
+
+async function switchChannel(channelId) {
+    currentChannelId = parseInt(channelId);
+    // Update session on server
+    try {
+        await fetch('/api/switch-channel', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ channel_id: currentChannelId })
+        });
+        // Reload schedule config with new channel
+        loadScheduleConfig();
+    } catch (error) {
+        console.error('Error switching channel:', error);
+    }
+}
+</script>
 
 <!-- Tab Navigation -->
 <div class="admin-tabs">
@@ -1125,7 +1158,7 @@ async function refreshCsrfToken() {
 // Load current configuration
 async function loadScheduleConfig() {
     try {
-        const response = await fetch('/api/schedule-config');
+        const response = await fetch(`/api/schedule-config?channel_id=${currentChannelId}`);
         const data = await response.json();
 
         if (data) {
@@ -1190,7 +1223,7 @@ document.getElementById('scheduleForm').addEventListener('submit', async functio
         // Refresh CSRF token before save
         await refreshCsrfToken();
 
-        const response = await fetch('/api/schedule-config', {
+        const response = await fetch(`/api/schedule-config?channel_id=${currentChannelId}`, {
             method: 'PUT',
             headers: {
                 'Content-Type': 'application/json',

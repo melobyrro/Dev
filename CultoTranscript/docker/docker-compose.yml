@@ -169,6 +169,10 @@ networks:
 
 volumes:
   postgres_data:
+    name: docker_postgres_data
+    external: true
   redis_data:
+    name: docker_redis_data
+    external: true
   worker_tmp:
   ollama_models:

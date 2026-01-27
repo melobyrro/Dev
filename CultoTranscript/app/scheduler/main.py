@@ -263,6 +263,29 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.end_headers()
 
+    def do_POST(self):
+        global scheduler
+
+        if self.path == '/reload-schedules':
+            try:
+                logger.info("Received schedule reload request")
+                result = reload_schedules()
+
+                status_code = 200 if result['success'] else 500
+                self.send_response(status_code)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps(result).encode())
+            except Exception as e:
+                logger.error(f"Error in reload endpoint: {e}", exc_info=True)
+                self.send_response(500)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(json.dumps({'success': False, 'message': str(e)}).encode())
+        else:
+            self.send_response(404)
+            self.end_headers()
+
     def log_message(self, format, *args):
         # Suppress default HTTP logging to avoid clutter
         pass
@@ -277,6 +300,72 @@ def start_health_server():
         logger.info("Health check server started on port 8001")
     except Exception as e:
         logger.error(f"Failed to start health check server: {e}")
+
+
+def reload_schedules():
+    """
+    Reload channel schedules and update scheduler jobs
+    Called by HTTP endpoint when admin updates schedules
+
+    Returns:
+        dict with success status and message
+    """
+    global scheduler
+
+    logger.info("Reloading channel schedules...")
+
+    try:
+        # Load new schedules from database
+        schedules = load_channel_schedules(max_retries=3, retry_delay=5)
+
+        if not scheduler:
+            return {'success': False, 'message': 'Scheduler not initialized'}
+
+        # Remove all existing channel check jobs (but keep monthly rollup)
+        jobs_to_remove = []
+        for job in scheduler.get_jobs():
+            if job.id.startswith('check_channel_') or job.id == 'fallback_daily_check':
+                jobs_to_remove.append(job.id)
+
+        for job_id in jobs_to_remove:
+            scheduler.remove_job(job_id)
+            logger.info(f"Removed old job: {job_id}")
+
+        # Add new channel jobs
+        if not schedules:
+            logger.warning("No schedules loaded, adding fallback daily check")
+            scheduler.add_job(
+                check_all_active_channels,
+                CronTrigger(hour=2, minute=0),
+                id='fallback_daily_check',
+                name='Fallback daily check (no channel schedules configured)'
+            )
+        else:
+            for config in schedules:
+                scheduler.add_job(
+                    lambda ch_id=config['channel_id']: check_channel_for_new_videos(ch_id),
+                    CronTrigger(
+                        day_of_week=config['day_of_week'],
+                        hour=config['hour'],
+                        minute=config['minute']
+                    ),
+                    id=f"check_channel_{config['channel_id']}",
+                    name=f"Check '{config['channel_name']}' ({config['day_of_week']} at {config['hour']:02d}:{config['minute']:02d})"
+                )
+                logger.info(f"Added job: Check '{config['channel_name']}' ({config['day_of_week']} at {config['hour']:02d}:{config['minute']:02d})")
+
+        job_count = len([j for j in scheduler.get_jobs() if j.id.startswith('check_channel_')])
+        logger.info(f"Schedule reload complete. {job_count} channel jobs active.")
+
+        return {
+            'success': True,
+            'message': f'Reloaded {len(schedules)} schedules successfully',
+            'jobs': job_count
+        }
+
+    except Exception as e:
+        logger.error(f"Error reloading schedules: {e}", exc_info=True)
+        return {'success': False, 'message': str(e)}
 
 
 def load_channel_schedules(max_retries=5, retry_delay=10):

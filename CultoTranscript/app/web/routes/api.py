@@ -1,7 +1,7 @@
 """
 API routes for AJAX calls and programmatic access
 """
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request, status
 from pydantic import BaseModel, HttpUrl
 from typing import Optional, List
 import redis
@@ -11,11 +11,10 @@ from app.web.auth import get_current_user, require_auth, verify_password
 from app.common.database import get_db_session
 from app.common.models import (
     Video, Job, Channel, ExcludedVideo, Transcript, SermonReport,
-    ChannelRollup, ScheduleConfig, Speaker, YouTubeSubscription,
-    ChatbotQueryMetrics, ChatbotFeedback
+    ChannelRollup, ScheduleConfig, Speaker,
+    ChatbotQueryMetrics, ChatbotFeedback, User
 )
 from app.worker.report_generators import generate_daily_sermon_report, generate_channel_rollup
-from app.worker.youtube_subscription_service import get_subscription_service
 from app.ai.chatbot_service import ChatbotService
 import os
 import logging
@@ -168,6 +167,90 @@ class ScheduleConfigResponse(BaseModel):
     day_of_week: Optional[int]
     time_of_day: str
     enabled: bool
+
+
+# ============================================================================
+# Authentication Endpoints
+# ============================================================================
+
+@router.get("/me")
+async def get_current_user_info(request: Request, db=Depends(get_db_session)):
+    """
+    Get current authenticated user info.
+    Returns user details if authenticated, 401 if not.
+    """
+    is_authenticated = request.session.get("authenticated", False)
+
+    if not is_authenticated:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated"
+        )
+
+    user_id = request.session.get("user_id")
+    channel_id = request.session.get("channel_id", 1)
+
+    # Get all channels for the churches dropdown
+    channels = db.query(Channel).filter(Channel.active == True).all()
+    churches = [{"id": c.id, "title": c.title} for c in channels]
+
+    # Build response in format frontend expects
+    response = {
+        "authenticated": True,
+        "current_channel_id": channel_id,
+        "churches": churches,
+    }
+
+    if user_id:
+        user = db.query(User).filter(User.id == user_id).first()
+        if user:
+            response["user"] = {
+                "id": user.id,
+                "email": user.email,
+                "is_superadmin": user.is_superadmin,
+            }
+            # Set role based on superadmin status
+            response["role"] = "owner" if user.is_superadmin else "admin"
+    else:
+        # Legacy session without user_id (instance password auth)
+        # Treat as superadmin for backwards compatibility
+        response["user"] = {
+            "id": None,
+            "email": None,
+            "is_superadmin": True,
+        }
+        response["role"] = "owner"
+
+    return response
+
+
+class SwitchChannelRequest(BaseModel):
+    channel_id: int
+
+
+@router.post("/switch-channel")
+async def switch_channel(
+    request: Request,
+    body: SwitchChannelRequest,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """
+    Switch the current channel in session (for multi-tenant admin UI)
+    """
+    # Verify channel exists and is active
+    channel = db.query(Channel).filter(
+        Channel.id == body.channel_id,
+        Channel.active == True
+    ).first()
+
+    if not channel:
+        raise HTTPException(status_code=404, detail="Canal não encontrado")
+
+    # Update session
+    request.session["channel_id"] = body.channel_id
+
+    return {"success": True, "channel_id": body.channel_id, "channel_title": channel.title}
 
 
 @router.post("/transcribe")
@@ -1234,21 +1317,30 @@ async def update_sermon_actual_date(
 
 @router.get("/schedule-config", response_model=ScheduleConfigResponse)
 async def get_schedule_config(
+    request: Request,
+    channel_id: Optional[int] = None,
     db=Depends(get_db_session),
     user: str = Depends(get_current_user)
 ):
     """
-    Get the current schedule configuration
+    Get the schedule configuration for a specific channel
+
+    Args:
+        channel_id: Channel ID (from query param or session)
 
     Returns:
-        Schedule configuration object
+        Schedule configuration object for the channel
     """
+    # Resolve channel_id from param or session
+    resolved_channel_id = channel_id or request.session.get("channel_id", 1)
+
     config = db.query(ScheduleConfig).filter(
-        ScheduleConfig.schedule_type == 'weekly_check'
+        ScheduleConfig.schedule_type == 'weekly_check',
+        ScheduleConfig.channel_id == resolved_channel_id
     ).first()
 
     if not config:
-        # Return default if not configured
+        # Return default if not configured for this channel
         return ScheduleConfigResponse(
             id=0,
             schedule_type='weekly_check',
@@ -1268,19 +1360,25 @@ async def get_schedule_config(
 
 @router.put("/schedule-config")
 async def update_schedule_config(
+    http_request: Request,
     request: ScheduleConfigRequest,
+    channel_id: Optional[int] = None,
     db=Depends(get_db_session),
     user: str = Depends(require_auth)
 ):
     """
-    Update the schedule configuration (Admin only)
+    Update the schedule configuration for a specific channel (Admin only)
 
     Args:
+        channel_id: Channel ID (from query param or session)
         request: Schedule configuration request
 
     Returns:
         Success response with updated configuration
     """
+    # Resolve channel_id from param or session
+    resolved_channel_id = channel_id or http_request.session.get("channel_id", 1)
+
     # Validate day_of_week
     if request.day_of_week < 0 or request.day_of_week > 6:
         raise HTTPException(status_code=400, detail="day_of_week deve estar entre 0 (Segunda) e 6 (Domingo)")
@@ -1293,9 +1391,10 @@ async def update_schedule_config(
     # Convert HH:MM to HH:MM:SS for database
     time_with_seconds = request.time_of_day + ':00'
 
-    # Get or create config
+    # Get or create config for this channel
     config = db.query(ScheduleConfig).filter(
-        ScheduleConfig.schedule_type == 'weekly_check'
+        ScheduleConfig.schedule_type == 'weekly_check',
+        ScheduleConfig.channel_id == resolved_channel_id
     ).first()
 
     if config:
@@ -1305,8 +1404,9 @@ async def update_schedule_config(
         config.enabled = request.enabled
         config.updated_at = datetime.now()
     else:
-        # Create new
+        # Create new for this channel
         config = ScheduleConfig(
+            channel_id=resolved_channel_id,
             schedule_type='weekly_check',
             day_of_week=request.day_of_week,
             time_of_day=time_with_seconds,
@@ -1318,9 +1418,27 @@ async def update_schedule_config(
 
     logger.info(f"Schedule config updated: Day {request.day_of_week}, Time {request.time_of_day}, Enabled {request.enabled}")
 
+    # Reload scheduler schedules immediately
+    reload_success = False
+    reload_message = ""
+    try:
+        import requests
+        reload_response = requests.post('http://culto_scheduler:8001/reload-schedules', timeout=5)
+        reload_data = reload_response.json()
+        reload_success = reload_data.get('success', False)
+        reload_message = reload_data.get('message', '')
+        if reload_success:
+            logger.info(f"Scheduler reloaded successfully: {reload_message}")
+        else:
+            logger.warning(f"Scheduler reload failed: {reload_message}")
+    except Exception as e:
+        logger.error(f"Error reloading scheduler: {e}")
+        reload_message = f"Failed to reload scheduler: {str(e)}"
+
     return {
         "success": True,
-        "message": "Configuração atualizada com sucesso",
+        "message": "Configuração atualizada com sucesso" + (f" e agendador recarregado ({reload_message})" if reload_success else " mas não foi possível recarregar o agendador automaticamente"),
+        "reload_success": reload_success,
         "config": {
             "day_of_week": config.day_of_week,
             "time_of_day": config.time_of_day[:5],  # Return HH:MM format

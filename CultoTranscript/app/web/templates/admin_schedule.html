@@ -308,7 +308,12 @@ document.getElementById('scheduleForm').addEventListener('submit', async functio
         const data = await response.json();
 
         if (data.success) {
-            showMessage('✓ Configuração salva com sucesso! O agendador será atualizado automaticamente.', 'success');
+            // Show success message from backend (includes reload status)
+            const messageType = data.reload_success ? 'success' : 'error';
+            showMessage('✓ ' + data.message, messageType);
+
+            // Refresh scheduler status widget
+            updateSchedulerStatus();
         } else {
             showMessage('Erro: ' + (data.detail || 'Erro desconhecido'), 'error');
         }

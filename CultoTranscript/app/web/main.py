@@ -31,6 +31,8 @@ try:
     from Backend.api.v2 import events as sse_router
     from Backend.api.v2 import videos as videos_v2_router
     from Backend.api.v2 import chat as chat_v2_router
+    from Backend.api.v2 import channels as channels_v2_router
+    from Backend.api.v2 import speakers as speakers_v2_router
     from Backend.services.sse_manager import sse_manager
     BACKEND_AVAILABLE = True
 except ImportError as e:
@@ -191,14 +193,23 @@ async def admin_page(request: Request, user: str = Depends(require_auth)):
     from app.common.database import get_db_session
     from app.common.models import Channel
 
-    # Get the first active channel (single-channel mode for now)
+    # Get channel_id from session (multi-tenant mode)
+    session_channel_id = request.session.get("channel_id", 1)
+
     with next(get_db_session()) as db:
-        channel = db.query(Channel).filter(Channel.active == True).first()
+        # Get all active channels for selector dropdown
+        channels = db.query(Channel).filter(Channel.active == True).all()
+        # Get the current channel from session
+        channel = db.query(Channel).filter(Channel.id == session_channel_id).first()
+        if not channel and channels:
+            channel = channels[0]  # Fallback to first channel
 
     return templates.TemplateResponse("admin.html", {
         "request": request,
         "user": user,
-        "channel": channel
+        "channel": channel,
+        "channels": channels,
+        "current_channel_id": channel.id if channel else 1
     })
 
 
