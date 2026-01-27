@@ -27,6 +27,14 @@ interface VideosResponse {
   total: number;
 }
 
+export interface JobStatusResponse {
+  job_id: number;
+  status: string;
+  progress?: string;
+  error?: string;
+  metadata?: Record<string, unknown>;
+}
+
 class VideoService {
   async fetchVideos(filters?: VideoFilters): Promise<VideoDTO[]> {
     const params = new URLSearchParams();
@@ -58,22 +66,29 @@ class VideoService {
     throw new Error(response.data.detail || 'Failed to fetch video details');
   }
 
-  async reprocessVideo(videoId: string): Promise<void> {
-    const url = '/api/v2/videos/' + videoId + '/reprocess';
-    const response = await api.post<ApiResponse>(url);
-    
+  async reprocessVideo(videoId: string, password: string): Promise<{ job_id: number }> {
+    const url = '/api/videos/' + videoId + '/reprocess';
+    const response = await api.post<ApiResponse<{ job_id: number }>>(url, { password });
+
     if (!response.data.success) {
       throw new Error(response.data.detail || 'Failed to reprocess video');
     }
+    return response.data.data;
   }
 
-  async deleteVideo(videoId: string): Promise<void> {
-    const url = '/api/v2/videos/' + videoId;
-    const response = await api.delete<ApiResponse>(url);
-    
+  async deleteVideo(videoId: string, password: string): Promise<void> {
+    const url = '/api/videos/' + videoId;
+    const response = await api.delete<ApiResponse>(url, { data: { password } });
+
     if (!response.data.success) {
       throw new Error(response.data.detail || 'Failed to delete video');
     }
+  }
+
+  async getJobStatus(jobId: number): Promise<JobStatusResponse> {
+    const url = '/api/jobs/' + jobId + '/status';
+    const response = await api.get<JobStatusResponse>(url);
+    return response.data;
   }
 
   async updateTranscript(videoId: string, transcript: string): Promise<void> {

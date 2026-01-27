@@ -1,6 +1,25 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Layout from './components/Layout';
+import { VideoList } from './components/VideoList';
+import Login from './pages/Login';
+import Register from './pages/Register';
+import Admin from './pages/Admin';
+import Settings from './pages/Settings';
+import Database from './pages/Database';
+import { ProtectedRoute } from './components/ProtectedRoute';
+import { useAuthStore } from './stores/authStore';
+import { useEffect } from 'react';
+import { AIDrawer } from './components/AIDrawer';
+import { FloatingActionButton } from './components/FloatingActionButton';
+import { ProgressModal } from './components/ProgressModal';
+
+function LegacyVideosRedirect() {
+  useEffect(() => {
+    window.location.href = '/videos';
+  }, []);
+  return null;
+}
 
 // Create a QueryClient instance
 const queryClient = new QueryClient({
@@ -13,20 +32,71 @@ const queryClient = new QueryClient({
   },
 });
 
+function AppContent() {
+  const { checkAuth } = useAuthStore();
+
+  // Check authentication status on app initialization
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  return (
+    <>
+      <Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
+        <Route
+          path="/"
+          element={
+            <ProtectedRoute>
+              <Layout />
+            </ProtectedRoute>
+          }
+        >
+          <Route index element={<VideoList />} />
+          <Route path="/channels" element={<VideoList />} />
+          <Route path="/videos" element={<LegacyVideosRedirect />} />
+          <Route
+            path="/database"
+            element={
+              <ProtectedRoute requireSuperadmin>
+                <Database />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute requiredRole="admin">
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <ProtectedRoute>
+                <Settings />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="*" element={<div className="p-8 text-center"><h1>404 - Página não encontrada</h1></div>} />
+        </Route>
+      </Routes>
+
+      {/* Global components */}
+      <AIDrawer />
+      <FloatingActionButton />
+      <ProgressModal />
+    </>
+  );
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <Routes>
-          <Route path="/" element={<Layout />}>
-            <Route index element={<div className="p-8"><h1>Home - Coming Soon</h1></div>} />
-            <Route path="/channels" element={<div className="p-8"><h1>Channels - Coming Soon</h1></div>} />
-            <Route path="/videos/:channelId" element={<div className="p-8"><h1>Videos - Coming Soon</h1></div>} />
-            <Route path="/video/:videoId" element={<div className="p-8"><h1>Video Detail - Coming Soon</h1></div>} />
-            <Route path="/chatbot" element={<div className="p-8"><h1>Chatbot - Coming Soon</h1></div>} />
-            <Route path="*" element={<div className="p-8"><h1>404 - Page Not Found</h1></div>} />
-          </Route>
-        </Routes>
+        <AppContent />
       </BrowserRouter>
     </QueryClientProvider>
   );

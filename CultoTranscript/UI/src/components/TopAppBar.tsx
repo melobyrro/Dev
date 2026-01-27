@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useVideoStore } from '../stores/videoStore';
 
 interface TopAppBarProps {
   onThemeToggle?: () => void;
@@ -9,11 +10,17 @@ interface TopAppBarProps {
 export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: TopAppBarProps) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const location = useLocation();
+  const { channels, selectedChannelId, setSelectedChannelId } = useVideoStore();
+
+  const handleChannelChange = async (e: React.ChangeEvent<HTMLSelectElement>) => {
+    await setSelectedChannelId(e.target.value);
+  };
 
   const navLinks = [
     { path: '/channels', label: 'Sermões', testId: 'nav-videos' },
     { path: '/reports', label: 'Relatórios', testId: 'nav-reports' },
     { path: '/admin', label: 'Admin', testId: 'nav-admin' },
+    { path: '/database', label: 'Sermões DB', testId: 'nav-database' },
   ];
 
   const isActiveRoute = (path: string) => {
@@ -32,6 +39,24 @@ export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: Top
               </h1>
             </Link>
           </div>
+
+          {/* Channel Selector */}
+          {channels.length >= 1 && (
+            <div className="hidden md:flex items-center ml-6">
+              <select
+                value={selectedChannelId || ''}
+                onChange={handleChannelChange}
+                className="text-sm bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                aria-label="Selecionar igreja"
+              >
+                {channels.map((channel) => (
+                  <option key={channel.id} value={channel.id}>
+                    {channel.title}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
@@ -120,6 +145,25 @@ export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: Top
                   {link.label}
                 </Link>
               ))}
+              {/* Mobile Channel Selector */}
+              {channels.length >= 1 && (
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">
+                    Igreja
+                  </label>
+                  <select
+                    value={selectedChannelId || ''}
+                    onChange={handleChannelChange}
+                    className="w-full text-sm bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300"
+                  >
+                    {channels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        {channel.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
                 <button
                   data-testid="theme-toggle"
