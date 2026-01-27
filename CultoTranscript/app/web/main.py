@@ -6,6 +6,7 @@ import os
 import sys
 import logging
 from pathlib import Path
+from typing import Optional
 
 # Add Backend directory to Python path for imports
 backend_path = Path(__file__).parent.parent.parent / "Backend"
@@ -18,7 +19,10 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import HTMLResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from app.web.auth import AuthMiddleware, verify_password, get_current_user, require_auth
+from app.web.auth import (
+    AuthMiddleware, verify_password, get_current_user, require_auth,
+    verify_user_password, update_login_tracking, get_user_default_channel
+)
 from app.web.routes import api, channels, videos, reports, websub
 from app.routers import llm_status, database
 from app.common.database import engine, Base, get_db
@@ -54,7 +58,7 @@ if BACKEND_AVAILABLE:
 if BACKEND_AVAILABLE:
     app.add_middleware(
         CSRFMiddleware,
-        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast", "/api/channels/", "/api/websub/callback", "/api/schedule-config"]
+        exempt_paths=["/health", "/login", "/api/v2/events/stream", "/api/v2/events/broadcast", "/api/v2/channels/", "/api/channels/", "/api/websub/callback", "/api/schedule-config"]
     )
 
 # Add auth middleware (added first so it runs second)
@@ -96,6 +100,7 @@ if BACKEND_AVAILABLE:
     app.include_router(videos_v2_router.router, prefix="/api/v2/videos", tags=["Videos v2"])
     app.include_router(chat_v2_router.router, prefix="/api/v2", tags=["Chat v2"])
     app.include_router(channels_v2_router.router, prefix="/api/v2/channels", tags=["Channels v2"])
+    app.include_router(speakers_v2_router.router, prefix="/api/v2/speakers", tags=["Speakers v2"])
 
 
 @app.on_event("startup")
@@ -243,17 +248,44 @@ async def login_page(request: Request):
 
 
 @app.post("/login")
-async def login(request: Request, password: str = Form(...)):
-    """Handle login form submission"""
-    if verify_password(password):
-        # Set session
-        request.session["authenticated"] = True
-        return RedirectResponse(url="/", status_code=303)
-    else:
+async def login(
+    request: Request,
+    password: str = Form(...),
+    email: Optional[str] = Form(None)
+):
+    """Handle login with email/password or instance password fallback."""
+    from app.common.database import get_db_session
+
+    db = next(get_db_session())
+
+    try:
+        # Try email/password auth if email provided
+        if email:
+            user = verify_user_password(email, password, db)
+            if user:
+                update_login_tracking(user, db)
+                channel_id = get_user_default_channel(user.id, db)
+
+                request.session["authenticated"] = True
+                request.session["user_id"] = user.id
+                if channel_id:
+                    request.session["channel_id"] = channel_id
+
+                return RedirectResponse(url="/", status_code=303)
+
+        # Fall back to instance password
+        if verify_password(password):
+            request.session["authenticated"] = True
+            return RedirectResponse(url="/", status_code=303)
+
+        # Authentication failed - return login page with error
         return templates.TemplateResponse("login.html", {
             "request": request,
-            "error": "Senha incorreta"
+            "error": "Email ou senha incorretos"
         })
+
+    finally:
+        db.close()
 
 
 @app.get("/logout")
