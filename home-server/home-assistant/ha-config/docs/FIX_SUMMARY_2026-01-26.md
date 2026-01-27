@@ -249,3 +249,56 @@ ERROR: 'homeassistant.util.read_only_dict.ReadOnlyDict object' has no attribute 
 - 20:06 - Dashboard validated via browser, all features working
 - 20:07 - Email SQL fix applied successfully
 - 20:08 - Test email sent, awaiting Gmail verification
+- 21:00 - Fixed recommendations dashboard (custom:auto-entities removal)
+- 21:05 - Fixed patio AC humidity setpoints resetting issue
+
+---
+
+## Additional Fixes (Evening Session)
+
+### Fix 5: Recommendations Dashboard - custom:auto-entities Removal ✅ COMPLETE
+
+**Problem**: Dashboard showed "Configuration error" cards because it used `type: custom:auto-entities` which wasn't installed.
+
+**File**: `dashboards/claude_config_recommendations.yaml`
+
+**Solution**: Rewrote dashboard to use standard HA cards:
+- Replaced `custom:auto-entities` with `type: entities`
+- Simplified card structure to use built-in components only
+
+**Verification**:
+- Dashboard loads at https://home.byrroserver.com/claude-config/recommendations
+- No configuration errors
+- All sensors display correctly
+- Browser console shows no errors
+
+### Fix 6: Patio AC Humidity Setpoints Resetting ✅ COMPLETE
+
+**Problem**: Humidity setpoints (like Night RH Stop) reset from user-set values (55) back to defaults (60) after every HA restart.
+
+**Root Cause**: `input_number` helpers had hardcoded `initial:` values in YAML that override user changes on restart.
+
+**File**: `packages/patio_ac.yaml`
+
+**Changes**: Removed `initial:` lines from 5 RH-related input_numbers:
+
+| Entity | Removed |
+|--------|---------|
+| `input_number.patio_ac_rh_night_stop` | `initial: 60` |
+| `input_number.patio_ac_rh_night_start` | `initial: 65` |
+| `input_number.patio_ac_rh_day_start` | `initial: 70` |
+| `input_number.patio_ac_rh_day_stop` | `initial: 62` |
+| `input_number.patio_ac_rh_emergency` | `initial: 75` |
+
+**Result**: User-set humidity values now persist across HA restarts.
+
+## Final Status
+
+| Fix | Status |
+|-----|--------|
+| Email buttons (CSS→inline) | ⏳ Removed from scope (HA-only approach) |
+| Button template entity | ✅ Complete |
+| Package naming (dots→underscores) | ✅ Complete |
+| Dashboard syntax errors | ✅ Complete |
+| custom:auto-entities removal | ✅ Complete |
+| Patio AC humidity setpoints | ✅ Complete |
