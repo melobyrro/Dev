@@ -194,6 +194,14 @@ ntfy.byrroserver.com {
 	reverse_proxy ntfy:80
 }
 
+# --- AI Gateway ---
+
+# Clawdbot - Claude AI Gateway (token auth built-in)
+clawd.byrroserver.com {
+	import common
+	reverse_proxy http://192.168.1.10:18789
+}
+
 # --- Home Automation ---
 
 # Home Assistant - Smart Home Hub (selective Authelia)
