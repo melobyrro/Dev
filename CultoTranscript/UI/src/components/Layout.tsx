@@ -1,50 +1,50 @@
-import { Outlet, Link } from 'react-router-dom';
+import { Outlet } from 'react-router-dom';
+import TopAppBar from './TopAppBar';
+import { useState, useEffect } from 'react';
 
 export default function Layout() {
-  return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="bg-surface border-b border-border shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-primary">CultoTranscript</h1>
-            </div>
-            <nav className="flex gap-4">
-              <Link
-                to="/"
-                className="px-3 py-2 rounded-md text-sm font-medium text-text hover:bg-border transition-colors"
-              >
-                Home
-              </Link>
-              <Link
-                to="/channels"
-                className="px-3 py-2 rounded-md text-sm font-medium text-text hover:bg-border transition-colors"
-              >
-                Channels
-              </Link>
-              <Link
-                to="/chatbot"
-                className="px-3 py-2 rounded-md text-sm font-medium text-text hover:bg-border transition-colors"
-              >
-                Chatbot
-              </Link>
-            </nav>
-          </div>
-        </div>
-      </header>
+  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
+    if (typeof window !== 'undefined') {
+      // Check localStorage first
+      const stored = localStorage.getItem('theme');
+      if (stored === 'dark' || stored === 'light') {
+        return stored;
+      }
+      // Fall back to system preference
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        return 'dark';
+      }
+    }
+    return 'light';
+  });
 
-      {/* Main Content */}
-      <main className="flex-1">
+  // Sync DOM class with React state on mount and theme change
+  useEffect(() => {
+    if (theme === 'dark') {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [theme]);
+
+  const handleThemeToggle = () => {
+    const newTheme = theme === 'light' ? 'dark' : 'light';
+    setTheme(newTheme);
+    if (newTheme === 'dark') {
+      document.documentElement.classList.add('dark');
+      localStorage.setItem('theme', 'dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+      localStorage.setItem('theme', 'light');
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <TopAppBar onThemeToggle={handleThemeToggle} currentTheme={theme} />
+      <main className="pt-16">
         <Outlet />
       </main>
-
-      {/* Footer */}
-      <footer className="bg-surface border-t border-border py-4">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center text-sm text-text-muted">
-          CultoTranscript v2.0 - Automated Sermon Transcription
-        </div>
-      </footer>
     </div>
   );
 }

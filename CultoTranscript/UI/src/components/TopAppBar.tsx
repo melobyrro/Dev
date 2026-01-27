@@ -46,11 +46,11 @@ export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: Top
               <select
                 value={selectedChannelId || ''}
                 onChange={handleChannelChange}
-                className="text-sm bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-1.5 text-gray-700 dark:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded-lg px-3 py-1.5 text-gray-900 dark:text-white font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 cursor-pointer"
                 aria-label="Selecionar igreja"
               >
                 {channels.map((channel) => (
-                  <option key={channel.id} value={channel.id}>
+                  <option key={channel.id} value={String(channel.id)}>
                     {channel.title}
                   </option>
                 ))}
@@ -154,10 +154,10 @@ export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: Top
                   <select
                     value={selectedChannelId || ''}
                     onChange={handleChannelChange}
-                    className="w-full text-sm bg-gray-100 dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg px-3 py-2 text-gray-700 dark:text-gray-300"
+                    className="w-full text-sm bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-500 rounded-lg px-3 py-2 text-gray-900 dark:text-white font-medium"
                   >
                     {channels.map((channel) => (
-                      <option key={channel.id} value={channel.id}>
+                      <option key={channel.id} value={String(channel.id)}>
                         {channel.title}
                       </option>
                     ))}

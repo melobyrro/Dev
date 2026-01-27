@@ -9,7 +9,9 @@ import Settings from './pages/Settings';
 import Database from './pages/Database';
 import { ProtectedRoute } from './components/ProtectedRoute';
 import { useAuthStore } from './stores/authStore';
+import { useVideoStore } from './stores/videoStore';
 import { useEffect } from 'react';
+import Reports from './pages/Reports';
 import { AIDrawer } from './components/AIDrawer';
 import { FloatingActionButton } from './components/FloatingActionButton';
 import { ProgressModal } from './components/ProgressModal';
@@ -34,11 +36,17 @@ const queryClient = new QueryClient({
 
 function AppContent() {
   const { checkAuth } = useAuthStore();
+  const { fetchChannels } = useVideoStore();
 
   // Check authentication status on app initialization
   useEffect(() => {
     checkAuth();
   }, [checkAuth]);
+
+  // Fetch channels on app startup
+  useEffect(() => {
+    fetchChannels();
+  }, [fetchChannels]);
 
   return (
     <>
@@ -55,6 +63,7 @@ function AppContent() {
         >
           <Route index element={<VideoList />} />
           <Route path="/channels" element={<VideoList />} />
+          <Route path="/reports" element={<Reports />} />
           <Route path="/videos" element={<LegacyVideosRedirect />} />
           <Route
             path="/database"
