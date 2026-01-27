@@ -159,6 +159,11 @@ views:
                       - type: section
                         label: Energy & Cost
                       - type: custom:template-entity-row
+                        name: Current
+                        icon: mdi:flash
+                        state: >
+                          {{ states('sensor.150633095083490_realtime_power') | float(0) | round(0) }} W
+                      - type: custom:template-entity-row
                         name: Today
                         icon: mdi:lightning-bolt
                         state: >

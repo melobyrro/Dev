@@ -788,15 +788,15 @@ python_script:
 
 utility_meter:
   patio_ac_energy_daily:
-    source: sensor.patio_ac_total_energy_consumption
+    source: sensor.150633095083490_total_energy_consumption
     name: "Patio AC Energy Daily"
     cycle: daily
   patio_ac_energy_monthly:
-    source: sensor.patio_ac_total_energy_consumption
+    source: sensor.150633095083490_total_energy_consumption
     name: "Patio AC Energy Monthly"
     cycle: monthly
   patio_ac_energy_yearly:
-    source: sensor.patio_ac_total_energy_consumption
+    source: sensor.150633095083490_total_energy_consumption
     name: "Patio AC Energy Yearly"
     cycle: yearly
 
