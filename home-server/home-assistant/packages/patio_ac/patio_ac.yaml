@@ -107,7 +107,6 @@ input_number:
     min: 0
     max: 1440
     step: 30
-    initial: 240
     unit_of_measurement: "min"
     mode: slider
     icon: mdi:timer-lock
@@ -116,7 +115,6 @@ input_number:
     min: 0
     max: 30
     step: 1
-    initial: 10
     unit_of_measurement: "min"
     mode: slider
     icon: mdi:snowflake-alert
@@ -125,7 +123,6 @@ input_number:
     min: 45
     max: 100
     step: 1
-    initial: 76
     unit_of_measurement: "°F"
     mode: slider
     icon: mdi:thermostat
@@ -134,7 +131,6 @@ input_number:
     min: 0
     max: 1440
     step: 30
-    initial: 60
     unit_of_measurement: "min"
     mode: slider
     icon: mdi:timer
@@ -159,7 +155,6 @@ input_number:
     min: 0
     max: 600
     step: 15
-    initial: 240
     unit_of_measurement: "min"
     mode: slider
     icon: mdi:timer-sand-complete
@@ -168,7 +163,6 @@ input_number:
     min: 45
     max: 100
     step: 1
-    initial: 95
     unit_of_measurement: "°F"
     mode: slider
     icon: mdi:thermometer-alert
@@ -177,7 +171,6 @@ input_number:
     min: 45
     max: 100
     step: 1
-    initial: 83
     unit_of_measurement: "°F"
     mode: slider
     icon: mdi:thermometer-check
@@ -186,7 +179,6 @@ input_number:
     min: 45
     max: 100
     step: 1
-    initial: 65
     unit_of_measurement: "°F"
     mode: slider
     icon: mdi:water-thermometer
@@ -195,7 +187,6 @@ input_number:
     min: 45
     max: 100
     step: 1
-    initial: 65
     unit_of_measurement: "°F"
     mode: slider
     icon: mdi:water-thermometer
@@ -204,7 +195,6 @@ input_number:
     min: 45
     max: 100
     step: 1
-    initial: 61
     unit_of_measurement: "°F"
     mode: slider
     icon: mdi:water-check
@@ -213,7 +203,6 @@ input_number:
     min: 60
     max: 80
     step: 1
-    initial: 65
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:water-percent
@@ -222,7 +211,6 @@ input_number:
     min: 55
     max: 70
     step: 1
-    initial: 60
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:water-check
@@ -231,7 +219,6 @@ input_number:
     min: 65
     max: 85
     step: 1
-    initial: 70
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:weather-sunny
@@ -240,7 +227,6 @@ input_number:
     min: 55
     max: 70
     step: 1
-    initial: 62
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:weather-sunny-alert
@@ -249,7 +235,6 @@ input_number:
     min: 70
     max: 90
     step: 1
-    initial: 75
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:alarm-light
@@ -258,7 +243,6 @@ input_number:
     min: 15
     max: 90
     step: 5
-    initial: 35
     unit_of_measurement: "min"
     mode: slider
     icon: mdi:timer-outline
@@ -267,7 +251,6 @@ input_number:
     min: 15
     max: 120
     step: 5
-    initial: 45
     unit_of_measurement: "min"
     mode: slider
     icon: mdi:timer-lock-open
@@ -276,7 +259,6 @@ input_number:
     min: 30
     max: 360
     step: 30
-    initial: 120
     unit_of_measurement: "min"
     mode: slider
     icon: mdi:timer-off
@@ -285,7 +267,6 @@ input_number:
     min: 5
     max: 30
     step: 5
-    initial: 15
     unit_of_measurement: min
     mode: slider
     icon: mdi:timer-cog
@@ -294,7 +275,6 @@ input_number:
     min: 2
     max: 10
     step: 1
-    initial: 5
     unit_of_measurement: s
     mode: slider
     icon: mdi:timer-sync
@@ -303,14 +283,12 @@ input_number:
     min: 45
     max: 100
     step: 1
-    initial: 60
     unit_of_measurement: "°F"
   patio_ac_dewpoint_night_stop:
     name: Night Dew Point Stop
     min: 45
     max: 100
     step: 1
-    initial: 60
     unit_of_measurement: "°F"
 
 input_select:
@@ -406,12 +384,10 @@ input_datetime:
     name: "Patio AC Day Start"
     has_date: false
     has_time: true
-    initial: "07:00"
   patio_ac_night_start:
     name: "Patio AC Night Start"
     has_date: false
     has_time: true
-    initial: "22:00"
   patio_ac_last_command:
     name: "Patio AC Last Command Time"
     has_date: true
