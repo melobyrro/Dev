@@ -26,17 +26,18 @@
 
 | Method | URL/Command | Use Case |
 |--------|-------------|----------|
-| Web Chat | `http://192.168.1.10:18789/chat?session=main` | Browser chat |
-| Control UI | `http://192.168.1.10:18789/?token=<TOKEN>` | Admin dashboard |
+| Web Chat | `https://clawd.byrroserver.com/chat?session=main` | Browser chat (HTTPS) |
+| Control UI | `https://clawd.byrroserver.com/?token=<TOKEN>` | Admin dashboard |
 | CLI | `clawdbot agent --message "..."` | Scripting |
 | WhatsApp | Message yourself | Mobile access |
+| LAN Direct | `http://192.168.1.10:18789/` | Fallback (no HTTPS) |
 
 ## Credentials
 
 **Gateway Token:** `228e0ea5abb6fd156375f1376d83e6c51428b159e245a3a2`
 
 **Tokenized Dashboard URL:**
-`http://192.168.1.10:18789/?token=228e0ea5abb6fd156375f1376d83e6c51428b159e245a3a2`
+`https://clawd.byrroserver.com/?token=228e0ea5abb6fd156375f1376d83e6c51428b159e245a3a2`
 
 ## Quick Commands
 
