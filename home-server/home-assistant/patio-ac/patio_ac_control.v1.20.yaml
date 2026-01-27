@@ -157,6 +157,29 @@ views:
                         state: >
                           {{ states('sensor.patio_ac_runtime_total_all') | float(0) | round(2) }}h
                       - type: section
+                        label: Energy & Cost
+                      - type: custom:template-entity-row
+                        name: Today
+                        icon: mdi:lightning-bolt
+                        state: >
+                          {% set kwh = states('sensor.patio_ac_energy_daily') | float(0) %}
+                          {% set cost = kwh * 0.137 %}
+                          {{ kwh | round(2) }} kWh (${{ '%0.2f' | format(cost) }})
+                      - type: custom:template-entity-row
+                        name: This Month
+                        icon: mdi:calendar-month
+                        state: >
+                          {% set kwh = states('sensor.patio_ac_energy_monthly') | float(0) %}
+                          {% set cost = kwh * 0.137 %}
+                          {{ kwh | round(2) }} kWh (${{ '%0.2f' | format(cost) }})
+                      - type: custom:template-entity-row
+                        name: This Year
+                        icon: mdi:calendar
+                        state: >
+                          {% set kwh = states('sensor.patio_ac_energy_yearly') | float(0) %}
+                          {% set cost = kwh * 0.137 %}
+                          {{ kwh | round(2) }} kWh (${{ '%0.2f' | format(cost) }})
+                      - type: section
                         label: Actions
                       - entity: input_button.patio_ac_resume_automation
                         name: Resume Automation
