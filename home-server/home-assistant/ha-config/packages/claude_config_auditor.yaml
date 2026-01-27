@@ -32,6 +32,7 @@ rest:
           - info_count
           - health_score
           - last_sync
+          - recommendation_states
 
 # ============================================
 # TEMPLATE SENSORS
@@ -194,6 +195,94 @@ template:
           {% else %}
             999
           {% endif %}
+
+      # Individual Recommendation Sensors
+      - name: "Claude Recommendation SessionStart Hooks"
+        unique_id: claude_recommendation_sessionstart_hooks
+        icon: mdi:hook
+        state: >
+          {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+          {% if rec_states and 'sessionstart-hooks' in rec_states %}
+            {{ rec_states['sessionstart-hooks'].state }}
+          {% else %}
+            open
+          {% endif %}
+        attributes:
+          feature_name: "SessionStart Hooks"
+          category: "Automation"
+          dismissed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'sessionstart-hooks' in rec_states %}
+              {{ rec_states['sessionstart-hooks'].dismissed_at }}
+            {% endif %}
+          reminded_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'sessionstart-hooks' in rec_states %}
+              {{ rec_states['sessionstart-hooks'].reminded_at }}
+            {% endif %}
+          completed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'sessionstart-hooks' in rec_states %}
+              {{ rec_states['sessionstart-hooks'].completed_at }}
+            {% endif %}
+
+      - name: "Claude Recommendation GitHub MCP"
+        unique_id: claude_recommendation_github_mcp
+        icon: mdi:github
+        state: >
+          {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+          {% if rec_states and 'github-mcp' in rec_states %}
+            {{ rec_states['github-mcp'].state }}
+          {% else %}
+            open
+          {% endif %}
+        attributes:
+          feature_name: "GitHub MCP Server"
+          category: "Integration"
+          dismissed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'github-mcp' in rec_states %}
+              {{ rec_states['github-mcp'].dismissed_at }}
+            {% endif %}
+          reminded_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'github-mcp' in rec_states %}
+              {{ rec_states['github-mcp'].reminded_at }}
+            {% endif %}
+          completed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'github-mcp' in rec_states %}
+              {{ rec_states['github-mcp'].completed_at }}
+            {% endif %}
+
+      - name: "Claude Recommendation Tool Search"
+        unique_id: claude_recommendation_tool_search
+        icon: mdi:magnify
+        state: >
+          {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+          {% if rec_states and 'tool-search' in rec_states %}
+            {{ rec_states['tool-search'].state }}
+          {% else %}
+            open
+          {% endif %}
+        attributes:
+          feature_name: "MCP Tool Search"
+          category: "Performance"
+          dismissed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'tool-search' in rec_states %}
+              {{ rec_states['tool-search'].dismissed_at }}
+            {% endif %}
+          reminded_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'tool-search' in rec_states %}
+              {{ rec_states['tool-search'].reminded_at }}
+            {% endif %}
+          completed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'tool-search' in rec_states %}
+              {{ rec_states['tool-search'].completed_at }}
+            {% endif %}
 
   - binary_sensor:
       - name: "Claude Config Audit Stale"

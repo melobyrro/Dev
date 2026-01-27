@@ -9,11 +9,20 @@ cards:
       These are personalized suggestions to improve your Claude Code workflow.
 
   - type: entities
-    title: "Active Recommendations"
+    title: "Recommendation Status"
     entities:
-      - entity_id: sensor.claude_recommendation_status
+      - entity: sensor.claude_recommendation_status
         name: "Recommendation System"
         icon: mdi:lightbulb-on-outline
+      - entity: sensor.claude_recommendation_sessionstart_hooks
+        name: "SessionStart Hooks"
+        icon: mdi:play-circle
+      - entity: sensor.claude_recommendation_github_mcp
+        name: "GitHub MCP Server"
+        icon: mdi:github
+      - entity: sensor.claude_recommendation_tool_search
+        name: "Tool Search"
+        icon: mdi:magnify
     show_empty: false
 
   - type: markdown
@@ -33,21 +42,14 @@ cards:
       ### Performance
       - **MCP Tool Search** - Reduce context usage
 
-      ---
-
-      **Actions**: Click buttons in your recommendation emails to:
-      - ✓ Mark Complete - Hide permanently
-      - ⏰ Remind in 7 Days - Show again later
-      - ✗ Dismiss - Hide permanently
-
   - type: entities
     title: "Actions"
     entities:
-      - entity_id: button.claude_config_generate_report
+      - entity: button.generate_claude_config_report
         name: "Send Email Report Now"
         icon: mdi:email-send
         tap_action:
           action: call-service
           service: button.press
-          service_data:
-            entity_id: button.claude_config_generate_report
+          target:
+            entity_id: button.generate_claude_config_report

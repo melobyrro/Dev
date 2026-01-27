@@ -124,6 +124,12 @@ services:
       - POSTGRES_USER=${POSTGRES_USER:-culto_admin}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
       - REDIS_URL=redis://redis:6379/0
+      # SMTP Configuration for email alerts
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT:-587}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - ALERT_EMAIL=${ALERT_EMAIL}
     volumes:
       - ../app:/app/app
       - ../analytics:/app/analytics

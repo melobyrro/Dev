@@ -213,7 +213,6 @@ input_number:
     min: 60
     max: 80
     step: 1
-    initial: 65
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:water-percent
@@ -222,7 +221,6 @@ input_number:
     min: 55
     max: 70
     step: 1
-    initial: 60
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:water-check
@@ -231,7 +229,6 @@ input_number:
     min: 65
     max: 85
     step: 1
-    initial: 70
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:weather-sunny
@@ -240,7 +237,6 @@ input_number:
     min: 55
     max: 70
     step: 1
-    initial: 62
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:weather-sunny-alert
@@ -249,7 +245,6 @@ input_number:
     min: 70
     max: 90
     step: 1
-    initial: 75
     unit_of_measurement: "%"
     mode: slider
     icon: mdi:alarm-light

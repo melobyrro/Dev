@@ -6,6 +6,7 @@ import sys
 import logging
 import json
 import redis
+import time
 from datetime import datetime, timedelta
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -16,9 +17,10 @@ import threading
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 
 from app.worker.yt_dlp_service import YtDlpService
-from app.worker.youtube_subscription_service import get_subscription_service
+from app.worker.rollup_service import MonthlyRollupService
 from app.common.database import get_db
 from app.common.models import Channel, Video, Job, ScheduleConfig
+from app.scheduler.email_notifier import send_scheduler_alert
 
 # Configure logging
 logging.basicConfig(
@@ -155,20 +157,38 @@ def check_channel_for_new_videos(channel_id: int):
 
     except Exception as e:
         logger.error(f"Error checking channel {channel_id}: {e}", exc_info=True)
+        send_scheduler_alert(
+            subject=f"Channel Check Failed: {channel_id}",
+            body=f"Error checking channel {channel_id} for new videos:\n\n{str(e)}\n\nCheck scheduler logs for full traceback."
+        )
 
 
-def renew_youtube_subscriptions():
-    """Renew expiring YouTube WebSub subscriptions."""
-    logger.info("Starting YouTube subscription renewal check")
+def refresh_monthly_rollups():
+    """Refresh current month rollups for all channels"""
+    logger.info("Starting monthly rollup refresh")
+
+    rollup_service = MonthlyRollupService()
 
     try:
         with get_db() as db:
-            service = get_subscription_service()
-            result = service.renew_expiring_subscriptions(db=db)
-            logger.info(f"Renewed {result.get('renewed', 0)} YouTube subscriptions "
-                       f"({result.get('failed', 0)} failed)")
+            channels = db.query(Channel).filter(Channel.active == True).all()
+
+            logger.info(f"Found {len(channels)} active channels")
+
+            for channel in channels:
+                try:
+                    rollup = rollup_service.refresh_current_month(channel.id)
+                    if rollup:
+                        logger.info(f"✅ Refreshed rollup for channel {channel.id} ({channel.title})")
+                    else:
+                        logger.info(f"No videos for current month in channel {channel.id}")
+                except Exception as e:
+                    logger.error(f"❌ Error refreshing rollup for channel {channel.id}: {e}")
+
+            logger.info("Monthly rollup refresh complete")
+
     except Exception as e:
-        logger.error(f"Error renewing subscriptions: {e}", exc_info=True)
+        logger.error(f"Error in refresh_monthly_rollups: {e}", exc_info=True)
 
 
 def check_all_active_channels():
@@ -259,54 +279,58 @@ def start_health_server():
         logger.error(f"Failed to start health check server: {e}")
 
 
-def get_schedule_config():
+def load_channel_schedules(max_retries=5, retry_delay=10):
     """
-    Get schedule configuration from database
+    Load all per-channel schedules from database with retry logic
+
+    Args:
+        max_retries: Maximum number of database connection attempts
+        retry_delay: Seconds to wait between retries
 
     Returns:
-        dict with day_of_week, hour, minute, enabled or None if not configured
+        List of schedule dicts with channel_id, channel_name, day_of_week, hour, minute
     """
-    try:
-        with get_db() as db:
-            config = db.query(ScheduleConfig).filter(
-                ScheduleConfig.schedule_type == 'weekly_check'
-            ).first()
+    for attempt in range(max_retries):
+        try:
+            with get_db() as db:
+                # Query for enabled schedules on active channels
+                schedules = db.query(ScheduleConfig).join(Channel).filter(
+                    ScheduleConfig.enabled == True,
+                    Channel.active == True,
+                    ScheduleConfig.schedule_type == 'weekly_check'
+                ).all()
 
-            if not config or not config.enabled:
-                # Default: Monday at 2 AM
-                logger.info("No schedule config found or disabled, using default: Monday 2 AM")
-                return {
-                    'day_of_week': 0,  # Monday
-                    'hour': 2,
-                    'minute': 0,
-                    'enabled': True
-                }
+                if not schedules:
+                    logger.warning("No enabled channel schedules found in database")
+                    return []
 
-            # Parse time_of_day (datetime.time object from database)
-            hour = config.time_of_day.hour
-            minute = config.time_of_day.minute
+                # Convert to list of dicts for APScheduler
+                day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
+                result = []
 
-            # Convert PostgreSQL day_of_week (0-6, 0=Monday) to APScheduler format
-            # APScheduler uses: mon, tue, wed, thu, fri, sat, sun
-            day_names = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-            day_name = day_names[config.day_of_week] if config.day_of_week is not None else None
+                for schedule in schedules:
+                    channel = schedule.channel
+                    result.append({
+                        'channel_id': channel.id,
+                        'channel_name': channel.title,
+                        'day_of_week': day_names[schedule.day_of_week],
+                        'hour': schedule.time_of_day.hour,
+                        'minute': schedule.time_of_day.minute
+                    })
 
-            return {
-                'day_of_week': day_name,
-                'hour': hour,
-                'minute': minute,
-                'enabled': config.enabled
-            }
+                logger.info(f"Loaded {len(result)} channel schedules from database")
+                return result
 
-    except Exception as e:
-        logger.error(f"Error loading schedule config: {e}", exc_info=True)
-        # Fallback to default
-        return {
-            'day_of_week': 'mon',  # Monday
-            'hour': 2,
-            'minute': 0,
-            'enabled': True
-        }
+        except Exception as e:
+            logger.error(f"Error loading channel schedules (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+            else:
+                logger.error("Failed to load schedules after all retry attempts")
+                return []
+
+    return []
 
 
 def main():
@@ -318,43 +342,58 @@ def main():
     # Start health check server
     start_health_server()
 
-    # Load schedule configuration from database
-    config = get_schedule_config()
-
-    if not config['enabled']:
-        logger.warning("Scheduler is disabled in configuration. Exiting...")
-        return
+    # Load per-channel schedules from database (with retry logic)
+    schedules = load_channel_schedules(max_retries=5, retry_delay=10)
 
     scheduler = BlockingScheduler()
 
-    # Schedule weekly check using database configuration
-    logger.info(f"Configuring scheduler: Day {config['day_of_week']}, Time {config['hour']:02d}:{config['minute']:02d}")
+    # Add per-channel scheduled jobs
+    if not schedules:
+        logger.warning("No enabled channel schedules found. Will check for channels periodically...")
+        send_scheduler_alert(
+            subject="No Channel Schedules Loaded",
+            body=f"Scheduler started but failed to load channel schedules.\n"
+                 f"Time: {datetime.utcnow().isoformat()}\n"
+                 f"Fallback daily check activated.\n"
+                 f"Check scheduler logs for details."
+        )
 
+        # Add fallback daily check for all channels
+        scheduler.add_job(
+            check_all_active_channels,
+            CronTrigger(hour=2, minute=0),
+            id='fallback_daily_check',
+            name='Fallback daily check (no channel schedules configured)'
+        )
+    else:
+        # Create one job per channel
+        for config in schedules:
+            # Use lambda with default argument to capture channel_id correctly
+            scheduler.add_job(
+                lambda ch_id=config['channel_id']: check_channel_for_new_videos(ch_id),
+                CronTrigger(
+                    day_of_week=config['day_of_week'],
+                    hour=config['hour'],
+                    minute=config['minute']
+                ),
+                id=f"check_channel_{config['channel_id']}",
+                name=f"Check '{config['channel_name']}' ({config['day_of_week']} at {config['hour']:02d}:{config['minute']:02d})"
+            )
+
+    # Add monthly rollup refresh job (runs daily at 2 AM)
     scheduler.add_job(
-        check_all_active_channels,
-        CronTrigger(
-            day_of_week=config['day_of_week'],
-            hour=config['hour'],
-            minute=config['minute']
-        ),
-        id='weekly_channel_check',
-        name=f"Check all channels (configured: {config['day_of_week']} at {config['hour']:02d}:{config['minute']:02d})"
+        lambda: refresh_monthly_rollups(),
+        CronTrigger(hour=2, minute=0),
+        id='monthly_rollup_refresh',
+        name='Refresh monthly sermon rollups'
     )
 
-    # Schedule daily YouTube subscription renewal (at 3 AM UTC)
-    scheduler.add_job(
-        renew_youtube_subscriptions,
-        CronTrigger(hour=3, minute=0),
-        id='youtube_subscription_renewal',
-        name='Renew YouTube WebSub subscriptions'
-    )
-
-    logger.info("Scheduler configured. Jobs:")
+    logger.info(f"Scheduler configured with {len(scheduler.get_jobs())} jobs:")
     for job in scheduler.get_jobs():
         logger.info(f"  - {job.name}")
 
-    # Run once on startup (before starting scheduler)
-    logger.info("Running initial channel check...")
+    # Run initial channel check on startup
+    logger.info("Running initial channel check for all active channels...")
     check_all_active_channels()
 
     # Start scheduler - this will block indefinitely

@@ -380,6 +380,20 @@ Schedules are stored in `schedule_config` table (singular, not plural):
 6 = Sunday (sun)
 ```
 
+### Per-Channel Schedules (Updated 2026-01-27)
+
+The scheduler loads per-channel schedules from the `schedule_config` table at startup. Each channel can have its own schedule for YouTube checks.
+
+**Features:**
+- One APScheduler job per channel
+- Retry logic (5 attempts, 10 sec delay) for DB connection at startup
+- Email alerts when schedules fail to load or channel checks fail
+- Fallback daily check if no schedules can be loaded
+
+**Email Configuration:**
+- SMTP settings in `docker/.env` (Gmail SMTP)
+- ALERT_EMAIL receives notifications about scheduler failures
+
 ### CRITICAL: Restart Required After Config Changes
 
 **The scheduler reads config only at startup.** If you change a channel's schedule in the admin UI, you must restart the scheduler container for changes to take effect:
