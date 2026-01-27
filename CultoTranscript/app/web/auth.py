@@ -26,6 +26,7 @@ class AuthMiddleware(BaseHTTPMiddleware):
             "/api/jobs",
             "/api/videos/",  # Detail routes like /api/videos/{id}/transcript
             "/api/v2/videos",  # Backend v2 videos API
+            "/api/v2/channels",  # Backend v2 channels API
         ]
 
         # Public chatbot endpoints (POST allowed for public chat)
@@ -116,3 +117,59 @@ def require_auth(request: Request):
             detail="Não autenticado - operação requer login"
         )
     return user
+
+
+def get_user_churches(db, user_id: int) -> list:
+    """
+    Get list of churches the user has access to.
+
+    Args:
+        db: Database session
+        user_id: User ID
+
+    Returns:
+        List of church dicts with id, title, role
+    """
+    from app.common.models import ChurchMember, Channel
+
+    if not user_id:
+        return []
+
+    memberships = db.query(ChurchMember).join(Channel).filter(
+        ChurchMember.user_id == user_id,
+        Channel.active == True
+    ).all()
+
+    return [
+        {
+            "id": m.channel_id,
+            "title": m.channel.title if m.channel else "",
+            "role": m.role
+        }
+        for m in memberships
+    ]
+
+
+def get_user_role(db, user_id: int, channel_id: int) -> str:
+    """
+    Get the user's role in a specific channel.
+
+    Args:
+        db: Database session
+        user_id: User ID
+        channel_id: Channel ID
+
+    Returns:
+        Role string ('owner', 'admin', 'user') or None if not a member
+    """
+    from app.common.models import ChurchMember
+
+    if not user_id or not channel_id:
+        return None
+
+    membership = db.query(ChurchMember).filter(
+        ChurchMember.user_id == user_id,
+        ChurchMember.channel_id == channel_id
+    ).first()
+
+    return membership.role if membership else None

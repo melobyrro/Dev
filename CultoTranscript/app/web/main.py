@@ -95,6 +95,7 @@ if BACKEND_AVAILABLE:
     app.include_router(sse_router.router, prefix="/api/v2/events", tags=["SSE Events"])
     app.include_router(videos_v2_router.router, prefix="/api/v2/videos", tags=["Videos v2"])
     app.include_router(chat_v2_router.router, prefix="/api/v2", tags=["Chat v2"])
+    app.include_router(channels_v2_router.router, prefix="/api/v2/channels", tags=["Channels v2"])
 
 
 @app.on_event("startup")
