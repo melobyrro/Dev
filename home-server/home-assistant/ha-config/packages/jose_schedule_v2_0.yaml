@@ -1,0 +1,396 @@
+# ============================================
+# JOSE SCHEDULE PACKAGE (v2.0)
+# ============================================
+# Purpose: Two configurable schedules for Jose (vacuum-only) with safe, idempotent execution.
+# Last Updated: 2026-01-28
+# Requirements: /home/byrro/Dev/home-server/home-assistant/jose/requirements.md
+# ============================================
+
+input_boolean:
+  helper_jose_schedule_1_enabled:
+    name: "Jose Schedule 1 Enabled"
+    icon: mdi:calendar-check
+  helper_jose_schedule_1_mon:
+    name: "Jose Schedule 1 Monday"
+    icon: mdi:calendar
+  helper_jose_schedule_1_tue:
+    name: "Jose Schedule 1 Tuesday"
+    icon: mdi:calendar
+  helper_jose_schedule_1_wed:
+    name: "Jose Schedule 1 Wednesday"
+    icon: mdi:calendar
+  helper_jose_schedule_1_thu:
+    name: "Jose Schedule 1 Thursday"
+    icon: mdi:calendar
+  helper_jose_schedule_1_fri:
+    name: "Jose Schedule 1 Friday"
+    icon: mdi:calendar
+  helper_jose_schedule_1_sat:
+    name: "Jose Schedule 1 Saturday"
+    icon: mdi:calendar
+  helper_jose_schedule_1_sun:
+    name: "Jose Schedule 1 Sunday"
+    icon: mdi:calendar
+  helper_jose_schedule_1_clean_preference:
+    name: "Jose Schedule 1 AI Clean"
+    icon: mdi:robot-vacuum
+
+  helper_jose_schedule_2_enabled:
+    name: "Jose Schedule 2 Enabled"
+    icon: mdi:calendar-check
+  helper_jose_schedule_2_mon:
+    name: "Jose Schedule 2 Monday"
+    icon: mdi:calendar
+  helper_jose_schedule_2_tue:
+    name: "Jose Schedule 2 Tuesday"
+    icon: mdi:calendar
+  helper_jose_schedule_2_wed:
+    name: "Jose Schedule 2 Wednesday"
+    icon: mdi:calendar
+  helper_jose_schedule_2_thu:
+    name: "Jose Schedule 2 Thursday"
+    icon: mdi:calendar
+  helper_jose_schedule_2_fri:
+    name: "Jose Schedule 2 Friday"
+    icon: mdi:calendar
+  helper_jose_schedule_2_sat:
+    name: "Jose Schedule 2 Saturday"
+    icon: mdi:calendar
+  helper_jose_schedule_2_sun:
+    name: "Jose Schedule 2 Sunday"
+    icon: mdi:calendar
+  helper_jose_schedule_2_clean_preference:
+    name: "Jose Schedule 2 AI Clean"
+    icon: mdi:robot-vacuum
+
+input_datetime:
+  helper_jose_schedule_1_time:
+    name: "Jose Schedule 1 Time"
+    has_date: false
+    has_time: true
+  helper_jose_schedule_2_time:
+    name: "Jose Schedule 2 Time"
+    has_date: false
+    has_time: true
+
+input_select:
+  helper_jose_schedule_1_power:
+    name: "Jose Schedule 1 Power"
+    options:
+      - use_current
+    initial: use_current
+  helper_jose_schedule_2_power:
+    name: "Jose Schedule 2 Power"
+    options:
+      - use_current
+    initial: use_current
+
+input_number:
+  helper_jose_schedule_1_min_battery:
+    name: "Jose Schedule 1 Minimum Battery"
+    min: 10
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:battery-alert
+    mode: slider
+    initial: 25
+
+  helper_jose_schedule_2_min_battery:
+    name: "Jose Schedule 2 Minimum Battery"
+    min: 10
+    max: 100
+    step: 1
+    unit_of_measurement: "%"
+    icon: mdi:battery-alert
+    mode: slider
+    initial: 25
+
+input_text:
+  helper_jose_schedule_1_last_run:
+    name: "Jose Schedule 1 Last Run"
+    max: 255
+  helper_jose_schedule_1_last_result:
+    name: "Jose Schedule 1 Last Result"
+    max: 255
+  helper_jose_schedule_2_last_run:
+    name: "Jose Schedule 2 Last Run"
+    max: 255
+  helper_jose_schedule_2_last_result:
+    name: "Jose Schedule 2 Last Result"
+    max: 255
+
+automation:
+  - id: function_jose_schedule_sync_options
+    alias: "Jose Schedule - Sync Options"
+    description: "Sync schedule helper options from vacuum attributes."
+    mode: queued
+    max: 5
+    trigger:
+      - platform: homeassistant
+        event: start
+      - platform: state
+        entity_id:
+          - vacuum.jose
+    condition: []
+    action:
+      - service: script.function_jose_schedule_sync_options
+
+  - id: function_jose_schedule_1_run
+    alias: "Jose Schedule 1 - Run"
+    description: "Run schedule 1 when enabled and day conditions match."
+    mode: single
+    trigger:
+      - platform: time
+        at: input_datetime.helper_jose_schedule_1_time
+    condition:
+      - condition: state
+        entity_id: input_boolean.helper_jose_schedule_1_enabled
+        state: "on"
+      - condition: template
+        value_template: >
+          {% set dow = now().strftime('%a') | lower %}
+          {{ (dow == 'mon' and is_state('input_boolean.helper_jose_schedule_1_mon', 'on')) or
+             (dow == 'tue' and is_state('input_boolean.helper_jose_schedule_1_tue', 'on')) or
+             (dow == 'wed' and is_state('input_boolean.helper_jose_schedule_1_wed', 'on')) or
+             (dow == 'thu' and is_state('input_boolean.helper_jose_schedule_1_thu', 'on')) or
+             (dow == 'fri' and is_state('input_boolean.helper_jose_schedule_1_fri', 'on')) or
+             (dow == 'sat' and is_state('input_boolean.helper_jose_schedule_1_sat', 'on')) or
+             (dow == 'sun' and is_state('input_boolean.helper_jose_schedule_1_sun', 'on')) }}
+    action:
+      - service: script.function_jose_schedule_run
+        data:
+          schedule_id: 1
+          reason: "Schedule 1 time trigger"
+
+  - id: function_jose_schedule_2_run
+    alias: "Jose Schedule 2 - Run"
+    description: "Run schedule 2 when enabled and day conditions match."
+    mode: single
+    trigger:
+      - platform: time
+        at: input_datetime.helper_jose_schedule_2_time
+    condition:
+      - condition: state
+        entity_id: input_boolean.helper_jose_schedule_2_enabled
+        state: "on"
+      - condition: template
+        value_template: >
+          {% set dow = now().strftime('%a') | lower %}
+          {{ (dow == 'mon' and is_state('input_boolean.helper_jose_schedule_2_mon', 'on')) or
+             (dow == 'tue' and is_state('input_boolean.helper_jose_schedule_2_tue', 'on')) or
+             (dow == 'wed' and is_state('input_boolean.helper_jose_schedule_2_wed', 'on')) or
+             (dow == 'thu' and is_state('input_boolean.helper_jose_schedule_2_thu', 'on')) or
+             (dow == 'fri' and is_state('input_boolean.helper_jose_schedule_2_fri', 'on')) or
+             (dow == 'sat' and is_state('input_boolean.helper_jose_schedule_2_sat', 'on')) or
+             (dow == 'sun' and is_state('input_boolean.helper_jose_schedule_2_sun', 'on')) }}
+    action:
+      - service: script.function_jose_schedule_run
+        data:
+          schedule_id: 2
+          reason: "Schedule 2 time trigger"
+
+script:
+  function_jose_schedule_sync_options:
+    alias: "Jose Schedule - Sync Options"
+    description: "Sync schedule input_select options from device fan speeds."
+    mode: queued
+    max: 5
+    sequence:
+      - variables:
+          fan_speed_options: "{{ state_attr('vacuum.jose', 'fan_speed_list') | default([]) }}"
+      - choose:
+          - conditions: "{{ fan_speed_options | length > 0 }}"
+            sequence:
+              - service: input_select.set_options
+                target:
+                  entity_id:
+                    - input_select.helper_jose_schedule_1_power
+                    - input_select.helper_jose_schedule_2_power
+                data:
+                  options: "{{ ['use_current'] + fan_speed_options }}"
+
+  function_jose_schedule_run:
+    alias: "Jose Schedule - Run"
+    description: "Apply schedule settings and start Jose safely (vacuum-only)."
+    mode: queued
+    max: 3
+    fields:
+      schedule_id:
+        description: "Schedule number (1 or 2)"
+        example: 1
+      reason:
+        description: "Invocation reason"
+        example: "Schedule time trigger"
+      force:
+        description: "Bypass schedule enabled check"
+        example: false
+    sequence:
+      - variables:
+          schedule_id: "{{ schedule_id | default(1) | int }}"
+          reason: "{{ reason | default('Schedule run') }}"
+          force: "{{ force | default(false) }}"
+          base: "{{ 'helper_jose_schedule_' ~ schedule_id }}"
+          enabled_entity: "{{ 'input_boolean.' ~ base ~ '_enabled' }}"
+          power_entity: "{{ 'input_select.' ~ base ~ '_power' }}"
+          min_battery_entity: "{{ 'input_number.' ~ base ~ '_min_battery' }}"
+          clean_preference_entity: "{{ 'input_boolean.' ~ base ~ '_clean_preference' }}"
+          last_run_entity: "{{ 'input_text.' ~ base ~ '_last_run' }}"
+          last_result_entity: "{{ 'input_text.' ~ base ~ '_last_result' }}"
+          timestamp: "{{ now().strftime('%Y-%m-%d %H:%M') }}"
+          vacuum_state: "{{ states('vacuum.jose') }}"
+          battery: "{{ states('sensor.jose_battery') | int(-1) }}"
+          min_battery: "{{ states(min_battery_entity) | int(25) }}"
+          fan_speed_options: "{{ state_attr('vacuum.jose', 'fan_speed_list') | default([]) }}"
+          requested_power: "{{ states(power_entity) }}"
+          work_mode_options: "{{ state_attr('select.jose_work_mode', 'options') | default([]) }}"
+
+      - choose:
+          - conditions: "{{ not (force | bool) and not is_state(enabled_entity, 'on') }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: "{{ last_result_entity }}"
+                data:
+                  value: "{{ timestamp }} - SKIPPED: Schedule disabled"
+              - stop: "Schedule disabled"
+
+      - choose:
+          - conditions: "{{ vacuum_state in ['unknown', 'unavailable', 'none'] }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: "{{ last_result_entity }}"
+                data:
+                  value: "{{ timestamp }} - FAILED: Vacuum unavailable"
+              - service: notify.mobile_app_andre_iphone
+                data:
+                  title: "Jose Schedule {{ schedule_id }}"
+                  message: "Schedule failed: vacuum is unavailable."
+                  data:
+                    push:
+                      sound: default
+              - stop: "Vacuum unavailable"
+
+      - choose:
+          - conditions: "{{ (battery | int) == -1 }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: "{{ last_result_entity }}"
+                data:
+                  value: "{{ timestamp }} - FAILED: Battery unknown"
+              - service: notify.mobile_app_andre_iphone
+                data:
+                  title: "Jose Schedule {{ schedule_id }}"
+                  message: "Schedule failed: battery state is unknown."
+                  data:
+                    push:
+                      sound: default
+              - stop: "Battery unknown"
+          - conditions: "{{ (battery | int) < (min_battery | int) }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: "{{ last_result_entity }}"
+                data:
+                  value: "{{ timestamp }} - SKIPPED: Battery {{ battery }}% < {{ min_battery }}%"
+              - service: logbook.log
+                data:
+                  name: "Jose Schedule"
+                  message: "Schedule {{ schedule_id }} skipped (battery {{ battery }}% < {{ min_battery }}%)."
+              - stop: "Battery below threshold"
+
+      - choose:
+          - conditions: "{{ vacuum_state in ['cleaning', 'returning', 'paused', 'error'] }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: "{{ last_result_entity }}"
+                data:
+                  value: "{{ timestamp }} - SKIPPED: Vacuum busy ({{ vacuum_state }})"
+              - service: logbook.log
+                data:
+                  name: "Jose Schedule"
+                  message: "Schedule {{ schedule_id }} skipped (vacuum state={{ vacuum_state }})."
+              - stop: "Vacuum busy"
+
+      - service: input_text.set_value
+        target:
+          entity_id: "{{ last_run_entity }}"
+        data:
+          value: "{{ timestamp }} - {{ reason }}"
+
+      - choose:
+          - conditions: "{{ 'vacuum' in work_mode_options }}"
+            sequence:
+              - service: select.select_option
+                target:
+                  entity_id: select.jose_work_mode
+                data:
+                  option: "vacuum"
+
+      - choose:
+          - conditions: >
+              {{ requested_power not in ['use_current', 'unknown', 'unavailable', 'none']
+                 and requested_power in fan_speed_options }}
+            sequence:
+              - service: vacuum.set_fan_speed
+                target:
+                  entity_id: vacuum.jose
+                data:
+                  fan_speed: "{{ requested_power }}"
+
+      - choose:
+          - conditions: "{{ states('switch.jose_clean_preference') not in ['unknown', 'unavailable'] }}"
+            sequence:
+              - choose:
+                  - conditions: "{{ is_state(clean_preference_entity, 'on') }}"
+                    sequence:
+                      - service: switch.turn_on
+                        target:
+                          entity_id: switch.jose_clean_preference
+                  - conditions: "{{ is_state(clean_preference_entity, 'off') }}"
+                    sequence:
+                      - service: switch.turn_off
+                        target:
+                          entity_id: switch.jose_clean_preference
+
+      - service: vacuum.start
+        target:
+          entity_id: vacuum.jose
+
+      - wait_for_trigger:
+          - platform: state
+            entity_id: vacuum.jose
+            to: "cleaning"
+        timeout: "00:02:00"
+        continue_on_timeout: true
+
+      - choose:
+          - conditions: "{{ wait.completed }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: "{{ last_result_entity }}"
+                data:
+                  value: "{{ timestamp }} - STARTED: Cleaning"
+              - service: logbook.log
+                data:
+                  name: "Jose Schedule"
+                  message: "Schedule {{ schedule_id }} started successfully."
+          - conditions: "{{ not wait.completed }}"
+            sequence:
+              - service: input_text.set_value
+                target:
+                  entity_id: "{{ last_result_entity }}"
+                data:
+                  value: "{{ timestamp }} - FAILED: Start timeout"
+              - service: notify.mobile_app_andre_iphone
+                data:
+                  title: "Jose Schedule {{ schedule_id }}"
+                  message: "Schedule failed: vacuum did not start in time."
+                  data:
+                    push:
+                      sound: default
+                      interruption-level: time-sensitive

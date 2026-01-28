@@ -5,118 +5,377 @@ cards:
     content: |
       # Recommendation Manager
       View and manage your Claude Code feature recommendations.
-      These are personalized suggestions to improve your Claude Code workflow.
+      Click **Details** to see setup instructions and examples.
 
+  # Filter Dropdown
+  - type: entities
+    entities:
+      - entity: input_select.claude_recommendation_filter
+        name: "Filter by Status"
+
+  # =============================================
   # SessionStart Hooks
-  - type: entities
-    title: "SessionStart Hooks"
-    show_header_toggle: false
-    entities:
-      - entity: sensor.claude_recommendation_sessionstart_hooks
-        name: "Status"
-        icon: mdi:play-circle
-      - type: section
-        label: "Auto-run commands at session start"
-      - type: buttons
-        entities:
-          - entity: script.complete_sessionstart_hooks
-            name: "Complete"
-            icon: mdi:check
-          - entity: script.remind_sessionstart_hooks
-            name: "Remind"
-            icon: mdi:clock-outline
-          - entity: script.dismiss_sessionstart_hooks
-            name: "Dismiss"
-            icon: mdi:close
+  # =============================================
+  - type: conditional
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_select.claude_recommendation_filter') == 'All' or
+             states('input_select.claude_recommendation_filter') | lower == states('sensor.claude_recommendation_sessionstart_hooks') }}
+    card:
+      type: vertical-stack
+      cards:
+        - type: entities
+          title: "SessionStart Hooks"
+          show_header_toggle: false
+          entities:
+            - entity: sensor.claude_recommendation_sessionstart_hooks
+              name: "Status"
+              icon: mdi:play-circle
+            - type: section
+              label: "Auto-run commands at session start"
+            - type: buttons
+              entities:
+                - entity: input_boolean.claude_details_sessionstart_hooks
+                  name: "Details"
+                  icon: mdi:information-outline
+                - entity: script.complete_sessionstart_hooks
+                  name: "Complete"
+                  icon: mdi:check
+                - entity: script.remind_sessionstart_hooks
+                  name: "Remind"
+                  icon: mdi:clock-outline
+                - entity: script.dismiss_sessionstart_hooks
+                  name: "Dismiss"
+                  icon: mdi:close
 
+        # Expandable Details
+        - type: conditional
+          conditions:
+            - entity: input_boolean.claude_details_sessionstart_hooks
+              state: "on"
+          card:
+            type: markdown
+            content: |
+              ### What are SessionStart Hooks?
+
+              Hooks let you automatically run commands when a Claude Code session starts. This is useful for:
+              - Auto-pulling git changes
+              - Showing project status
+              - Running health checks
+              - Loading environment variables
+
+              ### Setup Instructions
+
+              1. Create hooks directory: `mkdir -p ~/.claude/hooks`
+              2. Create the hook file: `touch ~/.claude/hooks/SessionStart`
+              3. Make it executable: `chmod +x ~/.claude/hooks/SessionStart`
+              4. Add your commands to the file
+
+              ### Example
+
+              ```bash
+              #!/bin/bash
+              # ~/.claude/hooks/SessionStart
+              git pull --rebase 2>/dev/null || true
+              echo "Session started at $(date)"
+              ```
+
+  # =============================================
   # GitHub MCP Server
-  - type: entities
-    title: "GitHub MCP Server"
-    show_header_toggle: false
-    entities:
-      - entity: sensor.claude_recommendation_github_mcp
-        name: "Status"
-        icon: mdi:github
-      - type: section
-        label: "Live GitHub PR/issue access"
-      - type: buttons
-        entities:
-          - entity: script.complete_github_mcp
-            name: "Complete"
-            icon: mdi:check
-          - entity: script.remind_github_mcp
-            name: "Remind"
-            icon: mdi:clock-outline
-          - entity: script.dismiss_github_mcp
-            name: "Dismiss"
-            icon: mdi:close
+  # =============================================
+  - type: conditional
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_select.claude_recommendation_filter') == 'All' or
+             states('input_select.claude_recommendation_filter') | lower == states('sensor.claude_recommendation_github_mcp') }}
+    card:
+      type: vertical-stack
+      cards:
+        - type: entities
+          title: "GitHub MCP Server"
+          show_header_toggle: false
+          entities:
+            - entity: sensor.claude_recommendation_github_mcp
+              name: "Status"
+              icon: mdi:github
+            - type: section
+              label: "Live GitHub PR/issue access"
+            - type: buttons
+              entities:
+                - entity: input_boolean.claude_details_github_mcp
+                  name: "Details"
+                  icon: mdi:information-outline
+                - entity: script.complete_github_mcp
+                  name: "Complete"
+                  icon: mdi:check
+                - entity: script.remind_github_mcp
+                  name: "Remind"
+                  icon: mdi:clock-outline
+                - entity: script.dismiss_github_mcp
+                  name: "Dismiss"
+                  icon: mdi:close
 
+        # Expandable Details
+        - type: conditional
+          conditions:
+            - entity: input_boolean.claude_details_github_mcp
+              state: "on"
+          card:
+            type: markdown
+            content: |
+              ### What is GitHub MCP Server?
+
+              The GitHub MCP server gives Claude Code live access to your GitHub repositories, including:
+              - View and create pull requests
+              - Read and comment on issues
+              - Browse repository files
+              - Check CI/CD status
+
+              ### Setup Instructions
+
+              1. Install the GitHub MCP server: `npm install -g @anthropic/mcp-server-github`
+              2. Create a GitHub Personal Access Token with repo scope
+              3. Add to `~/.claude.json`:
+
+              ```json
+              {
+                "mcpServers": {
+                  "github": {
+                    "command": "npx",
+                    "args": ["-y", "@anthropic/mcp-server-github"],
+                    "env": {
+                      "GITHUB_TOKEN": "your-token-here"
+                    }
+                  }
+                }
+              }
+              ```
+
+              4. Restart Claude Code
+
+  # =============================================
   # MCP Tool Search
-  - type: entities
-    title: "MCP Tool Search"
-    show_header_toggle: false
-    entities:
-      - entity: sensor.claude_recommendation_tool_search
-        name: "Status"
-        icon: mdi:magnify
-      - type: section
-        label: "Reduce context usage with tool search"
-      - type: buttons
-        entities:
-          - entity: script.complete_tool_search
-            name: "Complete"
-            icon: mdi:check
-          - entity: script.remind_tool_search
-            name: "Remind"
-            icon: mdi:clock-outline
-          - entity: script.dismiss_tool_search
-            name: "Dismiss"
-            icon: mdi:close
+  # =============================================
+  - type: conditional
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_select.claude_recommendation_filter') == 'All' or
+             states('input_select.claude_recommendation_filter') | lower == states('sensor.claude_recommendation_tool_search') }}
+    card:
+      type: vertical-stack
+      cards:
+        - type: entities
+          title: "MCP Tool Search"
+          show_header_toggle: false
+          entities:
+            - entity: sensor.claude_recommendation_tool_search
+              name: "Status"
+              icon: mdi:magnify
+            - type: section
+              label: "Reduce context usage with tool search"
+            - type: buttons
+              entities:
+                - entity: input_boolean.claude_details_tool_search
+                  name: "Details"
+                  icon: mdi:information-outline
+                - entity: script.complete_tool_search
+                  name: "Complete"
+                  icon: mdi:check
+                - entity: script.remind_tool_search
+                  name: "Remind"
+                  icon: mdi:clock-outline
+                - entity: script.dismiss_tool_search
+                  name: "Dismiss"
+                  icon: mdi:close
 
+        # Expandable Details
+        - type: conditional
+          conditions:
+            - entity: input_boolean.claude_details_tool_search
+              state: "on"
+          card:
+            type: markdown
+            content: |
+              ### What is MCP Tool Search?
+
+              Tool Search reduces context window usage by lazy-loading MCP tool definitions. Instead of loading all tool schemas upfront, Claude searches for relevant tools on-demand.
+
+              **Benefits:**
+              - Saves ~5-10% context per MCP server
+              - Faster session startup
+              - More room for conversation history
+
+              ### Setup Instructions
+
+              Add to `~/.claude/settings.json`:
+
+              ```json
+              {
+                "mcpToolSearch": {
+                  "enabled": true,
+                  "minTools": 50
+                }
+              }
+              ```
+
+              The `minTools` threshold determines when tool search activates. If your MCP servers have fewer than 50 tools total, all schemas load normally.
+
+  # =============================================
   # Manual-Only Skills
-  - type: entities
-    title: "Manual-Only Skills"
-    show_header_toggle: false
-    entities:
-      - entity: sensor.claude_recommendation_manual_skills
-        name: "Status"
-        icon: mdi:hand-back-left
-      - type: section
-        label: "Control automatic skill invocation"
-      - type: buttons
-        entities:
-          - entity: script.complete_manual_skills
-            name: "Complete"
-            icon: mdi:check
-          - entity: script.remind_manual_skills
-            name: "Remind"
-            icon: mdi:clock-outline
-          - entity: script.dismiss_manual_skills
-            name: "Dismiss"
-            icon: mdi:close
+  # =============================================
+  - type: conditional
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_select.claude_recommendation_filter') == 'All' or
+             states('input_select.claude_recommendation_filter') | lower == states('sensor.claude_recommendation_manual_skills') }}
+    card:
+      type: vertical-stack
+      cards:
+        - type: entities
+          title: "Manual-Only Skills"
+          show_header_toggle: false
+          entities:
+            - entity: sensor.claude_recommendation_manual_skills
+              name: "Status"
+              icon: mdi:hand-back-left
+            - type: section
+              label: "Control automatic skill invocation"
+            - type: buttons
+              entities:
+                - entity: input_boolean.claude_details_manual_skills
+                  name: "Details"
+                  icon: mdi:information-outline
+                - entity: script.complete_manual_skills
+                  name: "Complete"
+                  icon: mdi:check
+                - entity: script.remind_manual_skills
+                  name: "Remind"
+                  icon: mdi:clock-outline
+                - entity: script.dismiss_manual_skills
+                  name: "Dismiss"
+                  icon: mdi:close
 
+        # Expandable Details
+        - type: conditional
+          conditions:
+            - entity: input_boolean.claude_details_manual_skills
+              state: "on"
+          card:
+            type: markdown
+            content: |
+              ### What are Manual-Only Skills?
+
+              By default, Claude Code can automatically invoke skills when it detects relevant context. Manual-only mode requires explicit `/skill-name` invocation.
+
+              **Use cases:**
+              - Prevent accidental skill triggers
+              - More predictable behavior
+              - Control over when complex workflows run
+
+              ### Setup Instructions
+
+              Add to your skill's YAML frontmatter:
+
+              ```yaml
+              ---
+              name: my-skill
+              description: My custom skill
+              manual_only: true
+              ---
+              ```
+
+              Or disable model invocation globally in `~/.claude/settings.json`:
+
+              ```json
+              {
+                "skills": {
+                  "disableModelInvocation": true
+                }
+              }
+              ```
+
+  # =============================================
   # Permission Deny Rules
-  - type: entities
-    title: "Permission Deny Rules"
-    show_header_toggle: false
-    entities:
-      - entity: sensor.claude_recommendation_deny_rules
-        name: "Status"
-        icon: mdi:shield-lock
-      - type: section
-        label: "Block access to sensitive files"
-      - type: buttons
-        entities:
-          - entity: script.complete_deny_rules
-            name: "Complete"
-            icon: mdi:check
-          - entity: script.remind_deny_rules
-            name: "Remind"
-            icon: mdi:clock-outline
-          - entity: script.dismiss_deny_rules
-            name: "Dismiss"
-            icon: mdi:close
+  # =============================================
+  - type: conditional
+    conditions:
+      - condition: template
+        value_template: >
+          {{ states('input_select.claude_recommendation_filter') == 'All' or
+             states('input_select.claude_recommendation_filter') | lower == states('sensor.claude_recommendation_deny_rules') }}
+    card:
+      type: vertical-stack
+      cards:
+        - type: entities
+          title: "Permission Deny Rules"
+          show_header_toggle: false
+          entities:
+            - entity: sensor.claude_recommendation_deny_rules
+              name: "Status"
+              icon: mdi:shield-lock
+            - type: section
+              label: "Block access to sensitive files"
+            - type: buttons
+              entities:
+                - entity: input_boolean.claude_details_deny_rules
+                  name: "Details"
+                  icon: mdi:information-outline
+                - entity: script.complete_deny_rules
+                  name: "Complete"
+                  icon: mdi:check
+                - entity: script.remind_deny_rules
+                  name: "Remind"
+                  icon: mdi:clock-outline
+                - entity: script.dismiss_deny_rules
+                  name: "Dismiss"
+                  icon: mdi:close
 
+        # Expandable Details
+        - type: conditional
+          conditions:
+            - entity: input_boolean.claude_details_deny_rules
+              state: "on"
+          card:
+            type: markdown
+            content: |
+              ### What are Permission Deny Rules?
+
+              Deny rules prevent Claude Code from reading or modifying sensitive files, even if you accidentally ask it to.
+
+              **Protect:**
+              - `.env` files with secrets
+              - SSH keys and credentials
+              - Production config files
+              - Personal data
+
+              ### Setup Instructions
+
+              Add to `~/.claude/settings.json`:
+
+              ```json
+              {
+                "permissions": {
+                  "deny": [
+                    "**/.env",
+                    "**/.env.*",
+                    "**/secrets.yaml",
+                    "**/*.pem",
+                    "**/*.key",
+                    "**/credentials.json"
+                  ]
+                }
+              }
+              ```
+
+              Patterns use glob syntax. Double asterisk `**` matches any directory depth.
+
+  # =============================================
+  # Email Report Button
+  # =============================================
   - type: button
     name: "Send Email Report"
     icon: mdi:email-send

@@ -360,7 +360,23 @@ template:
           {{ critical > 0 }}
 
 # ============================================
-# INPUT BOOLEANS (Notification Preferences)
+# INPUT SELECT (Filter)
+# ============================================
+
+input_select:
+  claude_recommendation_filter:
+    name: "Recommendation Filter"
+    options:
+      - "All"
+      - "Open"
+      - "Dismissed"
+      - "Reminded"
+      - "Completed"
+    initial: "All"
+    icon: mdi:filter
+
+# ============================================
+# INPUT BOOLEANS (Notification Preferences & Detail Toggles)
 # ============================================
 
 input_boolean:
@@ -373,6 +389,32 @@ input_boolean:
     name: "Claude Config - Notify on Stale Data"
     icon: mdi:bell-sleep
     initial: true
+
+  # Detail toggle booleans for recommendation cards
+  claude_details_sessionstart_hooks:
+    name: "Show SessionStart Hooks Details"
+    icon: mdi:information
+    initial: false
+
+  claude_details_github_mcp:
+    name: "Show GitHub MCP Details"
+    icon: mdi:information
+    initial: false
+
+  claude_details_tool_search:
+    name: "Show Tool Search Details"
+    icon: mdi:information
+    initial: false
+
+  claude_details_deny_rules:
+    name: "Show Deny Rules Details"
+    icon: mdi:information
+    initial: false
+
+  claude_details_manual_skills:
+    name: "Show Manual Skills Details"
+    icon: mdi:information
+    initial: false
 
 # ============================================
 # REST COMMANDS - Recommendation Actions

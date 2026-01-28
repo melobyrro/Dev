@@ -5,56 +5,83 @@
 - **Title**: Jose (Vacuum)
 - **URL Path**: ``/jose-vacuum/jose``
 - **Source of Truth**: ``jose/lovelace.jose_vacuum.json``
-- **Last Updated**: 2026-01-23
+- **Last Updated**: 2026-01-28
 
 ## 1. Dashboard Design (Actual)
 
-The dashboard utilizes a responsive "Intent-Driven" layout (`custom:layout-card`) with a 2-column grid that stacks on mobile.
+The dashboard uses a responsive layout (`custom:layout-card`) with a 2-column grid that stacks on mobile.
 
-### 1.1 Left Column: Control & Status (The "Act" Loop)
-- **Primary Control**: `tile` card for `vacuum.jose` with Start/Stop/Home/Locate commands.
-- **Status Grid**:
-  - **Battery**: Primary color.
-  - **Station**: Cyan color.
-  - **Mop**: Blue indicator (Binary Sensor).
-  - **Error**: Red indicator (Sensor).
-- **Session Metrics**: Area Cleaned, Duration, Last Job Result.
-- **Quick Actions**:
-  - **Empty Dustbin** (Orange button).
-  - **Relocate** (Teal button).
-- **Configuration (Selects)**:
-  - Auto Empty Frequency.
-  - Water Flow Level.
-  - Active Map Selection.
-- **Error History**: Rolling log of the last 10 errors (Markdown).
+### 1.1 Main View: Jose
+**Left Column (Act)**
+- **Auto Clean** hero control with Start/Stop/Home/Locate
+- Status chips (Battery, Station, Mop, Error)
+- **AI Clean** toggle
+- **Cleaning Mode** chips (Vacuum, Vacuum + Mop, Mop, Mop after Vacuum)
+- **Suction Power** chips (quiet/normal/max/max_plus)
+- Last cleaning session metrics
+- Quick actions (Empty Dustbin, Relocate)
+- Settings (Auto Empty, Water Flow when mop is attached, Active Map)
+- Error History (read-only Markdown log table)
 
-### 1.2 Right Column: Context & Maintenance (The "Observe" Loop)
-- **Lifetime Statistics**: Total Cleanings, Total Area, Total Duration.
-- **Consumables (Gauges)**:
-  - **Brush/Filter**: Filter, Main Brush, Side Brush.
-  - **Maintenance**: Hand Filter, Unit Care.
-- **Map**: Live `picture-entity` showing the cleaning map.
+**Right Column (Observe)**
+- Lifetime statistics
+- Consumables gauges
+- Live map
+
+### 1.2 Schedules View (Tab)
+**Observe → Act**
+- **Observe**: Vacuum status chips + last run/result per schedule (read-only Markdown)
+- **Act**: Enable toggle, time, weekday toggles, power selection, AI Clean, minimum battery, and “Run Now”
 
 ## 2. Automation & Logic Requirements
 
 ### 2.1 Error Logging System
-- **Mechanism**: An automation triggers on `sensor.jose_error` state changes.
-- **Storage**: Pushes the error text into a FIFO queue of 10 `input_text` helpers (`jose_error_log_1` to `_10`).
-- **Display**: The dashboard Markdown card iterates through these helpers to display the log.
+- Automation triggers on `sensor.jose_error`
+- FIFO log stored in `input_text.jose_error_log_1..10`
+- Displayed in dashboard Markdown table
 
-### 2.2 Entity Inventory
-- **Vacuum**: `vacuum.jose` (Dreame Integration).
-- **Sensors**: Battery, Area, Duration, Error, Lifespan sensors.
-- **Helpers**: 10 `input_text` helpers for error logging.
+### 2.2 Schedule System (v2.0)
+- **Option Sync**: `script.function_jose_schedule_sync_options` copies vacuum fan speeds into schedule power selectors
+- **Execution**: `script.function_jose_schedule_run` applies schedule settings, enforces guardrails, and starts cleaning
+- **Automations**: `automation.function_jose_schedule_1_run` and `_2_run` fire at configured times when enabled
+- **Behavior**:
+  - **Vacuum-only**: schedules force `select.jose_work_mode = vacuum` when available
+  - **Power-only**: schedules set `vacuum.set_fan_speed` from helper selection
+  - Optional **AI Clean** toggle per schedule
+- **Guardrails**:
+  - Skip if vacuum unavailable or busy
+  - Skip if battery below minimum threshold
+  - Bounded wait for `vacuum.jose` to reach `cleaning` state; notify on failure
+- **Notifications**: Mobile notifications on failures; logbook entries for skips/success
 
-## 3. Configuration Management
+## 3. Entity Inventory (Selected)
+
+### 3.1 Primary Entities
+- `vacuum.jose`
+- `sensor.jose_battery`, `sensor.jose_error`, `sensor.jose_area_cleaned`, `sensor.jose_cleaning_duration`
+- `binary_sensor.jose_mop_attached`, `event.jose_last_job`
+
+### 3.2 Configuration / Controls
+- `select.jose_work_mode`, `select.jose_water_flow_level`, `select.jose_auto_empty_frequency`, `select.jose_active_map`
+- `switch.jose_clean_preference`
+- `button.jose_empty_dustbin`, `button.jose_relocate`
+
+### 3.3 Schedule Helpers (per schedule 1 & 2)
+- **Timing**: `input_boolean.helper_jose_schedule_<n>_enabled`, `input_datetime.helper_jose_schedule_<n>_time`, `input_boolean.helper_jose_schedule_<n>_<day>`
+- **Cleaning Settings**: `input_select.helper_jose_schedule_<n>_power`, `input_number.helper_jose_schedule_<n>_min_battery`
+- **Behavior**: `input_boolean.helper_jose_schedule_<n>_clean_preference`
+- **Status**: `input_text.helper_jose_schedule_<n>_last_run`, `_last_result`
+
+## 4. Configuration Management
 
 | File | Purpose | Location |
 |------|---------|----------|
 | `lovelace.jose_vacuum.json` | Dashboard Layout | `jose/` |
 | `jose_vacuum_package.yaml` | Error Logging Automation | `ha-config/packages/` |
+| `jose_schedule_v2_0.yaml` | Schedule Helpers/Scripts/Automations | `ha-config/packages/` |
+| `REQUIREMENTS.md` | Package Requirements | `ha-config/packages/` |
 
-## 4. Future Enhancements (Gap Analysis)
-
-- **Zone Presets**: Add "Quick Clean" buttons for high-traffic zones (Kitchen, Hallway) directly to the main view, bypassing the map selection requirement.
-- **Bin Full Prediction**: Implement a predictive model based on `sqft_cleaned` since last empty, rather than relying solely on the sensor.
+## 5. Future Enhancements (Gap Analysis)
+- **Zone/Room Schedules**: Add support for segment/room targets if exposed by the integration
+- **Quick Clean Presets**: High-traffic zone buttons
+- **Bin Full Prediction**: Estimate based on area cleaned since last empty
