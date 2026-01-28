@@ -5,177 +5,121 @@ cards:
     content: |
       # Recommendation Manager
       View and manage your Claude Code feature recommendations.
-
       These are personalized suggestions to improve your Claude Code workflow.
 
   # SessionStart Hooks
-  - type: horizontal-stack
-    cards:
-      - type: entity
-        entity: sensor.claude_recommendation_sessionstart_hooks
-        name: "SessionStart Hooks"
+  - type: entities
+    title: "SessionStart Hooks"
+    show_header_toggle: false
+    entities:
+      - entity: sensor.claude_recommendation_sessionstart_hooks
+        name: "Status"
         icon: mdi:play-circle
-      - type: button
-        name: "✓"
-        icon: mdi:check
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.complete_sessionstart_hooks
-      - type: button
-        name: "⏰"
-        icon: mdi:clock
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.remind_sessionstart_hooks
-      - type: button
-        name: "✗"
-        icon: mdi:close
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.dismiss_sessionstart_hooks
+      - type: section
+        label: "Auto-run commands at session start"
+      - type: buttons
+        entities:
+          - entity: script.complete_sessionstart_hooks
+            name: "Complete"
+            icon: mdi:check
+          - entity: script.remind_sessionstart_hooks
+            name: "Remind"
+            icon: mdi:clock-outline
+          - entity: script.dismiss_sessionstart_hooks
+            name: "Dismiss"
+            icon: mdi:close
 
   # GitHub MCP Server
-  - type: horizontal-stack
-    cards:
-      - type: entity
-        entity: sensor.claude_recommendation_github_mcp
-        name: "GitHub MCP Server"
+  - type: entities
+    title: "GitHub MCP Server"
+    show_header_toggle: false
+    entities:
+      - entity: sensor.claude_recommendation_github_mcp
+        name: "Status"
         icon: mdi:github
-      - type: button
-        name: "✓"
-        icon: mdi:check
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.complete_github_mcp
-      - type: button
-        name: "⏰"
-        icon: mdi:clock
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.remind_github_mcp
-      - type: button
-        name: "✗"
-        icon: mdi:close
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.dismiss_github_mcp
+      - type: section
+        label: "Live GitHub PR/issue access"
+      - type: buttons
+        entities:
+          - entity: script.complete_github_mcp
+            name: "Complete"
+            icon: mdi:check
+          - entity: script.remind_github_mcp
+            name: "Remind"
+            icon: mdi:clock-outline
+          - entity: script.dismiss_github_mcp
+            name: "Dismiss"
+            icon: mdi:close
 
-  # Tool Search
-  - type: horizontal-stack
-    cards:
-      - type: entity
-        entity: sensor.claude_recommendation_tool_search
-        name: "MCP Tool Search"
+  # MCP Tool Search
+  - type: entities
+    title: "MCP Tool Search"
+    show_header_toggle: false
+    entities:
+      - entity: sensor.claude_recommendation_tool_search
+        name: "Status"
         icon: mdi:magnify
-      - type: button
-        name: "✓"
-        icon: mdi:check
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.complete_tool_search
-      - type: button
-        name: "⏰"
-        icon: mdi:clock
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.remind_tool_search
-      - type: button
-        name: "✗"
-        icon: mdi:close
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.dismiss_tool_search
+      - type: section
+        label: "Reduce context usage with tool search"
+      - type: buttons
+        entities:
+          - entity: script.complete_tool_search
+            name: "Complete"
+            icon: mdi:check
+          - entity: script.remind_tool_search
+            name: "Remind"
+            icon: mdi:clock-outline
+          - entity: script.dismiss_tool_search
+            name: "Dismiss"
+            icon: mdi:close
 
   # Manual-Only Skills
-  - type: horizontal-stack
-    cards:
-      - type: entity
-        entity: sensor.claude_recommendation_manual_skills
-        name: "Manual-Only Skills"
+  - type: entities
+    title: "Manual-Only Skills"
+    show_header_toggle: false
+    entities:
+      - entity: sensor.claude_recommendation_manual_skills
+        name: "Status"
         icon: mdi:hand-back-left
-      - type: button
-        name: "✓"
-        icon: mdi:check
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.complete_manual_skills
-      - type: button
-        name: "⏰"
-        icon: mdi:clock
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.remind_manual_skills
-      - type: button
-        name: "✗"
-        icon: mdi:close
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.dismiss_manual_skills
+      - type: section
+        label: "Control automatic skill invocation"
+      - type: buttons
+        entities:
+          - entity: script.complete_manual_skills
+            name: "Complete"
+            icon: mdi:check
+          - entity: script.remind_manual_skills
+            name: "Remind"
+            icon: mdi:clock-outline
+          - entity: script.dismiss_manual_skills
+            name: "Dismiss"
+            icon: mdi:close
 
   # Permission Deny Rules
-  - type: horizontal-stack
-    cards:
-      - type: entity
-        entity: sensor.claude_recommendation_deny_rules
-        name: "Permission Deny Rules"
-        icon: mdi:shield-lock
-      - type: button
-        name: "✓"
-        icon: mdi:check
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.complete_deny_rules
-      - type: button
-        name: "⏰"
-        icon: mdi:clock
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.remind_deny_rules
-      - type: button
-        name: "✗"
-        icon: mdi:close
-        show_name: true
-        show_icon: false
-        tap_action:
-          action: call-service
-          service: script.dismiss_deny_rules
-
   - type: entities
-    title: "Actions"
+    title: "Permission Deny Rules"
+    show_header_toggle: false
     entities:
-      - entity: button.claude_config_generate_report
-        name: "Send Email Report Now"
-        icon: mdi:email-send
-        tap_action:
-          action: call-service
-          service: button.press
-          target:
-            entity_id: button.claude_config_generate_report
+      - entity: sensor.claude_recommendation_deny_rules
+        name: "Status"
+        icon: mdi:shield-lock
+      - type: section
+        label: "Block access to sensitive files"
+      - type: buttons
+        entities:
+          - entity: script.complete_deny_rules
+            name: "Complete"
+            icon: mdi:check
+          - entity: script.remind_deny_rules
+            name: "Remind"
+            icon: mdi:clock-outline
+          - entity: script.dismiss_deny_rules
+            name: "Dismiss"
+            icon: mdi:close
+
+  - type: button
+    name: "Send Email Report"
+    icon: mdi:email-send
+    tap_action:
+      action: call-service
+      service: rest_command.claude_config_generate_report
