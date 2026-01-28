@@ -2,6 +2,10 @@
 Simple instance password authentication for CultoTranscript
 """
 import os
+from datetime import datetime, timezone
+from typing import Optional
+
+import bcrypt
 from fastapi import HTTPException, status, Depends, Request
 from fastapi.responses import RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -173,3 +177,68 @@ def get_user_role(db, user_id: int, channel_id: int) -> str:
     ).first()
 
     return membership.role if membership else None
+
+
+def verify_user_password(email: str, password: str, db) -> Optional["User"]:
+    """
+    Verify user credentials against database.
+
+    Args:
+        email: User email
+        password: Plain text password to verify
+        db: Database session
+
+    Returns:
+        User object if credentials are valid, None otherwise
+    """
+    from app.common.models import User
+
+    if not email or not password:
+        return None
+
+    user = db.query(User).filter(User.email == email).first()
+    if not user or not user.password_hash:
+        return None
+
+    # Use bcrypt directly to verify password
+    try:
+        if not bcrypt.checkpw(password.encode('utf-8'), user.password_hash.encode('utf-8')):
+            return None
+    except Exception:
+        return None
+
+    return user
+
+
+def update_login_tracking(user, db) -> None:
+    """
+    Update user's login tracking fields after successful login.
+
+    Args:
+        user: User object to update
+        db: Database session
+    """
+    user.last_login = datetime.now(timezone.utc)
+    user.login_count = (user.login_count or 0) + 1
+    db.commit()
+
+
+def get_user_default_channel(user_id: int, db) -> Optional[int]:
+    """
+    Get the default channel for a user (first church membership).
+
+    Args:
+        user_id: User ID
+        db: Database session
+
+    Returns:
+        Channel ID if user has a membership, None otherwise
+    """
+    from app.common.models import ChurchMember, Channel
+
+    membership = db.query(ChurchMember).join(Channel).filter(
+        ChurchMember.user_id == user_id,
+        Channel.active == True
+    ).first()
+
+    return membership.channel_id if membership else None

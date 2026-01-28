@@ -36,10 +36,10 @@ interface VideoStore {
 
   // Channel actions
   fetchChannels: () => Promise<void>;
-  setSelectedChannelId: (id: string | null) => void;
+  setSelectedChannelId: (id: string | null) => Promise<void>;
 }
 
-export const useVideoStore = create<VideoStore>((set) => ({
+export const useVideoStore = create<VideoStore>((set, get) => ({
   videos: [],
   loading: false,
   error: null,
@@ -107,5 +107,21 @@ export const useVideoStore = create<VideoStore>((set) => ({
     }
   },
 
-  setSelectedChannelId: (id) => set({ selectedChannelId: id }),
+  setSelectedChannelId: async (id) => {
+    const previousId = get().selectedChannelId;
+
+    // Update local state immediately for UI responsiveness
+    set({ selectedChannelId: id });
+
+    // If changing to a new channel, sync with backend
+    if (id && id !== previousId) {
+      try {
+        await channelService.switchChurch(id);
+      } catch (error) {
+        console.error('Failed to switch church:', error);
+        // Revert on failure
+        set({ selectedChannelId: previousId });
+      }
+    }
+  },
 }));

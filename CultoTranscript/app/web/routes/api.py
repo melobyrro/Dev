@@ -208,6 +208,8 @@ async def get_current_user_info(request: Request, db=Depends(get_db_session)):
                 "id": user.id,
                 "email": user.email,
                 "is_superadmin": user.is_superadmin,
+                "last_login": user.last_login.isoformat() if user.last_login else None,
+                "login_count": user.login_count or 0,
             }
             # Set role based on superadmin status
             response["role"] = "owner" if user.is_superadmin else "admin"
@@ -218,6 +220,8 @@ async def get_current_user_info(request: Request, db=Depends(get_db_session)):
             "id": None,
             "email": None,
             "is_superadmin": True,
+            "last_login": None,
+            "login_count": 0,
         }
         response["role"] = "owner"
 

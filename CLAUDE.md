@@ -95,6 +95,12 @@ This system uses these MCP servers and integrations:
 - **superpowers** - Enhanced capabilities plugin
 - **claude-in-chrome** - Browser automation integration
 
+### Claude in Chrome Usage Rules
+When using the Chrome extension for browser automation:
+- Always reuse existing tabs and windows
+- Never create new tabs or tab groups
+- Close the tab once the task is complete
+
 ### Configuration Files
 MCP servers are configured in multiple locations with specific precedence:
 

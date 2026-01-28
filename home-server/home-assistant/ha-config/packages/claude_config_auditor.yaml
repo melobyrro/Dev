@@ -380,21 +380,21 @@ input_boolean:
 
 rest_command:
   claude_recommendation_complete:
-    url: "http://192.168.1.11:5678/webhook/recommendation-action"
+    url: "http://192.168.1.11:5678/webhook/recommendation-action-ha"
     method: POST
     timeout: 30
     content_type: "application/json"
     payload: '{"recommendation_id": "{{ recommendation_id }}", "action": "complete", "source": "home_assistant"}'
 
   claude_recommendation_dismiss:
-    url: "http://192.168.1.11:5678/webhook/recommendation-action"
+    url: "http://192.168.1.11:5678/webhook/recommendation-action-ha"
     method: POST
     timeout: 30
     content_type: "application/json"
     payload: '{"recommendation_id": "{{ recommendation_id }}", "action": "dismiss", "source": "home_assistant"}'
 
   claude_recommendation_remind:
-    url: "http://192.168.1.11:5678/webhook/recommendation-action"
+    url: "http://192.168.1.11:5678/webhook/recommendation-action-ha"
     method: POST
     timeout: 30
     content_type: "application/json"

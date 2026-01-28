@@ -46,6 +46,7 @@ class UpdateChannelRequest(BaseModel):
     """Request body for updating channel"""
     youtube_url: Optional[str] = None
     title: Optional[str] = None
+    default_speaker: Optional[str] = None
 
 
 @router.get("/", response_model=ApiSuccessResponse)
@@ -228,6 +229,9 @@ async def update_channel(
 
         if body.title is not None:
             channel.title = body.title
+
+        if body.default_speaker is not None:
+            channel.default_speaker = body.default_speaker
 
         db.commit()
         db.refresh(channel)

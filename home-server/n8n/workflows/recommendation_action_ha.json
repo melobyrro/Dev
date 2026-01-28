@@ -1,0 +1,313 @@
+{
+  "name": "Recommendation Action Handler (HA)",
+  "nodes": [
+    {
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "position": [256, 304],
+      "webhookId": "recommendation-action-ha",
+      "parameters": {
+        "path": "recommendation-action-ha",
+        "httpMethod": "POST",
+        "options": {
+          "rawBody": false
+        },
+        "responseMode": "responseNode"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "normalize-input",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "position": [420, 304],
+      "parameters": {
+        "jsCode": "// Handle POST request from Home Assistant\n// In n8n webhook v2, POST body is parsed directly into $json (not nested under body)\nconst input = $input.first().json;\n\n// POST data is directly in input for v2 webhooks\nconst rule_id = input.recommendation_id || input.body?.recommendation_id;\nconst action = input.action || input.body?.action;\nconst source = input.source || input.body?.source || 'home_assistant';\nconst project_id = input.project_id || input.body?.project_id || 'Dev';\n\n// Validate required fields\nif (!rule_id || !action) {\n  return [{ json: { error: 'Missing required fields: recommendation_id and action', valid: false, received: JSON.stringify(input) } }];\n}\n\n// Validate action\nconst validActions = ['dismiss', 'remind', 'complete'];\nif (!validActions.includes(action)) {\n  return [{ json: { error: `Invalid action: ${action}. Must be one of: ${validActions.join(', ')}`, valid: false } }];\n}\n\nreturn [{\n  json: {\n    rule_id: rule_id,\n    action: action,\n    source: source,\n    project_id: project_id,\n    valid: true\n  }\n}];"
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "check-input-valid",
+      "name": "Check Input Valid",
+      "type": "n8n-nodes-base.if",
+      "position": [584, 304],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "validate-project",
+      "name": "Validate Project",
+      "type": "n8n-nodes-base.postgres",
+      "position": [748, 208],
+      "parameters": {
+        "query": "SELECT\n  p.id as project_id,\n  COALESCE(ar.id, 0) as audit_result_id,\n  COALESCE(ar.state, 'open') as current_state\nFROM projects p\nLEFT JOIN audit_results ar ON ar.rule_id = '{{ $json.rule_id }}' AND ar.project_id = p.id\nWHERE p.name = '{{ $json.project_id }}'\nLIMIT 1;",
+        "options": {},
+        "operation": "executeQuery"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      },
+      "typeVersion": 2.5
+    },
+    {
+      "id": "check-project-valid",
+      "name": "Check Project Valid",
+      "type": "n8n-nodes-base.if",
+      "position": [912, 208],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $json.project_id }}",
+              "rightValue": 0,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "update-state",
+      "name": "Update Recommendation State",
+      "type": "n8n-nodes-base.postgres",
+      "position": [1076, 112],
+      "parameters": {
+        "query": "INSERT INTO audit_results (rule_id, project_id, status, state, checked_at, dismissed_at, reminded_at, completed_at, dismissed_by)\nVALUES (\n  '{{ $(\"Normalize Input\").first().json.rule_id }}',\n  {{ $(\"Validate Project\").first().json.project_id }},\n  'skip',\n  CASE\n    WHEN '{{ $(\"Normalize Input\").first().json.action }}' = 'dismiss' THEN 'dismissed'\n    WHEN '{{ $(\"Normalize Input\").first().json.action }}' = 'remind' THEN 'reminded'\n    WHEN '{{ $(\"Normalize Input\").first().json.action }}' = 'complete' THEN 'completed'\n    ELSE 'open'\n  END,\n  NOW(),\n  CASE WHEN '{{ $(\"Normalize Input\").first().json.action }}' = 'dismiss' THEN NOW() ELSE NULL END,\n  CASE WHEN '{{ $(\"Normalize Input\").first().json.action }}' = 'remind' THEN NOW() ELSE NULL END,\n  CASE WHEN '{{ $(\"Normalize Input\").first().json.action }}' = 'complete' THEN NOW() ELSE NULL END,\n  '{{ $(\"Normalize Input\").first().json.source }}'\n)\nON CONFLICT (rule_id, project_id) DO UPDATE SET\n  state = EXCLUDED.state,\n  dismissed_at = COALESCE(EXCLUDED.dismissed_at, audit_results.dismissed_at),\n  reminded_at = COALESCE(EXCLUDED.reminded_at, audit_results.reminded_at),\n  completed_at = COALESCE(EXCLUDED.completed_at, audit_results.completed_at),\n  dismissed_by = EXCLUDED.dismissed_by,\n  checked_at = NOW()\nRETURNING rule_id, state;",
+        "options": {},
+        "operation": "executeQuery"
+      },
+      "credentials": {
+        "postgres": {
+          "id": "1",
+          "name": "PostgreSQL Auditor DB"
+        }
+      },
+      "typeVersion": 2.5
+    },
+    {
+      "id": "respond-success-html",
+      "name": "Respond Success HTML",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1240, 32],
+      "parameters": {
+        "options": {
+          "responseHeaders": {
+            "entries": [
+              {
+                "name": "Content-Type",
+                "value": "text/html"
+              }
+            ]
+          }
+        },
+        "respondWith": "text",
+        "responseBody": "=<!DOCTYPE html>\n<html>\n<head>\n  <title>Success</title>\n  <style>\n    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: #f5f5f5; }\n    .card { background: white; padding: 40px; border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); text-align: center; max-width: 400px; }\n    .icon { font-size: 48px; margin-bottom: 16px; }\n    h1 { color: #333; margin: 0 0 8px 0; font-size: 24px; }\n    p { color: #666; margin: 0; }\n    a { color: #007bff; text-decoration: none; display: inline-block; margin-top: 16px; }\n  </style>\n</head>\n<body>\n  <div class=\"card\">\n    <div class=\"icon\">✓</div>\n    <h1>Recommendation {{ $(\"Normalize Input\").first().json.action }}d successfully!</h1>\n    <p>This recommendation will {{ $(\"Normalize Input\").first().json.action === 'remind' ? 'reappear in 7 days' : 'no longer appear in future reports' }}.</p>\n    <a href=\"http://192.168.1.11:8123/lovelace/claude-config\">View Dashboard →</a>\n  </div>\n</body>\n</html>"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "respond-success-json",
+      "name": "Respond Success JSON",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1240, 192],
+      "parameters": {
+        "options": {},
+        "respondWith": "json",
+        "responseBody": "={{ { success: true, action: $(\"Normalize Input\").first().json.action, rule_id: $(\"Normalize Input\").first().json.rule_id, new_state: $json.state || $(\"Normalize Input\").first().json.action + 'd' } }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "check-source",
+      "name": "Check Source",
+      "type": "n8n-nodes-base.if",
+      "position": [1240, 112],
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "leftValue": "={{ $(\"Normalize Input\").first().json.source }}",
+              "rightValue": "home_assistant",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        }
+      },
+      "typeVersion": 2
+    },
+    {
+      "id": "respond-error-project",
+      "name": "Respond Error Project",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [1076, 304],
+      "parameters": {
+        "options": {
+          "responseCode": 404
+        },
+        "respondWith": "json",
+        "responseBody": "={{ { error: 'Project not found', project_id: $(\"Normalize Input\").first().json.project_id } }}"
+      },
+      "typeVersion": 1.1
+    },
+    {
+      "id": "respond-error-input",
+      "name": "Respond Error Input",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "position": [748, 400],
+      "parameters": {
+        "options": {
+          "responseCode": 400
+        },
+        "respondWith": "json",
+        "responseBody": "={{ { error: $json.error || 'Invalid input' } }}"
+      },
+      "typeVersion": 1.1
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Normalize Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Input": {
+      "main": [
+        [
+          {
+            "node": "Check Input Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Input Valid": {
+      "main": [
+        [
+          {
+            "node": "Validate Project",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error Input",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Project": {
+      "main": [
+        [
+          {
+            "node": "Check Project Valid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Project Valid": {
+      "main": [
+        [
+          {
+            "node": "Update Recommendation State",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Error Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Recommendation State": {
+      "main": [
+        [
+          {
+            "node": "Check Source",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Source": {
+      "main": [
+        [
+          {
+            "node": "Respond Success JSON",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Success HTML",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

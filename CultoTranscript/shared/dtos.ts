@@ -159,6 +159,8 @@ export interface ChannelDTO {
   id: string;
   title: string;
   youtube_channel_id: string;
+  youtube_url?: string; // Full YouTube channel URL
+  default_speaker?: string; // Default speaker name
   last_checked_at?: string; // ISO 8601 datetime
   created_at: string;
   total_videos: number;
