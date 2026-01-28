@@ -284,6 +284,64 @@ template:
               {{ rec_states['tool-search'].completed_at }}
             {% endif %}
 
+      - name: "Claude Recommendation Deny Rules"
+        unique_id: claude_recommendation_deny_rules
+        icon: mdi:shield-lock
+        state: >
+          {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+          {% if rec_states and 'deny-rules' in rec_states %}
+            {{ rec_states['deny-rules'].state }}
+          {% else %}
+            open
+          {% endif %}
+        attributes:
+          feature_name: "Permission Deny Rules"
+          category: "Security"
+          dismissed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'deny-rules' in rec_states %}
+              {{ rec_states['deny-rules'].dismissed_at }}
+            {% endif %}
+          reminded_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'deny-rules' in rec_states %}
+              {{ rec_states['deny-rules'].reminded_at }}
+            {% endif %}
+          completed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'deny-rules' in rec_states %}
+              {{ rec_states['deny-rules'].completed_at }}
+            {% endif %}
+
+      - name: "Claude Recommendation Manual Skills"
+        unique_id: claude_recommendation_manual_skills
+        icon: mdi:hand-back-left
+        state: >
+          {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+          {% if rec_states and 'disable-model-invocation' in rec_states %}
+            {{ rec_states['disable-model-invocation'].state }}
+          {% else %}
+            open
+          {% endif %}
+        attributes:
+          feature_name: "Manual-Only Skills"
+          category: "Automation"
+          dismissed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'disable-model-invocation' in rec_states %}
+              {{ rec_states['disable-model-invocation'].dismissed_at }}
+            {% endif %}
+          reminded_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'disable-model-invocation' in rec_states %}
+              {{ rec_states['disable-model-invocation'].reminded_at }}
+            {% endif %}
+          completed_at: >
+            {% set rec_states = state_attr('sensor.claude_config_audit_raw', 'recommendation_states') %}
+            {% if rec_states and 'disable-model-invocation' in rec_states %}
+              {{ rec_states['disable-model-invocation'].completed_at }}
+            {% endif %}
+
   - binary_sensor:
       - name: "Claude Config Audit Stale"
         unique_id: claude_config_audit_stale
@@ -317,11 +375,194 @@ input_boolean:
     initial: true
 
 # ============================================
+# REST COMMANDS - Recommendation Actions
+# ============================================
+
+rest_command:
+  claude_recommendation_complete:
+    url: "http://192.168.1.11:5678/webhook/recommendation-action"
+    method: POST
+    timeout: 30
+    content_type: "application/json"
+    payload: '{"recommendation_id": "{{ recommendation_id }}", "action": "complete", "source": "home_assistant"}'
+
+  claude_recommendation_dismiss:
+    url: "http://192.168.1.11:5678/webhook/recommendation-action"
+    method: POST
+    timeout: 30
+    content_type: "application/json"
+    payload: '{"recommendation_id": "{{ recommendation_id }}", "action": "dismiss", "source": "home_assistant"}'
+
+  claude_recommendation_remind:
+    url: "http://192.168.1.11:5678/webhook/recommendation-action"
+    method: POST
+    timeout: 30
+    content_type: "application/json"
+    payload: '{"recommendation_id": "{{ recommendation_id }}", "action": "remind", "source": "home_assistant"}'
+
+# ============================================
+# SCRIPTS - Recommendation Actions
+# ============================================
+
+script:
+  # SessionStart Hooks
+  complete_sessionstart_hooks:
+    alias: "Complete SessionStart Hooks"
+    description: "Mark SessionStart Hooks recommendation as completed"
+    icon: mdi:check
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_complete
+        data:
+          recommendation_id: "sessionstart-hooks"
+
+  remind_sessionstart_hooks:
+    alias: "Remind SessionStart Hooks"
+    description: "Set reminder for SessionStart Hooks recommendation"
+    icon: mdi:clock-outline
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_remind
+        data:
+          recommendation_id: "sessionstart-hooks"
+
+  dismiss_sessionstart_hooks:
+    alias: "Dismiss SessionStart Hooks"
+    description: "Dismiss SessionStart Hooks recommendation"
+    icon: mdi:close
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_dismiss
+        data:
+          recommendation_id: "sessionstart-hooks"
+
+  # GitHub MCP Server
+  complete_github_mcp:
+    alias: "Complete GitHub MCP"
+    description: "Mark GitHub MCP Server recommendation as completed"
+    icon: mdi:check
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_complete
+        data:
+          recommendation_id: "github-mcp"
+
+  remind_github_mcp:
+    alias: "Remind GitHub MCP"
+    description: "Set reminder for GitHub MCP Server recommendation"
+    icon: mdi:clock-outline
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_remind
+        data:
+          recommendation_id: "github-mcp"
+
+  dismiss_github_mcp:
+    alias: "Dismiss GitHub MCP"
+    description: "Dismiss GitHub MCP Server recommendation"
+    icon: mdi:close
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_dismiss
+        data:
+          recommendation_id: "github-mcp"
+
+  # Tool Search
+  complete_tool_search:
+    alias: "Complete Tool Search"
+    description: "Mark Tool Search recommendation as completed"
+    icon: mdi:check
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_complete
+        data:
+          recommendation_id: "tool-search"
+
+  remind_tool_search:
+    alias: "Remind Tool Search"
+    description: "Set reminder for Tool Search recommendation"
+    icon: mdi:clock-outline
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_remind
+        data:
+          recommendation_id: "tool-search"
+
+  dismiss_tool_search:
+    alias: "Dismiss Tool Search"
+    description: "Dismiss Tool Search recommendation"
+    icon: mdi:close
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_dismiss
+        data:
+          recommendation_id: "tool-search"
+
+  # Permission Deny Rules
+  complete_deny_rules:
+    alias: "Complete Deny Rules"
+    description: "Mark Permission Deny Rules recommendation as completed"
+    icon: mdi:check
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_complete
+        data:
+          recommendation_id: "deny-rules"
+
+  remind_deny_rules:
+    alias: "Remind Deny Rules"
+    description: "Set reminder for Permission Deny Rules recommendation"
+    icon: mdi:clock-outline
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_remind
+        data:
+          recommendation_id: "deny-rules"
+
+  dismiss_deny_rules:
+    alias: "Dismiss Deny Rules"
+    description: "Dismiss Permission Deny Rules recommendation"
+    icon: mdi:close
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_dismiss
+        data:
+          recommendation_id: "deny-rules"
+
+  # Manual-Only Skills
+  complete_manual_skills:
+    alias: "Complete Manual Skills"
+    description: "Mark Manual-Only Skills recommendation as completed"
+    icon: mdi:check
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_complete
+        data:
+          recommendation_id: "disable-model-invocation"
+
+  remind_manual_skills:
+    alias: "Remind Manual Skills"
+    description: "Set reminder for Manual-Only Skills recommendation"
+    icon: mdi:clock-outline
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_remind
+        data:
+          recommendation_id: "disable-model-invocation"
+
+  dismiss_manual_skills:
+    alias: "Dismiss Manual Skills"
+    description: "Dismiss Manual-Only Skills recommendation"
+    icon: mdi:close
+    mode: single
+    sequence:
+      - service: rest_command.claude_recommendation_dismiss
+        data:
+          recommendation_id: "disable-model-invocation"
+
 # ============================================
 # AUTOMATIONS
 # ============================================
-# NOTE: rest_command definitions moved to main configuration.yaml
-# to resolve YAML merge conflicts
 
 automation:
   - id: claude_config_critical_alert

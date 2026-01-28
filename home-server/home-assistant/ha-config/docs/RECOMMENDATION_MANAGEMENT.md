@@ -69,9 +69,16 @@ The dashboard shows:
    - Timestamps for actions (dismissed_at, reminded_at, completed_at)
    - Feature name and category
 
-### Important Limitation
+### Dashboard Action Buttons
 
-**The dashboard is view-only**. You cannot change recommendation states from Home Assistant - only from the email action buttons. This is intentional for security and tracking purposes.
+Each recommendation row now has action buttons:
+- **✓** (Complete) - Mark the recommendation as implemented
+- **⏰** (Remind) - Set a 7-day reminder
+- **✗** (Dismiss) - Permanently hide the recommendation
+
+These buttons call the same webhook endpoint as the email buttons, allowing you to manage recommendations directly from the dashboard.
+
+> **Note**: The n8n webhook must be configured to accept POST requests from Home Assistant for dashboard buttons to work. See Phase 4 of the implementation plan.
 
 ---
 
@@ -292,10 +299,10 @@ http://192.168.1.11:5678/webhook/recommendation-action?token=123e4567-e89b-12d3-
 
 | Want to... | Do this... | Result... |
 |------------|-----------|-----------|
-| Never see this recommendation again | Click **✗ Dismiss** in email | Permanent removal |
-| Implement it but later | Click **⏰ Remind in 7 Days** | Hidden for 7 days, then returns |
-| Mark it as implemented | Click **✓ Mark Complete** | Permanent removal |
-| See current states | Open HA dashboard at `/lovelace/claude-config` | View-only display |
+| Never see this recommendation again | Click **✗ Dismiss** in email or dashboard | Permanent removal |
+| Implement it but later | Click **⏰ Remind in 7 Days** in email or dashboard | Hidden for 7 days, then returns |
+| Mark it as implemented | Click **✓ Mark Complete** in email or dashboard | Permanent removal |
+| See and manage states | Open HA dashboard at `/lovelace/claude-config/recommendations` | View and action buttons |
 | Check state via API | `curl http://192.168.1.11:5678/webhook/status-api` | JSON response |
 | Manually trigger new email | See n8n workflow "Config Report Generator" | Fresh action links |
 

@@ -8,48 +8,174 @@ cards:
 
       These are personalized suggestions to improve your Claude Code workflow.
 
-  - type: entities
-    title: "Recommendation Status"
-    entities:
-      - entity: sensor.claude_recommendation_status
-        name: "Recommendation System"
-        icon: mdi:lightbulb-on-outline
-      - entity: sensor.claude_recommendation_sessionstart_hooks
+  # SessionStart Hooks
+  - type: horizontal-stack
+    cards:
+      - type: entity
+        entity: sensor.claude_recommendation_sessionstart_hooks
         name: "SessionStart Hooks"
         icon: mdi:play-circle
-      - entity: sensor.claude_recommendation_github_mcp
+      - type: button
+        name: "✓"
+        icon: mdi:check
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.complete_sessionstart_hooks
+      - type: button
+        name: "⏰"
+        icon: mdi:clock
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.remind_sessionstart_hooks
+      - type: button
+        name: "✗"
+        icon: mdi:close
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.dismiss_sessionstart_hooks
+
+  # GitHub MCP Server
+  - type: horizontal-stack
+    cards:
+      - type: entity
+        entity: sensor.claude_recommendation_github_mcp
         name: "GitHub MCP Server"
         icon: mdi:github
-      - entity: sensor.claude_recommendation_tool_search
-        name: "Tool Search"
+      - type: button
+        name: "✓"
+        icon: mdi:check
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.complete_github_mcp
+      - type: button
+        name: "⏰"
+        icon: mdi:clock
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.remind_github_mcp
+      - type: button
+        name: "✗"
+        icon: mdi:close
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.dismiss_github_mcp
+
+  # Tool Search
+  - type: horizontal-stack
+    cards:
+      - type: entity
+        entity: sensor.claude_recommendation_tool_search
+        name: "MCP Tool Search"
         icon: mdi:magnify
-    show_empty: false
+      - type: button
+        name: "✓"
+        icon: mdi:check
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.complete_tool_search
+      - type: button
+        name: "⏰"
+        icon: mdi:clock
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.remind_tool_search
+      - type: button
+        name: "✗"
+        icon: mdi:close
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.dismiss_tool_search
 
-  - type: markdown
-    content: |
-      ## Available Recommendations
+  # Manual-Only Skills
+  - type: horizontal-stack
+    cards:
+      - type: entity
+        entity: sensor.claude_recommendation_manual_skills
+        name: "Manual-Only Skills"
+        icon: mdi:hand-back-left
+      - type: button
+        name: "✓"
+        icon: mdi:check
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.complete_manual_skills
+      - type: button
+        name: "⏰"
+        icon: mdi:clock
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.remind_manual_skills
+      - type: button
+        name: "✗"
+        icon: mdi:close
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.dismiss_manual_skills
 
-      ### Automation
-      - **SessionStart Hooks** - Auto-run commands at session start
-      - **Manual-Only Skills** - Control automatic skill invocation
-
-      ### Security
-      - **Permission Deny Rules** - Block access to sensitive files
-
-      ### Integration
-      - **GitHub MCP Server** - Live GitHub PR/issue access
-
-      ### Performance
-      - **MCP Tool Search** - Reduce context usage
+  # Permission Deny Rules
+  - type: horizontal-stack
+    cards:
+      - type: entity
+        entity: sensor.claude_recommendation_deny_rules
+        name: "Permission Deny Rules"
+        icon: mdi:shield-lock
+      - type: button
+        name: "✓"
+        icon: mdi:check
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.complete_deny_rules
+      - type: button
+        name: "⏰"
+        icon: mdi:clock
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.remind_deny_rules
+      - type: button
+        name: "✗"
+        icon: mdi:close
+        show_name: true
+        show_icon: false
+        tap_action:
+          action: call-service
+          service: script.dismiss_deny_rules
 
   - type: entities
     title: "Actions"
     entities:
-      - entity: button.generate_claude_config_report
+      - entity: button.claude_config_generate_report
         name: "Send Email Report Now"
         icon: mdi:email-send
         tap_action:
           action: call-service
           service: button.press
           target:
-            entity_id: button.generate_claude_config_report
+            entity_id: button.claude_config_generate_report
