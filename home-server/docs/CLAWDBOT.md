@@ -39,6 +39,82 @@
 **Tokenized Dashboard URL:**
 `https://clawd.byrroserver.com/?token=228e0ea5abb6fd156375f1376d83e6c51428b159e245a3a2`
 
+## Models (Multi-Provider)
+
+Clawdbot supports multiple AI providers. Currently configured:
+
+| Provider | Models | Auth Method |
+|----------|--------|-------------|
+| Anthropic | Claude Opus 4.5, Sonnet, Haiku | OAuth (Claude Max) |
+| OpenAI | GPT-5.2, GPT-5.1, Codex variants | OAuth (ChatGPT Plus) |
+
+### Switch Models
+
+**In chat** (WhatsApp, Dashboard, TUI):
+```
+/model                    # Show available models
+/model list               # Same as above
+/model 1                  # Switch to model #1
+/model gpt                # Switch by alias
+/model openai/gpt-5.2     # Switch by full name
+/model status             # Show current model
+```
+
+**Via CLI:**
+```bash
+ssh root@192.168.1.10 "clawdbot models list"       # List available
+ssh root@192.168.1.10 "clawdbot models set gpt"    # Switch model
+ssh root@192.168.1.10 "clawdbot models status"     # Current config
+```
+
+### Add Model Aliases
+
+```bash
+ssh root@192.168.1.10 "clawdbot models aliases add claude anthropic/claude-opus-4-5"
+ssh root@192.168.1.10 "clawdbot models aliases add gpt openai/gpt-5.2"
+```
+
+### Re-authenticate OAuth (if expired)
+
+For Anthropic:
+```bash
+# On Mac (has browser), then copy to Proxmox
+clawdbot configure --section model
+# Choose "Anthropic OAuth" and complete browser flow
+scp ~/.clawdbot/credentials/oauth.json root@192.168.1.10:/root/.clawdbot/credentials/
+```
+
+For OpenAI:
+```bash
+# Same process, choose "OpenAI Code (Codex) subscription (OAuth)"
+```
+
+## Gmail Access (Himalaya)
+
+Email access via IMAP/SMTP using Himalaya CLI.
+
+**Config location:** `/root/.config/himalaya/config.toml`
+
+### Test Email Access
+```bash
+ssh root@192.168.1.10 "himalaya envelope list --account gmail"
+```
+
+### Ask Clawdbot About Email
+In chat:
+- "Check my email"
+- "Show my 5 latest emails"
+- "Search emails about FPL"
+- "Send email to X about Y"
+
+### Reconfigure Gmail (if needed)
+```bash
+ssh root@192.168.1.10 "himalaya account configure gmail"
+# Or edit /root/.config/himalaya/config.toml directly
+```
+
+Requires Gmail App Password: https://myaccount.google.com/apppasswords
+
 ## Quick Commands
 
 ### Check Status
@@ -137,5 +213,39 @@ Run this to re-authenticate (requires browser):
 ssh -t root@192.168.1.10 "clawdbot models auth setup-token"
 ```
 
+## Skills
+
+Check available skills:
+```bash
+ssh root@192.168.1.10 "clawdbot skills list"
+```
+
+Currently installed:
+- **himalaya** ✓ - Email via IMAP/SMTP
+- **github** ✓ - GitHub CLI integration
+- **coding-agent** ✓ - Run coding agents (Codex, Claude Code)
+
+To install a skill:
+```bash
+ssh root@192.168.1.10 "clawdbot skills info <skill-name>"
+# Follow install instructions shown
+```
+
+## Management Quick Reference
+
+| Task | Command |
+|------|---------|
+| Status overview | `clawdbot status` |
+| Health check | `clawdbot health` |
+| Switch model | `/model <name>` (in chat) |
+| List models | `clawdbot models list` |
+| List channels | `clawdbot channels list` |
+| List skills | `clawdbot skills list` |
+| Configure | `clawdbot configure` |
+| View logs | `clawdbot logs --follow` |
+
 ## Created
 2026-01-27
+
+## Updated
+2026-01-27 - Added multi-provider models, Gmail access, skills section
