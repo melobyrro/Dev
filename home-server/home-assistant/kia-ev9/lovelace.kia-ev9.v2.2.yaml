@@ -315,10 +315,24 @@ views:
           - type: markdown
             content: |
               **Walk-Away:** {% if is_state('input_boolean.ev9_walk_away_lock_enabled', 'on') %}<font color="green">ON</font>{% else %}<font color="gray">OFF</font>{% endif %} ({{ states('input_number.ev9_walkaway_distance') | int }}m threshold)
-              *Last: {{ states('input_text.ev9_last_walkaway_result') | default('unknown', true) }}*
 
               **Timeout:** {% if is_state('input_boolean.ev9_timeout_lock_enabled', 'on') %}<font color="green">ON</font>{% else %}<font color="gray">OFF</font>{% endif %} ({{ states('input_number.ev9_unlock_timeout') | int }}min)
-              *Last: {{ states('input_text.ev9_last_timeout_lock_result') | default('unknown', true) }}*
+
+              {% set walkaway_raw = states('input_text.ev9_last_walkaway_result') %}
+              {% set timeout_raw = states('input_text.ev9_last_timeout_lock_result') %}
+              {% set walkaway_value = walkaway_raw if walkaway_raw not in ['unknown', 'unavailable', ''] else '' %}
+              {% set timeout_value = timeout_raw if timeout_raw not in ['unknown', 'unavailable', ''] else '' %}
+              {% set walkaway_parts = walkaway_value.split(' - ', 1) if walkaway_value else [] %}
+              {% set timeout_parts = timeout_value.split(' - ', 1) if timeout_value else [] %}
+              {% set walkaway_time = walkaway_parts[0] if walkaway_parts|length > 1 else 'N/A' %}
+              {% set walkaway_msg = walkaway_parts[1] if walkaway_parts|length > 1 else (walkaway_value if walkaway_value else 'No events yet') %}
+              {% set timeout_time = timeout_parts[0] if timeout_parts|length > 1 else 'N/A' %}
+              {% set timeout_msg = timeout_parts[1] if timeout_parts|length > 1 else (timeout_value if timeout_value else 'No events yet') %}
+
+              | Automation | Date/Time | Result |
+              | --- | --- | --- |
+              | Walk-Away Lock | {{ walkaway_time }} | {{ walkaway_msg }} |
+              | Timeout Failsafe | {{ timeout_time }} | {{ timeout_msg }} |
 
       # ============================================================
       # VEHICLE INFO CARD (Odometer & Last Update)
@@ -1668,17 +1682,33 @@ views:
       - type: markdown
         title: "Automation Health"
         content: |
-          **Walk-Away Lock**
-          {{ states('input_text.ev9_last_walkaway_result') | default('No events yet', true) }}
+          {% set walkaway_raw = states('input_text.ev9_last_walkaway_result') %}
+          {% set timeout_raw = states('input_text.ev9_last_timeout_lock_result') %}
+          {% set precondition_raw = states('input_text.ev9_last_precondition_result') %}
+          {% set theft_raw = states('input_text.ev9_last_theft_result') %}
+          {% set walkaway_value = walkaway_raw if walkaway_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set timeout_value = timeout_raw if timeout_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set precondition_value = precondition_raw if precondition_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set theft_value = theft_raw if theft_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set walkaway_parts = walkaway_value.split(' - ', 1) if walkaway_value else [] %}
+          {% set timeout_parts = timeout_value.split(' - ', 1) if timeout_value else [] %}
+          {% set precondition_parts = precondition_value.split(' - ', 1) if precondition_value else [] %}
+          {% set theft_parts = theft_value.split(' - ', 1) if theft_value else [] %}
+          {% set walkaway_time = walkaway_parts[0] if walkaway_parts|length > 1 else 'N/A' %}
+          {% set walkaway_msg = walkaway_parts[1] if walkaway_parts|length > 1 else (walkaway_value if walkaway_value else 'No events yet') %}
+          {% set timeout_time = timeout_parts[0] if timeout_parts|length > 1 else 'N/A' %}
+          {% set timeout_msg = timeout_parts[1] if timeout_parts|length > 1 else (timeout_value if timeout_value else 'No events yet') %}
+          {% set precondition_time = precondition_parts[0] if precondition_parts|length > 1 else 'N/A' %}
+          {% set precondition_msg = precondition_parts[1] if precondition_parts|length > 1 else (precondition_value if precondition_value else 'No events yet') %}
+          {% set theft_time = theft_parts[0] if theft_parts|length > 1 else 'N/A' %}
+          {% set theft_msg = theft_parts[1] if theft_parts|length > 1 else (theft_value if theft_value else 'No events yet') %}
 
-          **Timeout Failsafe**
-          {{ states('input_text.ev9_last_timeout_lock_result') | default('No events yet', true) }}
-
-          **Pre-conditioning**
-          {{ states('input_text.ev9_last_precondition_result') | default('No events yet', true) }}
-
-          **Theft Detection**
-          {{ states('input_text.ev9_last_theft_result') | default('No events yet', true) }}
+          | Automation | Date/Time | Result |
+          | --- | --- | --- |
+          | Walk-Away Lock | {{ walkaway_time }} | {{ walkaway_msg }} |
+          | Timeout Failsafe | {{ timeout_time }} | {{ timeout_msg }} |
+          | Pre-conditioning | {{ precondition_time }} | {{ precondition_msg }} |
+          | Theft Detection | {{ theft_time }} | {{ theft_msg }} |
 
   # ============================================================
   # VIEW 3: LOGS (Read-only Event History - DSH-19)
@@ -1694,11 +1724,33 @@ views:
       - type: markdown
         title: Last Run Summary
         content: |
-          **Walk-Away Lock**: {{ states('input_text.ev9_last_walkaway_result') or 'No events yet' }}
+          {% set walkaway_raw = states('input_text.ev9_last_walkaway_result') %}
+          {% set timeout_raw = states('input_text.ev9_last_timeout_lock_result') %}
+          {% set precondition_raw = states('input_text.ev9_last_precondition_result') %}
+          {% set theft_raw = states('input_text.ev9_last_theft_result') %}
+          {% set walkaway_value = walkaway_raw if walkaway_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set timeout_value = timeout_raw if timeout_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set precondition_value = precondition_raw if precondition_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set theft_value = theft_raw if theft_raw not in ['unknown', 'unavailable', ''] else '' %}
+          {% set walkaway_parts = walkaway_value.split(' - ', 1) if walkaway_value else [] %}
+          {% set timeout_parts = timeout_value.split(' - ', 1) if timeout_value else [] %}
+          {% set precondition_parts = precondition_value.split(' - ', 1) if precondition_value else [] %}
+          {% set theft_parts = theft_value.split(' - ', 1) if theft_value else [] %}
+          {% set walkaway_time = walkaway_parts[0] if walkaway_parts|length > 1 else 'N/A' %}
+          {% set walkaway_msg = walkaway_parts[1] if walkaway_parts|length > 1 else (walkaway_value if walkaway_value else 'No events yet') %}
+          {% set timeout_time = timeout_parts[0] if timeout_parts|length > 1 else 'N/A' %}
+          {% set timeout_msg = timeout_parts[1] if timeout_parts|length > 1 else (timeout_value if timeout_value else 'No events yet') %}
+          {% set precondition_time = precondition_parts[0] if precondition_parts|length > 1 else 'N/A' %}
+          {% set precondition_msg = precondition_parts[1] if precondition_parts|length > 1 else (precondition_value if precondition_value else 'No events yet') %}
+          {% set theft_time = theft_parts[0] if theft_parts|length > 1 else 'N/A' %}
+          {% set theft_msg = theft_parts[1] if theft_parts|length > 1 else (theft_value if theft_value else 'No events yet') %}
 
-          **Timeout Lock**: {{ states('input_text.ev9_last_timeout_lock_result') or 'No events yet' }}
-
-          **Precondition**: {{ states('input_text.ev9_last_precondition_result') or 'No events yet' }}
+          | Automation | Date/Time | Result |
+          | --- | --- | --- |
+          | Walk-Away Lock | {{ walkaway_time }} | {{ walkaway_msg }} |
+          | Timeout Failsafe | {{ timeout_time }} | {{ timeout_msg }} |
+          | Pre-conditioning | {{ precondition_time }} | {{ precondition_msg }} |
+          | Theft Detection | {{ theft_time }} | {{ theft_msg }} |
 
       # ============================================================
       # RECENT EVENTS (10 most recent)
@@ -1722,8 +1774,11 @@ views:
           {% if filtered | length == 0 %}
           *No events logged yet.*
           {% else %}
+          | Date/Time | Event |
+          | --- | --- |
           {% for event in filtered %}
-          - {{ event }}
+          {% set parts = event.split(' - ', 1) %}
+          | {{ parts[0] if parts|length > 1 else 'N/A' }} | {{ parts[1] if parts|length > 1 else event }} |
           {% endfor %}
           {% endif %}
 
