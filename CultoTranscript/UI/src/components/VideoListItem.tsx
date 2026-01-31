@@ -1,4 +1,4 @@
-import type { VideoDTO } from '../types';
+import type { VideoDTO, VideoStatus } from '../types';
 import StatusChip from './StatusChip';
 import { formatDuration, formatDate, formatVideoTitle } from '../lib/utils';
 import { useVideoStore } from '../stores/videoStore';
@@ -34,7 +34,7 @@ export function VideoListItem({ video }: VideoListItemProps) {
             >
               {formatVideoTitle(video)}
             </h3>
-            <StatusChip status={video.status} />
+            {video.status !== VideoStatus.PROCESSED && <StatusChip status={video.status} />}
           </div>
           <div
             data-testid="video-date"
