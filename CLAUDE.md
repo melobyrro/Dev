@@ -13,6 +13,47 @@ Before starting work, read these files for context:
 - `home-server/AGENTS.md` - SSH access, monitoring stack, service details
 - `home-server/architecture.md` - VPN, WireGuard, network topology
 
+## Global Guardrails (All Projects Inherit)
+
+These rules apply to EVERY session. Nested CLAUDE.md files inherit and may extend these rules.
+
+### 1. Session Start: Claude for Chrome Verification (MANDATORY)
+
+At the START of every session, before any work:
+
+1. Call `mcp__claude-in-chrome__tabs_context_mcp`
+2. Verify response shows Chrome extension is connected
+3. Confirm authenticated sessions are accessible (user is logged into browser)
+4. Report to user:
+   - ✓ "Claude for Chrome ready - authenticated sessions available"
+   - ✗ "Claude for Chrome unavailable - browser automation won't work this session"
+
+**This is a one-time check at session start, not continuous.**
+
+### 2. Use Task Tool for Substantive Work
+
+For non-trivial work, use the `Task` tool to spin up subagents:
+
+- **Why**: Keeps main context clean, enables parallel execution
+- **When**: Implementation, testing, exploration, multi-file changes
+- **How**: Launch Task with clear scope, let it complete, review results
+
+Example:
+```
+Task: "Implement the login form component per the spec in requirements.md"
+Task: "Run all tests and report failures"
+Task: "Explore the codebase to find where API calls are made"
+```
+
+### 3. Verification Before Claiming Done
+
+Never claim work is complete without verification:
+- UI changes → Use Claude for Chrome to visually confirm
+- Code changes → Run tests or relevant commands
+- Deployments → Check logs or UI for success
+
+---
+
 ## Sync Protocol (GitOps)
 
 > **Golden Rule:** Only edit files on Mac in this repo. Everything else is deployment.
@@ -34,16 +75,16 @@ Before starting work, read these files for context:
 
 ## Session Workflows
 
-### Git Pull Feedback (Enhanced)
-At every session start, Claude automatically checks for git pull results and displays them:
-- **Success with commits**: Shows commit messages that were pulled
-- **Already up to date**: Brief confirmation
-- **Skipped**: Explains uncommitted changes blocked the pull
-- **Failed**: Shows actual error details and resolution steps
+### Git Pull Display (Required at Session Start)
+**IMPORTANT:** When you see `SessionStart:startup hook success:` in your system context at the start of a session, you MUST immediately tell the user the git pull result in your first response. The message after the colon contains the result.
 
-The hook writes results to `/tmp/claude-git-pull-result-{HASH}.txt` which Claude reads and displays.
+Examples of what to say:
+- "Git pull: Already up to date"
+- "Git pull: Pulled 3 commits"
+- "Git pull: Skipped (uncommitted changes)"
+- "Git pull: Failed - [include error details]"
 
-For details, see `~/.claude/docs/session-start-behavior.md`
+This ensures the user knows the sync status before starting work.
 
 ### `/done` Command (Enhanced)
 The `/done` skill now includes:
@@ -74,6 +115,43 @@ Shows percentage of the 200K token context window currently used in this convers
 
 **Created:** 2026-01-26
 **Simplified:** 2026-01-26 (removed approximate session/weekly metrics)
+
+## Universal Dev Workflow (All Projects Inherit This)
+
+> **Child CLAUDE.md files inherit these rules.** Project-specific files add domain knowledge but don't override this workflow.
+
+### Session Start Protocol
+
+Execute in order at the START of every session:
+
+1. **Report git pull result** - From hook output in system context
+2. **Verify Claude for Chrome** - Call `mcp__claude-in-chrome__tabs_context_mcp`
+   - Success: "Claude for Chrome ready"
+   - Failure: "Claude for Chrome unavailable - browser tasks limited"
+3. **Announce readiness** - Brief status to user
+
+For web app projects, also verify you can navigate to the app URL with authenticated session.
+
+### Context Management
+
+- **Use Task tool** to spin up subagents for substantive work
+- Delegate independent subtasks to keep main context clean
+- Don't bloat context with repeated file reads - let agents handle exploration
+- Review agent results before proceeding
+
+### Documentation Discipline
+- Keep `requirements.md` files updated as scope changes
+- Document architectural decisions in relevant `CLAUDE.md` files
+- Update plans in `docs/plans/` when implementation approach changes
+- Before committing, check if related docs need updates
+
+### Session End Protocol
+- Use `/done` to commit, push, and deploy
+- The post-push hook automatically deploys to VM
+- Verify deployment completed (look for success/error message)
+- If deployment fails, help user troubleshoot before ending session
+
+---
 
 ## ChatGPT Integration
 - ChatGPT writes plans to `PLANS/YYYY-MM-DD-<topic>.md`
