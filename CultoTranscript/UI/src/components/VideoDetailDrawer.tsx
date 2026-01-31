@@ -75,9 +75,9 @@ export function VideoDetailDrawer() {
 
   return (
     <>
-      {/* Backdrop */}
+      {/* Backdrop - transparent to keep video list visible */}
       <div
-        className="fixed inset-0 bg-black bg-opacity-50 z-40 transition-opacity"
+        className="fixed inset-0 z-40"
         onClick={handleClose}
       />
 
