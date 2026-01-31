@@ -71,6 +71,11 @@ app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 # Mount static files
 app.mount("/static", StaticFiles(directory="app/web/static"), name="static")
 
+# Mount React UI static assets (built files)
+UI_DIST_PATH = Path("/app/ui-dist")
+if UI_DIST_PATH.exists():
+    app.mount("/assets", StaticFiles(directory=str(UI_DIST_PATH / "assets")), name="ui-assets")
+
 # Templates
 templates = Jinja2Templates(directory="app/web/templates")
 
@@ -164,17 +169,20 @@ async def shutdown_event():
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, user: str = Depends(get_current_user)):
-    """Home page / Dashboard - Channel-focused"""
+    """Home page - serves React SPA if available, otherwise dashboard template"""
+    # Serve React SPA if built UI exists
+    react_index = UI_DIST_PATH / "index.html" if UI_DIST_PATH.exists() else None
+    if react_index and react_index.exists():
+        return HTMLResponse(content=react_index.read_text())
+
+    # Fallback to Jinja2 template dashboard
     from app.common.database import get_db_session
     from app.common.models import Channel, Video
 
-    # Get the first active channel (single-channel mode for now)
-    # In the future, could add channel selection dropdown
     with next(get_db_session()) as db:
         channel = db.query(Channel).filter(Channel.active == True).first()
 
         if channel:
-            # Get video stats for this channel
             total_videos = db.query(Video).filter(Video.channel_id == channel.id).count()
             completed_videos = db.query(Video).filter(
                 Video.channel_id == channel.id,
@@ -328,6 +336,23 @@ def worker_health():
             "stuck_jobs": stuck_details,
             "message": f"{len(stuck_jobs)} jobs stuck for > 30 minutes" if stuck_jobs else "All jobs running normally"
         }
+
+
+# SPA catch-all route - must be last to allow API routes to take precedence
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+async def spa_catch_all(request: Request, full_path: str, user: str = Depends(get_current_user)):
+    """Catch-all route for React SPA client-side routing"""
+    # Skip if this looks like an API call or static file
+    if full_path.startswith(("api/", "static/", "assets/")):
+        raise HTTPException(status_code=404, detail="Not found")
+
+    # Serve React SPA if built UI exists
+    react_index = UI_DIST_PATH / "index.html" if UI_DIST_PATH.exists() else None
+    if react_index and react_index.exists():
+        return HTMLResponse(content=react_index.read_text())
+
+    # Fallback to 404
+    raise HTTPException(status_code=404, detail="Not found")
 
 
 if __name__ == "__main__":
