@@ -10,6 +10,14 @@ from typing import Dict
 logger = logging.getLogger(__name__)
 
 
+class QueryIntent(Enum):
+    """Intent types for query processing"""
+    CONTENT = "content"
+    LIST_ALL = "list_all"
+    HIGHLIGHTS = "highlights"
+    QUESTIONS = "questions"
+
+
 class QueryType(Enum):
     """Types of queries the chatbot can receive"""
     TITLE_SUGGESTION = "title_suggestion"
