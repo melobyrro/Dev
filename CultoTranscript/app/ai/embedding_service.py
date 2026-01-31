@@ -43,9 +43,16 @@ class EmbeddingService:
 
     def __init__(self):
         """Initialize embedding service"""
-        self.gemini = get_gemini_client()
+        self._gemini = None  # Lazy load to avoid startup failure if API key missing
         self.embeddings_skipped = 0
         self.embeddings_generated = 0
+
+    @property
+    def gemini(self):
+        """Lazy load Gemini client only when needed"""
+        if self._gemini is None:
+            self._gemini = get_gemini_client()
+        return self._gemini
 
         # Initialize segmenter based on mode
         self.overlap_mode = EMBEDDING_OVERLAP_MODE
