@@ -1,5 +1,5 @@
 # CLAUDE.md — Home Assistant Repository Constitution
-**Last updated:** 2026-01-23
+**Last updated:** 2026-01-31
 **Status:** Binding
 **Authority:** This file is the law for this repository. If any instruction conflicts with this document, this document wins.
 
@@ -222,6 +222,99 @@ Rollback:
 
 **Law:** If you cannot point to the before/after truth, you cannot claim the change is correct.
 
+---
+
+### 2.5 Session Start Protocol (Chrome MCP Validation)
+
+Every Home Assistant work session MUST begin with browser validation before any implementation work.
+
+#### Mandatory First Steps
+
+1. **Verify Chrome MCP Connection:**
+   ```
+   - Call mcp__claude-in-chrome__tabs_context_mcp
+   - Confirm extension is responding
+   - If unavailable: STOP and alert user — cannot proceed
+   ```
+
+2. **Navigate to Authenticated HA Session:**
+   ```
+   - Open Home Assistant dashboard (or verify existing tab)
+   - Confirm NOT on login page (authentication valid)
+   - Take baseline screenshot for reference
+   ```
+
+3. **If Chrome MCP Unavailable:**
+   - Stop immediately and inform user
+   - Cannot proceed with UI validation work
+   - No dashboard/automation changes allowed without validation capability
+
+**Why:** Every change must be validated in the actual UI. No Chrome = no validation = no changes.
+
+**Law:** A session without verified Chrome MCP access cannot make UI-affecting changes.
+
+---
+
+### 2.6 Context Window Management (Agent Delegation Law)
+
+To maintain clean context and enable thorough validation, delegate implementation work to Task agents.
+
+#### Delegation Pattern
+
+| Role | Responsibilities |
+|------|------------------|
+| **Main context** | Planning, requirements gathering, user communication, orchestration |
+| **Task agents** | File edits, searches, implementation, validation |
+
+**Rule:** Keep main context clean. Spawn agents for implementation and validation.
+
+#### Post-Change Validation Protocol (Mandatory)
+
+After ANY dashboard or automation change, spawn a validation agent:
+
+```
+Task: Navigate to <dashboard URL>
+      Go to <specific tab/section>
+      Verify: <what should be visible>
+      Check responsive views (mobile/tablet/desktop)
+      Take screenshots as evidence
+      Report: PASS with evidence, or FAIL with details
+```
+
+**Agent Responsibilities:**
+- Navigate to affected dashboard in Chrome
+- Verify change appears correctly
+- Check at least mobile + desktop responsive views
+- Screenshot evidence of success/failure
+- Report back with clear PASS/FAIL and evidence
+
+**Main Context Responsibilities:**
+- Review agent validation result
+- If PASS: proceed to next change or commit
+- If FAIL: fix issue and re-validate
+
+#### Validation Agent Prompt Template
+```text
+Navigate to Home Assistant at <HA_URL>.
+Open dashboard: <dashboard_name>.
+Go to tab/section: <specific_location>.
+
+Verify the following:
+1. <specific check 1>
+2. <specific check 2>
+3. ...
+
+Test responsive views:
+- Mobile (narrow)
+- Desktop (wide)
+
+Take screenshots as evidence.
+Report: PASS if all checks succeed, FAIL with specific details if not.
+```
+
+**Law:** No change is complete until a validation agent confirms it in the live UI.
+
+---
 
 ## 3) Architecture Standards
 
@@ -332,6 +425,88 @@ Cross-feature interaction must use explicit contracts:
 **Law:** Legacy template formats are forbidden.
 - **Bad:** `value_template: ...` inside a list without `state:` key.
 - **Good:** Modern configuration format under `template:` integration.
+
+---
+
+### 3.9 File Organization Law (Active/Archive Discipline)
+
+#### Active File Rule (Strict)
+- **Only ONE active version** per component in any directory
+- Active file naming: `<component>.v<major>.<minor>.yaml`
+- **Forbidden in active directories:**
+  - `_deployed`, `_backup`, `_old` suffixes
+  - Timestamp-based names (e.g., `automations-20260115.yaml`)
+  - Multiple version files (e.g., both `v1.10` and `v1.21` in same folder)
+
+#### Archive Strategy (Mandatory)
+Old versions MUST move to `.archive/` immediately upon new version deployment.
+
+| Action | Requirement |
+|--------|-------------|
+| New version deployed | Move old version to `.archive/` same day |
+| Archive naming | Keep original name, add `-archived-YYYYMMDD` suffix |
+| Archive location | `.archive/` folder at feature root level |
+
+#### Directory Structure Standard
+```text
+<feature>/
+  REQUIREMENTS.md               # Required for every feature
+  package.v<X>.<Y>.yaml         # Main package (if using packages)
+  automations.v<X>.<Y>.yaml     # Single active automation file
+  scripts.v<X>.<Y>.yaml         # Single active scripts file
+  helpers.v<X>.<Y>.yaml         # Single active helpers file
+  sensors.v<X>.<Y>.yaml         # Single active sensors file
+  dashboards/
+    <dashboard>.v<X>.<Y>.yaml   # Single active dashboard
+  docs/
+    notes.md
+  .archive/                     # All old versions here
+    automations.v1.0-archived-20260115.yaml
+    dashboards/
+      dashboard.v1.0-archived-20260110.yaml
+```
+
+**Law:** If `ls` in any active directory shows multiple versions of the same component, the repository is non-compliant.
+
+---
+
+### 3.10 Feature Registry (Central Index)
+
+A **REGISTRY.md** file MUST exist at the repository root listing all features.
+
+#### Registry Format
+```markdown
+# Home Assistant Feature Registry
+**Last Updated:** YYYY-MM-DD
+
+| Feature | Path | Dashboard | Automations | Scripts | Owner | Updated |
+|---------|------|-----------|-------------|---------|-------|---------|
+| Kia EV9 | kia-ev9/ | lovelace.kia_ev9.v2.10.yaml | automations.v2.8.yaml | scripts.v2.7.yaml | Andre | 2026-01-30 |
+| Patio AC | patio-ac/ | patio_ac.v1.21.yaml | automations.v1.0.yaml | scripts.v1.0.yaml | Andre | 2026-01-28 |
+| Daikin | Daikin/ | daikin.v2.0.yaml | daikin_automations.yaml | — | Andre | 2026-01-25 |
+| Jose Vacuum | jose/ | jose_vacuum.v1.0.yaml | — | — | Andre | 2026-01-20 |
+| Central Automations | ha-config/dashboards/ | automations_central.v1.0.yaml | (aggregates orphans) | — | Andre | 2026-01-31 |
+```
+
+#### Registry Rules
+
+| Rule | Requirement |
+|------|-------------|
+| Update frequency | Must be updated on every feature structural change |
+| Paths | Relative paths from repo root |
+| "Updated" column | Date of last structural change (not every commit) |
+| Completeness | Every feature with a dashboard MUST appear |
+| Accuracy | Dead links = non-compliant registry |
+
+**Verification command:**
+```bash
+# Check all registry paths resolve
+grep -oP '\| [a-zA-Z0-9_/-]+\.yaml' REGISTRY.md | tr -d '| ' | while read f; do
+  [ -f "$f" ] || echo "MISSING: $f"
+done
+```
+
+**Law:** If a feature exists but is not in REGISTRY.md, the repository is non-compliant.
 
 ---
 
@@ -459,6 +634,101 @@ Automations should be triggered by any state change that *could* make conditions
 
 ---
 
+### 4.9 Automation Visibility Law (Dashboard Observability)
+
+Every automation must be visible and understandable from a dashboard. No automation should be "hidden" in YAML with no UI presence.
+
+#### Automation Location Rules
+
+| Automation Type | Dashboard Location |
+|-----------------|-------------------|
+| Feature-specific (e.g., EV9 lock, vacuum schedule) | **Automations tab** in that feature's dashboard |
+| Cross-cutting (notifications, trackers, system) | **Central Automations dashboard** with categorized tabs |
+
+**Law:** Every automation appears in exactly ONE dashboard's Automations tab.
+
+#### Required Automations Tab Structure
+
+Every feature dashboard MUST have an "Automations" tab containing a table with these columns:
+
+| Column | Content | Notes |
+|--------|---------|-------|
+| **Name** | Automation alias | From `alias:` field |
+| **Description** | What it does (1 line) | From `description:` field |
+| **Trigger Type** | `scheduled` / `state` / `event` | Icon recommended |
+| **Trigger Inputs** | Current values of ALL trigger entities + conditions | Live updating |
+| **Last Run** | Timestamp of last execution | Only if ran |
+| **Next Run** | Timestamp | Only for scheduled automations |
+| **Status** | `idle` / `running` / `disabled` | Color-coded |
+| **Last Action** | What happened | Only show if action taken or error |
+
+#### Trigger Input Display (Critical for Debugging)
+
+Show ALL monitored entities with their current values so users can verify automation logic:
+
+**For Scheduled Automations:**
+```
+Next: 06:00 AM | Last: Yesterday 06:00 AM
+```
+
+**For State/Trigger-Based Automations:**
+```
+distance: 245m | car_locked: false | home_mode: away | battery: 78%
+```
+
+This allows users to see exactly what the automation is watching and confirm it will trigger as expected.
+
+#### Logging Rules (Signal, Not Noise)
+
+| Event | Log to "Last Action" column? |
+|-------|------------------------------|
+| Action was taken | **YES** — describe what action |
+| Error occurred | **YES** — describe what error |
+| Ran but conditions not met | **NO** — silent |
+| "No action needed" | **NO** — silent |
+
+**Why:** Users only care when something happened or broke, not when nothing happened.
+
+#### Implementation Pattern (Automation Status Sensor)
+
+Each automation needs a companion template sensor to expose its state to dashboards:
+
+```yaml
+template:
+  - sensor:
+      - name: "<feature>_automation_<name>_status"
+        unique_id: "<feature>_automation_<name>_status"
+        state: "{{ states('automation.<automation_id>') }}"
+        attributes:
+          alias: "<Human readable name>"
+          description: "<What it does>"
+          trigger_type: "state"  # or "scheduled" or "event"
+          last_triggered: "{{ state_attr('automation.<automation_id>', 'last_triggered') }}"
+          trigger_inputs:
+            distance: "{{ states('sensor.ev9_distance_from_home') }}"
+            car_locked: "{{ states('lock.ev9_door_lock') }}"
+            home_mode: "{{ states('input_select.home_mode') }}"
+          last_action: "{{ states('input_text.<feature>_<name>_last_action') }}"
+          last_action_time: "{{ states('input_datetime.<feature>_<name>_last_action_time') }}"
+```
+
+#### Central Automations Dashboard
+
+For automations not tied to a specific feature, create a central dashboard at:
+`/ha-config/dashboards/automations_central.v1.0.yaml`
+
+**Required tabs:**
+- **Notifications** — all notification automations
+- **Trackers** — presence, location, device tracking
+- **System** — HA health, backups, maintenance
+- **Misc** — anything not fitting above
+
+Each tab follows the same table format.
+
+**Law:** If an automation exists but is not visible in any dashboard's Automations tab, the repository is non-compliant.
+
+---
+
 ## 5) Dashboard UX Standards Constitution
 
 ### 5.1 Primary Hierarchy: Observe → Understand → Act (Law)
@@ -558,6 +828,113 @@ Dashboards must be verified at minimum:
 - Do not accept "default" spacing if it breaks the grid or alignment.
 - Ensure unified grid widths across stacks.
 - Prevent visual regression by pinning complex layouts with explicit CSS.
+
+---
+
+### 5.8 Dashboard Layout Standards (Mandatory Structure)
+
+Every feature dashboard MUST follow a consistent tab and section structure for visual consistency across the entire Home Assistant UI.
+
+#### Mandatory Tab Structure
+
+| Tab | Purpose | Required? |
+|-----|---------|-----------|
+| **Overview** | Primary Observe → Understand → Act interface | **Yes** |
+| **Automations** | Table of all feature automations with live state (see 4.9) | **Yes** |
+| **Details** | Deeper metrics, history graphs, trends | Optional |
+| **Settings** | Configuration helpers, thresholds, modes | If applicable |
+
+**Tab order is fixed.** Overview first, Automations second, then optional tabs.
+
+#### Overview Tab Layout Template
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│ STATUS BAR                                                  │
+│ Health indicator • Last update • Key metric summary         │
+├─────────────────────────────────────────────────────────────┤
+│ OBSERVE (2-3 cards max)                                     │
+│ ┌───────────────┐ ┌───────────────┐ ┌───────────────┐       │
+│ │ Primary State │ │ Secondary     │ │ Tertiary      │       │
+│ │ (biggest)     │ │ State         │ │ State         │       │
+│ └───────────────┘ └───────────────┘ └───────────────┘       │
+├─────────────────────────────────────────────────────────────┤
+│ UNDERSTAND                                                  │
+│ Current mode • Active logic explanation • Why this state    │
+├─────────────────────────────────────────────────────────────┤
+│ ACT (primary controls only)                                 │
+│ ┌─────────┐ ┌─────────┐ ┌─────────┐                         │
+│ │ Toggle  │ │ Button  │ │ Button  │                         │
+│ └─────────┘ └─────────┘ └─────────┘                         │
+└─────────────────────────────────────────────────────────────┘
+```
+
+#### Responsive Requirements (Strict)
+
+| Breakpoint | Max Columns | Requirements |
+|------------|-------------|--------------|
+| **Mobile** (< 600px) | 1 column | Controls reachable without scroll; status bar visible |
+| **Tablet** (600-1024px) | 2 columns | Cards stack naturally; no horizontal overflow |
+| **Desktop** (> 1024px) | 3 columns max | No horizontal scroll; comfortable spacing |
+
+**Checklist before any dashboard is considered complete:**
+- [ ] Mobile: single column, no horizontal scroll
+- [ ] Mobile: primary controls visible without scrolling
+- [ ] Tablet: 2-column layout works
+- [ ] Desktop: 3-column max, no wasted space
+- [ ] All breakpoints: Status bar visible at top
+
+#### Card Alignment Standards
+
+| Element | Rule |
+|---------|------|
+| **Tables** | Must use `flex-table-card` — no stacked entity cards pretending to be tables |
+| **Spacing** | Use `card-mod` for consistent margins/padding |
+| **Grid widths** | Unified across all stacks in a view |
+| **Units** | Always displayed, consistent format (e.g., always "78%" not sometimes "78" and sometimes "78%") |
+
+#### Automations Tab Layout
+
+The Automations tab uses `flex-table-card` with fixed columns:
+
+```yaml
+type: custom:flex-table-card
+title: Feature Automations
+entities:
+  include: sensor.*_automation_*_status
+columns:
+  - name: Name
+    data: alias
+  - name: Description
+    data: description
+  - name: Trigger
+    data: trigger_type
+    icon: true
+  - name: Inputs
+    data: trigger_inputs
+    modify: |-
+      Object.entries(x).map(([k,v]) => `${k}: ${v}`).join(' | ')
+  - name: Last Run
+    data: last_triggered
+    modify: |-
+      if (x) new Date(x).toLocaleString()
+      else '—'
+  - name: Status
+    data: state
+  - name: Last Action
+    data: last_action
+    modify: x || '—'
+```
+
+#### Settings Tab Layout (If Applicable)
+
+Group settings by category:
+1. **Thresholds** — numeric inputs, sliders
+2. **Modes** — dropdowns, radio buttons
+3. **Toggles** — on/off switches for features
+4. **Advanced** — hidden by default, expandable section
+
+**Law:** A dashboard without Overview and Automations tabs is non-compliant.
 
 ---
 
