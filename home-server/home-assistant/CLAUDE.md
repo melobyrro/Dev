@@ -1,4 +1,7 @@
 # CLAUDE.md — Home Assistant Repository Constitution
+
+> **Inherits from:** [/Dev/CLAUDE.md](../../CLAUDE.md) — Read root file for universal dev workflow (git sync, Chrome MCP, Tasks, /done)
+
 **Last updated:** 2026-01-31
 **Status:** Binding
 **Authority:** This file is the law for this repository. If any instruction conflicts with this document, this document wins.
@@ -62,6 +65,28 @@ Rollback is not a suggestion; it is a requirement.
 - What you will revert (commit hash / files)
 - What artifact you will restore (backup filename / snapshot ID)
 - How you will validate recovery (config check + log check + trace run)
+
+---
+
+### 1.3 Secrets & Sensitive Data (Hard Law)
+**Goal:** No credentials, tokens, cookies, or personal data in git history, refs, screenshots, logs, or notes.
+
+#### Allowed secret stores
+- `secrets.yaml` (preferred for Home Assistant)
+- `.env` (only for local tooling; never required for HA runtime)
+
+#### Forbidden locations
+- Any committed `*.yaml` containing secrets (outside `secrets.yaml`)
+- Markdown evidence/notes and ref snapshots
+- Screenshots exposing tokens, cookies, email addresses, coordinates, SSIDs, or internal URLs
+- Commit messages / PR descriptions / automation descriptions
+
+#### Mandatory controls
+- `.gitignore` MUST include: `.env`, `secrets.yaml`
+- Before publishing evidence, redact secrets and sensitive values
+
+#### Violation handling
+- Treat as SEV-0: rotate compromised secrets immediately
 
 ---
 
@@ -540,6 +565,24 @@ done
 ```
 
 **Law:** If a feature exists but is not in REGISTRY.md, the repository is non-compliant.
+
+---
+
+### 3.11 Dependency Governance (HACS, Custom Cards, Integrations)
+**Law:** UI reliability requires dependency governance (pinning + controlled upgrades).
+
+#### Required artifact
+`DEPENDENCIES.md` at repo root listing:
+- Custom cards (name, source URL, pinned version/tag)
+- HACS integrations (name, pinned version)
+- Known breaking changes and mitigation notes
+
+#### Rules
+- If a feature dashboard uses a custom card, its REQUIREMENTS.md MUST declare the dependency
+- Upgrade discipline:
+  - One dependency upgrade per branch
+  - Requires UI validation at all breakpoints
+  - Requires rollback plan (pin back to previous version)
 
 ---
 
@@ -1055,6 +1098,20 @@ After reload/restart:
 - Observe → Understand → Act preserved
 - Read‑Only Logs rule satisfied
 - Tables aligned and readable
+
+---
+
+### 7.4 Entity Quality Gates (Templates/Sensors)
+**Law:** Every newly introduced template sensor/binary_sensor MUST include:
+- `unique_id`
+- `availability` (or justified exception in REQUIREMENTS)
+- Correct `device_class` / `state_class` (when applicable)
+- Correct `unit_of_measurement` (when applicable)
+
+#### Performance rules
+- Prefer trigger-based templates over free-running templates
+- Avoid unbounded scans of `states` in templates
+- Avoid high-frequency state churn entities in dashboards unless required
 
 ---
 
