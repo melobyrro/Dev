@@ -266,6 +266,7 @@ export interface ChatRequestDTO {
   message: string;
   session_id: string;
   channel_id: string;
+  knowledge_mode?: 'database_only' | 'global';
 }
 
 export interface ChatResponseDTO {

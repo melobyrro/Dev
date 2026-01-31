@@ -8,11 +8,15 @@ interface ChatStore {
   isOpen: boolean;
   isLoading: boolean;
   sessionId: string;
-  
+  knowledgeMode: 'database_only' | 'global';
+  drawerWidth: number;
+
   openDrawer: () => void;
   closeDrawer: () => void;
   sendMessage: (message: string) => Promise<void>;
   refreshChat: () => void;
+  setKnowledgeMode: (mode: 'database_only' | 'global') => void;
+  setDrawerWidth: (width: number) => void;
 }
 
 function generateSessionId(): string {
@@ -24,27 +28,37 @@ export const useChatStore = create<ChatStore>((set, get) => ({
   isOpen: false,
   isLoading: false,
   sessionId: generateSessionId(),
+  knowledgeMode: 'database_only',
+  drawerWidth: parseInt(localStorage.getItem('chatbotPanelWidth') || '400', 10),
 
   openDrawer: () => set({ isOpen: true }),
-  
+
   closeDrawer: () => set({ isOpen: false }),
-  
+
+  setKnowledgeMode: (mode) => set({ knowledgeMode: mode }),
+
+  setDrawerWidth: (width) => {
+    localStorage.setItem('chatbotPanelWidth', width.toString());
+    set({ drawerWidth: width });
+  },
+
   sendMessage: async (message: string) => {
-    const { sessionId, messages } = get();
-    
+    const { sessionId, messages, knowledgeMode } = get();
+
     const userMessage: ChatMessageDTO = {
       role: 'user',
       content: message,
       timestamp: new Date().toISOString(),
     };
-    
+
     set({ messages: [...messages, userMessage], isLoading: true });
-    
+
     try {
       const response = await chatService.sendMessage(
         config.defaultChannelId,
         message,
-        sessionId
+        sessionId,
+        knowledgeMode
       );
       
       const assistantMessage: ChatMessageDTO = {

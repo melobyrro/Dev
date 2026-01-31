@@ -10,13 +10,12 @@
   top: 0;
   right: 0;
   bottom: 0;
-  width: 100%;
-  max-width: 400px;
   background-color: white;
   box-shadow: -4px 0 20px rgba(0, 0, 0, 0.15);
   z-index: 50;
   display: flex;
   flex-direction: column;
+  transition: width 0.1s ease-out;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -219,4 +218,104 @@
   .ai-drawer {
     max-width: 100%;
   }
+}
+
+/* Resize handle */
+.resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: ew-resize;
+  background: transparent;
+  z-index: 51;
+  transition: background 0.2s;
+}
+
+.resize-handle:hover,
+.resize-handle.active {
+  background: rgba(59, 130, 246, 0.5);
+}
+
+.resize-handle::after {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 2px;
+  height: 40px;
+  background: currentColor;
+  border-radius: 1px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.resize-handle:hover::after {
+  opacity: 0.5;
+}
+
+.ai-drawer.resizing {
+  transition: none !important;
+  user-select: none;
+}
+
+@media (max-width: 768px) {
+  .resize-handle {
+    display: none;
+  }
+}
+
+/* Knowledge mode toggle */
+.knowledge-toggle {
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.dark .knowledge-toggle {
+  border-top-color: #374151;
+}
+
+.toggle-btn {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background-color: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.dark .toggle-btn {
+  background-color: #374151;
+  border-color: #4b5563;
+  color: #9ca3af;
+}
+
+.toggle-btn:hover {
+  border-color: #3b82f6;
+  color: #3b82f6;
+}
+
+.dark .toggle-btn:hover {
+  border-color: #60a5fa;
+  color: #60a5fa;
+}
+
+.toggle-btn.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border-color: transparent;
+  color: white;
+}
+
+.dark .toggle-btn.active {
+  background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+  border-color: transparent;
+  color: white;
 }

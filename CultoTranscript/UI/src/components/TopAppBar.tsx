@@ -33,13 +33,16 @@ export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: Top
   };
 
   const navLinks = [
-    { path: '/channels', label: 'Sermões', testId: 'nav-videos' },
+    { path: '/', label: 'Sermões', testId: 'nav-videos' },
     { path: '/reports', label: 'Relatórios', testId: 'nav-reports' },
     { path: '/admin', label: 'Admin', testId: 'nav-admin' },
     { path: '/database', label: 'Sermões DB', testId: 'nav-database' },
   ];
 
   const isActiveRoute = (path: string) => {
+    if (path === '/') {
+      return location.pathname === '/' || location.pathname === '/channels';
+    }
     return location.pathname === path || location.pathname.startsWith(path + '/');
   };
 
@@ -126,6 +129,13 @@ export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: Top
 
               {userMenuOpen && (
                 <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-200 dark:border-gray-700 py-1 z-50">
+                  <Link
+                    to="/settings"
+                    onClick={() => setUserMenuOpen(false)}
+                    className="block px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                  >
+                    Configurações
+                  </Link>
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
@@ -194,21 +204,30 @@ export default function TopAppBar({ onThemeToggle, currentTheme = 'light' }: Top
                   </select>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-4 border-t border-gray-200 dark:border-gray-700">
-                <button
-                  data-testid="theme-toggle"
-                  onClick={onThemeToggle}
-                  className="flex items-center space-x-2 px-2 py-1 text-sm text-gray-700 dark:text-gray-300"
+              <div className="flex flex-col space-y-2 pt-4 border-t border-gray-200 dark:border-gray-700">
+                <Link
+                  to="/settings"
+                  onClick={() => setMobileMenuOpen(false)}
+                  className="px-2 py-1 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded"
                 >
-                  <span>Tema</span>
-                  {currentTheme === 'light' ? '🌙' : '☀️'}
-                </button>
-                <button
-                  onClick={handleLogout}
-                  className="px-4 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
-                >
-                  Sair
-                </button>
+                  Configurações
+                </Link>
+                <div className="flex items-center justify-between">
+                  <button
+                    data-testid="theme-toggle"
+                    onClick={onThemeToggle}
+                    className="flex items-center space-x-2 px-2 py-1 text-sm text-gray-700 dark:text-gray-300"
+                  >
+                    <span>Tema</span>
+                    {currentTheme === 'light' ? '🌙' : '☀️'}
+                  </button>
+                  <button
+                    onClick={handleLogout}
+                    className="px-4 py-1 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 rounded"
+                  >
+                    Sair
+                  </button>
+                </div>
               </div>
             </nav>
           </div>

@@ -178,6 +178,7 @@ class ChatRequestDTO(BaseModel):
     message: str
     session_id: str
     channel_id: str
+    knowledge_mode: Optional[str] = "database_only"
 
 
 class ChatResponseDTO(BaseModel):

@@ -13,12 +13,14 @@ class ChatService {
   async sendMessage(
     channelId: string,
     message: string,
-    sessionId: string
+    sessionId: string,
+    knowledgeMode: 'database_only' | 'global' = 'database_only'
   ): Promise<ChatResponseDTO> {
     const request: ChatRequestDTO = {
       message,
       session_id: sessionId,
       channel_id: channelId,
+      knowledge_mode: knowledgeMode,
     };
 
     try {

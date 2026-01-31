@@ -232,6 +232,52 @@ class SwitchChannelRequest(BaseModel):
     channel_id: int
 
 
+@router.get("/user/profile")
+async def get_user_profile(
+    request: Request,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Get current user's profile information"""
+    user_id = request.session.get("user_id")
+    user_obj = db.query(User).filter(User.id == user_id).first()
+    if not user_obj:
+        return {"success": False, "message": "User not found"}
+    return {
+        "success": True,
+        "data": {
+            "email": user_obj.email,
+            "created_at": user_obj.created_at.isoformat() if user_obj.created_at else None
+        }
+    }
+
+
+@router.post("/user/change-password")
+async def change_password(
+    request: Request,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Change the current user's password"""
+    import bcrypt
+
+    data = await request.json()
+    current_password = data.get("current_password")
+    new_password = data.get("new_password")
+
+    user_id = request.session.get("user_id")
+    user_obj = db.query(User).filter(User.id == user_id).first()
+
+    if not bcrypt.checkpw(current_password.encode(), user_obj.password_hash.encode()):
+        return {"success": False, "message": "Senha atual incorreta"}
+
+    new_hash = bcrypt.hashpw(new_password.encode(), bcrypt.gensalt()).decode()
+    user_obj.password_hash = new_hash
+    db.commit()
+
+    return {"success": True, "message": "Senha alterada"}
+
+
 @router.post("/switch-channel")
 async def switch_channel(
     request: Request,
@@ -2364,3 +2410,101 @@ async def get_recent_feedback(
     except Exception as e:
         logger.error(f"Error fetching feedback: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Erro ao buscar feedback: {str(e)}")
+
+
+# ============================================================================
+# Church Members Endpoints
+# ============================================================================
+
+@router.get("/church/members")
+async def get_church_members(
+    channel_id: Optional[int] = None,
+    request: Request = None,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Get members for a church channel"""
+    from app.common.models import ChurchMember, User
+
+    cid = channel_id or request.session.get("channel_id", 1)
+
+    members = db.query(
+        ChurchMember.id,
+        ChurchMember.role,
+        User.email,
+        User.last_login,
+        User.login_count
+    ).join(User, ChurchMember.user_id == User.id).filter(
+        ChurchMember.channel_id == cid
+    ).all()
+
+    return {
+        "members": [
+            {
+                "id": m.id,
+                "email": m.email,
+                "role": m.role,
+                "last_login": m.last_login.isoformat() if m.last_login else None,
+                "login_count": m.login_count
+            }
+            for m in members
+        ]
+    }
+
+@router.post("/church/members/invite")
+async def invite_member(
+    request: Request,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Invite a new member to the church"""
+    from app.common.models import ChurchMember, User
+
+    data = await request.json()
+    email = data.get("email")
+    role = data.get("role", "user")
+    channel_id = data.get("channel_id") or request.session.get("channel_id", 1)
+
+    if role not in ("owner", "admin", "user"):
+        return {"success": False, "message": "Invalid role"}
+
+    existing_user = db.query(User).filter(User.email == email).first()
+
+    if existing_user:
+        existing_membership = db.query(ChurchMember).filter(
+            ChurchMember.user_id == existing_user.id,
+            ChurchMember.channel_id == channel_id
+        ).first()
+
+        if existing_membership:
+            return {"success": False, "message": "User is already a member"}
+
+        membership = ChurchMember(
+            user_id=existing_user.id,
+            channel_id=channel_id,
+            role=role,
+            invited_by=request.session.get("user_id")
+        )
+        db.add(membership)
+        db.commit()
+
+        return {"success": True, "message": "Member added successfully"}
+    else:
+        return {"success": False, "message": "User not found. They must register first."}
+
+@router.delete("/church/members/{member_id}")
+async def remove_member(
+    member_id: int,
+    db=Depends(get_db_session),
+    user: str = Depends(require_auth)
+):
+    """Remove a member from the church"""
+    from app.common.models import ChurchMember
+
+    membership = db.query(ChurchMember).filter(ChurchMember.id == member_id).first()
+    if not membership:
+        return {"success": False, "message": "Member not found"}
+
+    db.delete(membership)
+    db.commit()
+    return {"success": True, "message": "Member removed"}

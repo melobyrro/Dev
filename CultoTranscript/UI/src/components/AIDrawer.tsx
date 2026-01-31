@@ -4,10 +4,13 @@ import { ChatMessage } from './ChatMessage';
 import '../styles/AIDrawer.css';
 
 export function AIDrawer() {
-  const { messages, isOpen, isLoading, closeDrawer, sendMessage, refreshChat } = useChatStore();
+  const { messages, isOpen, isLoading, closeDrawer, sendMessage, refreshChat, knowledgeMode, setKnowledgeMode, drawerWidth, setDrawerWidth } = useChatStore();
   const [inputValue, setInputValue] = React.useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const [isResizing, setIsResizing] = React.useState(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(0);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -22,6 +25,37 @@ export function AIDrawer() {
       textareaRef.current.focus();
     }
   }, [isOpen]);
+
+  // Resize handler
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (window.innerWidth <= 768) return;
+    e.preventDefault();
+    setIsResizing(true);
+    startXRef.current = e.clientX;
+    startWidthRef.current = drawerWidth;
+  };
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (e: MouseEvent) => {
+      const delta = startXRef.current - e.clientX;
+      const newWidth = Math.min(800, Math.max(300, startWidthRef.current + delta));
+      setDrawerWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing, setDrawerWidth]);
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -48,7 +82,15 @@ export function AIDrawer() {
         className="drawer-backdrop"
         onClick={closeDrawer}
       />
-      <div data-testid="ai-drawer" className="ai-drawer">
+      <div
+        data-testid="ai-drawer"
+        className={`ai-drawer ${isResizing ? 'resizing' : ''}`}
+        style={{ width: `${drawerWidth}px` }}
+      >
+        <div
+          className={`resize-handle ${isResizing ? 'active' : ''}`}
+          onMouseDown={handleMouseDown}
+        />
         <div className="drawer-header">
           <h2>Assistente IA</h2>
           <div className="drawer-actions">
@@ -96,6 +138,22 @@ export function AIDrawer() {
           <div ref={messagesEndRef} />
         </div>
 
+        <div className="knowledge-toggle">
+          <button
+            className={`toggle-btn ${knowledgeMode === 'database_only' ? 'active' : ''}`}
+            onClick={() => setKnowledgeMode('database_only')}
+            title="Buscar apenas nos sermões desta igreja"
+          >
+            Somente sermões
+          </button>
+          <button
+            className={`toggle-btn ${knowledgeMode === 'global' ? 'active' : ''}`}
+            onClick={() => setKnowledgeMode('global')}
+            title="Usar conhecimento bíblico geral"
+          >
+            Global / Internet
+          </button>
+        </div>
         <div className="drawer-footer">
           <textarea
             ref={textareaRef}

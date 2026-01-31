@@ -83,7 +83,8 @@ async def chat(
         response_data = chatbot_service.chat(
             channel_id=int(channel_id),
             user_message=request.message,
-            session_id=request.session_id
+            session_id=request.session_id,
+            knowledge_mode=request.knowledge_mode
         )
 
         # Transform cited videos to VideoDTO format
