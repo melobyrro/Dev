@@ -1,5 +1,7 @@
 # Jose (Vacuum) - Project Instructions
 
+> **Inherits from:** [/Dev/CLAUDE.md](../../../CLAUDE.md) — Read root file for universal dev workflow (git sync, Chrome MCP, Tasks, /done)
+
 ## Overview
 
 Jose is a **Dreame robot vacuum** integrated with Home Assistant via the **Ecovacs integration**. This project includes a dashboard, error logging, and **self-healing connection recovery**.

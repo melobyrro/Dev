@@ -1,5 +1,7 @@
 # CultoTranscript
 
+> **Inherits from:** [/Dev/CLAUDE.md](../CLAUDE.md) — Read root file for universal dev workflow (git sync, Chrome MCP, Tasks, /done)
+
 Sermon transcription and analytics platform for Brazilian churches.
 Live: https://church.byrroserver.com
 
@@ -23,46 +25,115 @@ cd docker && docker-compose up -d
 
 ## Development Rules
 
-### Session Startup (REQUIRED)
+### 1. Session Start Protocol (MANDATORY)
 
-**Before any code changes**, verify browser access:
+Before ANY code changes, verify browser access:
 
-1. Run `mcp__claude-in-chrome__tabs_context_mcp` to check Chrome connection
-2. Navigate to https://church.byrroserver.com
-3. Confirm you can interact with the logged-in session
-4. If browser unavailable, **STOP** and inform the user
+**Step 1 — Chrome MCP Check:**
+```
+Call: mcp__claude-in-chrome__tabs_context_mcp
+If unavailable: STOP — inform user, cannot proceed
+```
 
-**Why**: Every change must be validated in-browser before claiming completion.
+**Step 2 — Navigate to App:**
+- Go to https://church.byrroserver.com
+- Confirm logged-in session (not on login page)
+- Take baseline screenshot for reference
 
-### Task Management
+**Step 3 — If Browser Unavailable:**
+- STOP immediately
+- No code changes allowed without validation capability
+- Inform user: "Browser automation unavailable — cannot validate changes"
 
-- **Always use tasks** for multi-step work (`TaskCreate`, `TaskUpdate`)
-- **Delegate to subagents** for independent work (`Task` tool with appropriate `subagent_type`)
-- **Run parallel tasks** when no dependencies exist (single message, multiple `Task` calls)
-- **Mark tasks complete** only after browser verification
+**Law:** A session without verified browser access cannot make UI-affecting changes.
 
-### Artifact Policy
+---
 
-**Do NOT create one-time files in the project root.**
+### 2. Execution Discipline
 
-| Artifact Type | Location | Cleanup |
-|---------------|----------|---------|
+#### Task-Driven Workflow
+
+All multi-step work MUST use tasks:
+
+| Work Type | Requirement |
+|-----------|-------------|
+| Single trivial fix | Optional task tracking |
+| 2+ file changes | MUST use `TaskCreate` |
+| Feature work | MUST use `TaskCreate` + validation tasks |
+
+#### Agent Delegation Pattern
+
+| Role | Responsibilities |
+|------|------------------|
+| **Main context** | Planning, user communication, orchestration |
+| **Task agents** | Implementation, file edits, searches |
+| **Validation agents** | Browser verification after changes |
+
+**Rule:** Keep main context clean. Delegate implementation and validation to agents.
+
+#### Post-Change Validation Protocol (MANDATORY)
+
+After ANY code change, spawn a validation agent:
+
+```
+Subagent Task: Validate <change description>
+- Navigate to https://church.byrroserver.com
+- Go to <affected page/component>
+- Verify: <specific checks — what should be visible/functional>
+- Check browser console for errors
+- Take screenshot evidence
+- Report: PASS with evidence, or FAIL with details
+```
+
+**Law:** No change is complete until a validation agent confirms it in the live UI.
+
+---
+
+### 3. Verification Checklist
+
+Before claiming ANY work complete:
+
+| Gate | Requirement | Evidence |
+|------|-------------|----------|
+| Browser validation | Validation agent PASSED | Screenshot + report |
+| No console errors | Console clear of new errors | Console check |
+| Multi-tenant check | If channel-scoped, tested with 2 channels | Cross-channel verification |
+| Tasks complete | All tasks marked done | Task list clean |
+| Temp files cleaned | `.scratch/` cleared | No orphan files |
+
+---
+
+### 4. File Discipline
+
+**Active Directory Rule:** No temp files in project root.
+
+| File Type | Location | Cleanup |
+|-----------|----------|---------|
 | Temp scripts | `.scratch/` | Delete after use |
 | Debug output | `.scratch/` | Delete after use |
 | Migration scripts | `scripts/` | Delete after successful run |
-| Test files | `tests/` or `.scratch/` | Keep if reusable |
+| Test data | `.scratch/` | Delete after use |
+| Test files | `tests/` | Keep if reusable |
 
 The `.scratch/` directory is gitignored. Use it freely for temporary work.
 
-### Verification Checklist
+**Law:** If `ls` shows temp files in project root, the session is non-compliant.
 
-Before claiming any work complete:
+---
 
-- [ ] Browser test passed (visual verification at https://church.byrroserver.com)
-- [ ] No console errors
-- [ ] Multi-tenant check (if channel-scoped feature)
-- [ ] Tasks marked complete
-- [ ] Temp files in `.scratch/` cleaned up
+### 5. Requirements Documentation
+
+When modifying feature behavior, update documentation in the same commit:
+
+| Change Type | Requires Doc Update? | Where |
+|-------------|---------------------|-------|
+| New API endpoint | **Yes** | `docs/ARCHITECTURE.md` |
+| Changed UI behavior | **Yes** | `docs/ARCHITECTURE.md` |
+| New feature | **Yes** | `docs/ARCHITECTURE.md` or new doc |
+| Bug fix (same behavior) | No | — |
+| Refactor (same behavior) | No | — |
+
+**Law:** A commit that changes behavior without updating documentation is non-compliant.
 
 ## Project Structure
 

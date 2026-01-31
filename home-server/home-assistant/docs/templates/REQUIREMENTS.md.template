@@ -1,0 +1,30 @@
+# <Feature Name> — Requirements
+**Version:** v1.0
+**Last Updated:** <YYYY-MM-DD>
+**Owner:** <team/person>
+
+## 1) Purpose
+- What this feature does (user value)
+
+## 2) Inputs
+- Sensors/entities/events/services consumed
+
+## 3) Outputs
+- Sensors/entities/events/services produced
+
+## 4) Controls
+- What users can change (helpers/toggles/inputs)
+
+## 5) Safety and Guardrails
+- Timeouts, failsafes, error handling, safe states
+
+## 6) UI Contract
+- Where it appears in dashboards
+- Observe → Understand → Act mapping
+
+## 7) Acceptance Tests (Manual)
+- Steps + expected results
+- Required traces to run
+
+## 8) Rollback
+- Exact revert + restore steps and artifacts

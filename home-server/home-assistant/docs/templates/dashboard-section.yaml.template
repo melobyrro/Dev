@@ -1,0 +1,26 @@
+# Dashboard Section Template (Observe → Understand → Act)
+# See CLAUDE.md Section 6.1 for rules
+
+# ============================================
+# OBSERVE - "What is happening?"
+# ============================================
+# - High-signal status indicators
+# - Trend graphs
+# - Health indicators
+# - 2-3 cards max
+
+# ============================================
+# UNDERSTAND - "Why is it happening?"
+# ============================================
+# - Explanation markdown
+# - Automation state + key conditions
+# - Thresholds and reasoning
+# - Current mode display
+
+# ============================================
+# ACT - "What can I do?"
+# ============================================
+# - Primary toggles (daily controls)
+# - Routine action buttons
+# - Guarded advanced controls (separated)
+# - Emergency actions (guarded with confirmations)

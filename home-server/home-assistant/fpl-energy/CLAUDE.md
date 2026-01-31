@@ -1,5 +1,7 @@
 # FPL Energy Integration - Project Instructions
 
+> **Inherits from:** [/Dev/CLAUDE.md](../../../CLAUDE.md) — Read root file for universal dev workflow (git sync, Chrome MCP, Tasks, /done)
+
 ## Overview
 
 This project integrates Florida Power & Light (FPL) energy data with Home Assistant using the [hass-fpl HACS integration](https://github.com/dotKrad/hass-fpl). The integration provides daily energy usage monitoring, billing information, and projected costs.

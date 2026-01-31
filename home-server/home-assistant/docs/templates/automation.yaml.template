@@ -1,0 +1,30 @@
+# Compliant Automation Template
+# See CLAUDE.md Section 5 for rules
+
+- id: "<immutable_id>"
+  alias: "<Human readable name>"
+  description: >
+    What it does. Why it exists. Key safety assumptions.
+  mode: single  # or restart, queued, parallel
+
+  trigger:
+    - platform: state
+      entity_id: <ENTITY_ID>
+
+  condition: []
+
+  variables:
+    feature_enabled: "{{ is_state('input_boolean.<feature_enabled>', 'on') }}"
+    # decision variables...
+
+  action:
+    - choose:
+        - conditions: "{{ not feature_enabled }}"
+          sequence:
+            - stop: "Feature disabled"
+        - conditions: "{{ feature_enabled }}"
+          sequence:
+            # Decision → then Actuation via scripts
+            - service: script.<feature_actuation_script>
+              data:
+                reason: "Automation <alias> triggered"

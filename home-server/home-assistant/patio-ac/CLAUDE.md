@@ -1,5 +1,7 @@
 # Patio AC Control System — Project Instructions
 
+> **Inherits from:** [/Dev/CLAUDE.md](../../../CLAUDE.md) — Read root file for universal dev workflow (git sync, Chrome MCP, Tasks, /done)
+
 ## Overview
 
 This folder is the **feature root** for the Patio AC automation system.

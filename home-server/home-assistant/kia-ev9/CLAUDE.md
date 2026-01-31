@@ -1,5 +1,7 @@
 # Kia EV9 Integration - Project Instructions
 
+> **Inherits from:** [/Dev/CLAUDE.md](../../../CLAUDE.md) — Read root file for universal dev workflow (git sync, Chrome MCP, Tasks, /done)
+
 ## Overview
 
 This project integrates a **2024 Kia EV9** electric vehicle with Home Assistant using the [kia_uvo HACS integration](https://github.com/Hyundai-Kia-Connect/kia_uvo). The integration provides vehicle status monitoring, climate control, charging management, and location tracking.

@@ -1,0 +1,8 @@
+# package.v1.0.yaml
+# Feature: <feature_name>
+# Contract: See REQUIREMENTS.md
+
+automation: !include automations.v1.0.yaml
+script: !include scripts.v1.0.yaml
+template: !include sensors.v1.0.yaml
+# helpers.v1.0.yaml may define input_* helpers, groups, alerts, etc.

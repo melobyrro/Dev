@@ -1,0 +1,31 @@
+# Automations Tab - flex-table-card Template
+# See CLAUDE.md Section 6.2 for rules
+#
+# Use this for the Automations tab in feature dashboards
+
+type: custom:flex-table-card
+title: Feature Automations
+entities:
+  include: sensor.*_automation_*_status
+columns:
+  - name: Name
+    data: alias
+  - name: Description
+    data: description
+  - name: Trigger
+    data: trigger_type
+    icon: true
+  - name: Inputs
+    data: trigger_inputs
+    modify: |-
+      Object.entries(x).map(([k,v]) => `${k}: ${v}`).join(' | ')
+  - name: Last Run
+    data: last_triggered
+    modify: |-
+      if (x) new Date(x).toLocaleString()
+      else '—'
+  - name: Status
+    data: state
+  - name: Last Action
+    data: last_action
+    modify: x || '—'

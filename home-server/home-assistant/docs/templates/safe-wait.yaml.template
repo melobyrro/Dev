@@ -1,0 +1,27 @@
+# Safe Wait Pattern (Short Waits < 5 min)
+# See CLAUDE.md Section 5.3 for rules
+#
+# NEVER use unbounded wait_for_trigger
+# For waits > 5 min, use input_datetime deadline helpers instead
+
+- wait_for_trigger:
+    - platform: state
+      entity_id: <ENTITY_ID>
+      to: "<TARGET_STATE>"
+  timeout: "00:05:00"
+  continue_on_timeout: true
+
+- choose:
+    - conditions: "{{ wait.completed }}"
+      sequence:
+        - service: logbook.log
+          data:
+            name: "<Feature>"
+            message: "Wait completed successfully"
+    - conditions: "{{ not wait.completed }}"
+      sequence:
+        - service: persistent_notification.create
+          data:
+            title: "<Feature> Timeout"
+            message: "Wait timed out after 5 minutes"
+        - stop: "Timeout safety stop"

@@ -1,0 +1,21 @@
+# Read-Only Log Display Template
+# See CLAUDE.md Section 6.3 for rules
+#
+# Dashboards must not contain editable elements that function as logs
+# Use tap_action: none to prevent editing
+
+# Option 1: Markdown card (preferred for text logs)
+type: markdown
+title: "Recent Events (Read-Only)"
+content: |
+  **Last update:** {{ states('sensor.<feature>_last_update') }}
+  **Status:** {{ states('sensor.<feature>_status') }}
+  **Last alert:** {{ states('sensor.<feature>_last_alert') }}
+
+# Option 2: Entity with tap_action disabled
+# type: entity
+# entity: sensor.<feature>_status
+# tap_action:
+#   action: none
+# hold_action:
+#   action: none

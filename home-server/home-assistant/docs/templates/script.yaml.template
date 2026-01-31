@@ -1,0 +1,25 @@
+# Idempotent Script Template
+# See CLAUDE.md Section 5.2 for rules
+
+<feature_actuation_script>:
+  alias: "<Feature> — Actuation"
+  description: "Performs side effects. Must be safe to re-run."
+  mode: queued
+  max: 5
+  fields:
+    reason:
+      description: "Why this script was invoked"
+      example: "Triggered by automation X"
+
+  sequence:
+    - choose:
+        - conditions: "{{ <guard_condition> }}"
+          sequence:
+            - service: <domain.service>
+              data:
+                entity_id: <TARGET_ENTITY>
+        - default:
+            - service: logbook.log
+              data:
+                name: "<Feature>"
+                message: "Actuation skipped: guard condition not met. Reason={{ reason }}"

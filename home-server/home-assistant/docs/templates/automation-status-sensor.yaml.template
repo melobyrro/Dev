@@ -1,0 +1,22 @@
+# Automation Status Sensor Template
+# See CLAUDE.md Section 5.7 for rules
+#
+# Each automation needs a companion template sensor to expose its state to dashboards
+
+template:
+  - sensor:
+      - name: "<feature>_automation_<name>_status"
+        unique_id: "<feature>_automation_<name>_status"
+        state: "{{ states('automation.<automation_id>') }}"
+        attributes:
+          alias: "<Human readable name>"
+          description: "<What it does>"
+          trigger_type: "state"  # or "scheduled" or "event"
+          last_triggered: "{{ state_attr('automation.<automation_id>', 'last_triggered') }}"
+          trigger_inputs:
+            # List all entities this automation monitors
+            distance: "{{ states('sensor.<feature>_distance') }}"
+            locked: "{{ states('lock.<feature>_lock') }}"
+            mode: "{{ states('input_select.<feature>_mode') }}"
+          last_action: "{{ states('input_text.<feature>_<name>_last_action') }}"
+          last_action_time: "{{ states('input_datetime.<feature>_<name>_last_action_time') }}"
