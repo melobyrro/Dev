@@ -1,4 +1,5 @@
-import type { VideoDTO, VideoStatus } from '../types';
+import type { VideoDTO } from '../types';
+import { VideoStatus } from '../types';
 import StatusChip from './StatusChip';
 import { formatDuration, formatDate, formatVideoTitle } from '../lib/utils';
 import { useVideoStore } from '../stores/videoStore';

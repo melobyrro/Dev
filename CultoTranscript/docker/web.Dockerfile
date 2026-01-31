@@ -1,12 +1,16 @@
 # Stage 1: Build React UI
 FROM node:20-slim AS ui-builder
 
-WORKDIR /ui
+WORKDIR /build
 
 # Copy package files
-COPY UI/package*.json ./
+COPY UI/package*.json ./UI/
+
+# Copy shared types (needed for UI build)
+COPY shared/ ./shared/
 
 # Install dependencies
+WORKDIR /build/UI
 RUN npm ci
 
 # Copy UI source
@@ -36,7 +40,7 @@ COPY migrations/ /app/migrations/
 COPY shared/ /app/shared/
 
 # Copy built React UI from builder stage
-COPY --from=ui-builder /ui/dist /app/ui-dist
+COPY --from=ui-builder /build/UI/dist /app/ui-dist
 
 # Expose port
 EXPOSE 8000
