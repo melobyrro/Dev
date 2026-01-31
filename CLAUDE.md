@@ -51,6 +51,53 @@ Never claim work is complete without verification:
 - Code changes → Run tests or relevant commands
 - Deployments → Check logs or UI for success
 
+### 4. Post-Implementation Validation Pattern
+
+After implementing changes that affect UI or user-facing behavior, spawn a validation task:
+
+**Validation Task Template:**
+```
+Task: "Validate [change description]"
+- Navigate to [URL/page]
+- Verify visual/functional behavior
+- Check browser console for errors
+- Capture screenshot evidence
+- Report: PASS/FAIL with details
+```
+
+**When Required:**
+| Change Type | Validation |
+|------------|------------|
+| Dashboard YAML | Chrome MCP screenshot |
+| Web app code | Navigate + verify |
+| API endpoint | Test call + response |
+| Backend-only | Run tests (no Chrome) |
+| Documentation | Not required |
+
+### 5. Context Discipline for Large Files
+
+**Rules:**
+1. **Changelogs** → separate CHANGELOG.md, never embedded in CLAUDE.md
+2. **Large file searches** → use Grep to find specific content first, then targeted reads
+3. **Exploration** → delegate to Task agents to keep main context clean
+4. **Anti-patterns to avoid:**
+   - Reading entire large files when an excerpt suffices
+   - Repeated full-file reads without mental caching
+   - Including full file contents in responses when summaries work
+
+### 6. Temp File Hygiene
+
+**Rule:** No temp files in project root at session end.
+
+| File Type | Location | Lifecycle |
+|-----------|----------|-----------|
+| Debug scripts | `.scratch/` | Delete after use |
+| Test outputs | `.scratch/` | Delete after use |
+| Generated plans | `~/.claude/plans/` | Auto-managed |
+
+All projects should have `.scratch/` in `.gitignore`.
+The `/done` skill checks for orphan temp files before completing.
+
 ---
 
 ## Sync Protocol (GitOps)
