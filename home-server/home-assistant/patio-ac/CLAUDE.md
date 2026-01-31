@@ -1,50 +1,48 @@
-# Patio AC Control System - Project Instructions
+# Patio AC Control System — Project Instructions
 
 ## Overview
 
-This folder contains the Patio AC automation system for Home Assistant.
-**CRITICAL:** This project has been migrated to the Home Assistant **Packages** architecture.
-
-## 🚨 Active Configuration Location
-
-**DO NOT EDIT FILES IN THIS FOLDER.**
-
-The active configuration is now located at:
-`home-assistant/packages/patio_ac/patio_ac.yaml`
-
-This single file contains:
-- All Input Helpers (selects, numbers, booleans, etc.)
-- All Automations (Heat Guard, Humidity Control, etc.)
-- All Scripts (Control logic with error handling)
-- All Template Sensors
+This folder is the **feature root** for the Patio AC automation system.
 
 ## File Structure
 
 ```
-home-assistant/
-├── packages/
-│   └── patio_ac/
-│       └── patio_ac.yaml        # <--- EDIT THIS FILE
-└── patio-ac/                    # This folder (Documentation only)
-    ├── CLAUDE.md                # This file
-    ├── Patio_AC_FRD_v1.8.md     # Functional Requirements
-    ├── patio_ac_control.v1.20.yaml # Dashboard (Lovelace)
-    └── .archive/                # Old versioned files
+patio-ac/
+├── REQUIREMENTS.md              # Feature requirements (binding)
+├── CLAUDE.md                    # This file
+├── dashboards/
+│   └── patio_ac.v1.21.yaml     # Active dashboard
+├── docs/
+│   └── ...                     # Additional documentation
+└── .archive/                   # Old versions
+
+ha-config/packages/
+└── patio_ac.yaml               # Active package (code)
 ```
 
-## Migration Notes (2026-01-22)
+## Key Files
 
-- **Consolidation**: `automations.v2.11`, `configuration.v2.9`, and `scripts.v2.8` were merged into `packages/patio_ac/patio_ac.yaml`.
-- **Entity Rename**: The hardware ID `climate.150633095083490_climate` was replaced with `climate.patio_ac`.
-- **Logic Hardening**: The `patio_ac_control` script now checks for `wait_template` timeouts and aborts if the device is unresponsive, preventing false state updates.
+| File | Location | Purpose |
+|------|----------|---------|
+| **Requirements** | `patio-ac/REQUIREMENTS.md` | Binding requirements document |
+| **Package** | `ha-config/packages/patio_ac.yaml` | All code (automations, scripts, helpers, sensors) |
+| **Dashboard** | `patio-ac/dashboards/patio_ac.v1.21.yaml` | Lovelace UI |
 
-## Deployment Process
+## Why Split?
 
-1. **Edit**: Modify `packages/patio_ac/patio_ac.yaml`.
-2. **Verify**: Run `ha core check` (if available) or check config via UI.
-3. **Deploy**: Restart Home Assistant to load the package changes.
-4. **Dashboard**: Update dashboard cards to use `climate.patio_ac`.
+Home Assistant's `!include_dir_named` requires packages to be in `ha-config/packages/`.
+The requirements and dashboard live here in the feature folder per the constitution (Section 3.9).
 
-## Dashboard Updates
+## Editing Guidelines
 
-The dashboard file `patio_ac_control.v1.20.yaml` still references the old entity ID. It needs to be updated to `climate.patio_ac`.
+1. **Read `REQUIREMENTS.md` first** — it's binding
+2. **Edit `ha-config/packages/patio_ac.yaml`** for code changes
+3. **Edit `dashboards/patio_ac.v1.21.yaml`** for UI changes
+4. **Update `REQUIREMENTS.md`** when changing behavior (per Section 2.7)
+
+## Migration Notes (2026-01-31)
+
+- Renamed `Patio_AC_FRD_v1.8.md` → `REQUIREMENTS.md`
+- Moved dashboard from `ha-config/dashboards/` to `patio-ac/dashboards/`
+- Archived old dashboard versions to `.archive/`
+- Updated `configuration.yaml` to reference new dashboard path

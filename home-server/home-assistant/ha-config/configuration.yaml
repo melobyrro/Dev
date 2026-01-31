@@ -115,7 +115,7 @@ lovelace:
       title: Patio AC
       icon: mdi:air-conditioner
       show_in_sidebar: true
-      filename: dashboards/patio_ac_control.v1.21.yaml
+      filename: ../patio-ac/dashboards/patio_ac.v1.21.yaml
 
 automation: !include automations.v3.0.yaml
 script: !include scripts.v3.0.yaml

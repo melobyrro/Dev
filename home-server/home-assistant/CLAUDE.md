@@ -316,6 +316,39 @@ Report: PASS if all checks succeed, FAIL with specific details if not.
 
 ---
 
+### 2.7 Requirements Maintenance Law
+
+**Law:** When modifying feature behavior, the nearest REQUIREMENTS.md MUST be updated in the same commit.
+
+#### When to Update Requirements
+
+| Change Type | Requires Update? |
+|-------------|------------------|
+| Add new entity/sensor | **Yes** — add to Outputs section |
+| Add new automation | **Yes** — add to Controls/Safety sections |
+| Change thresholds/behavior | **Yes** — update Controls section |
+| Add new input/dependency | **Yes** — add to Inputs section |
+| Bug fix (no behavior change) | No |
+| Refactoring (no behavior change) | No |
+| Documentation-only changes | No |
+
+#### Update Checklist
+
+Before committing a behavior change, verify:
+- [ ] **Inputs** section reflects current consumed entities/services
+- [ ] **Outputs** section reflects current produced entities/services
+- [ ] **Controls** section reflects current user-adjustable settings
+- [ ] **Safety** section reflects current guardrails and failsafes
+- [ ] **Version** or **Last Updated** date incremented
+
+#### Enforcement
+
+**Law:** A commit that changes behavior without updating the nearest REQUIREMENTS.md is non-compliant.
+
+**Exception:** If no REQUIREMENTS.md exists, you must create one before making behavior changes (per Section 2.2).
+
+---
+
 ## 3) Architecture Standards
 
 ### 3.1 Packages as Feature Isolation (Law)
