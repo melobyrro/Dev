@@ -10,7 +10,6 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.22.0",
-    "chrome-devtools-mcp": "^0.12.1"
+    "@modelcontextprotocol/sdk": "^1.22.0"
   }
 }

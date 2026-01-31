@@ -10,7 +10,6 @@
 ## Key Documentation
 Before starting work, read these files for context:
 - `home-server/GITOPS.md` - **GitOps workflow rules** (single source of truth)
-- `home-server/AGENTS.md` - SSH access, monitoring stack, service details
 - `home-server/architecture.md` - VPN, WireGuard, network topology
 
 ## Global Guardrails (All Projects Inherit)
@@ -169,15 +168,8 @@ For web app projects, also verify you can navigate to the app URL with authentic
 This system uses these MCP servers and integrations:
 - **ref** - Documentation search and reference tools
 - **sequential-thinking** - Structured problem-solving tool
-- **chrome-devtools** - Chrome DevTools integration
 - **superpowers** - Enhanced capabilities plugin
 - **claude-in-chrome** - Browser automation integration
-
-### Claude in Chrome Usage Rules
-When using the Chrome extension for browser automation:
-- Always reuse existing tabs and windows
-- Never create new tabs or tab groups
-- Close the tab once the task is complete
 
 ### Configuration Files
 MCP servers are configured in multiple locations with specific precedence:

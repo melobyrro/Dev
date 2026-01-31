@@ -7,10 +7,6 @@
     "ref": {
       "command": "npx",
       "args": ["-y", "ref-tools-mcp@latest"]
-    },
-    "chrome-devtools": {
-      "command": "npx",
-      "args": ["-y", "chrome-devtools-mcp"]
     }
   }
 }
