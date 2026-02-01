@@ -68,9 +68,21 @@ cameras:
         - detect
         - record
     detect:
-      fps: 5
+      fps: 10
       width: 640
       height: 360
+    objects:
+      track:
+        - person
+      filters:
+        person:
+          min_score: 0.4
+          threshold: 0.6
+    zones:
+      door_exit:
+        coordinates: 0.3,0.2,0.8,0.2,0.8,0.9,0.3,0.9
+        objects:
+          - person
     mqtt:
       timestamp: false
       bounding_box: false
