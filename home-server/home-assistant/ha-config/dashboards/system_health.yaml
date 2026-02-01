@@ -402,3 +402,77 @@ sections:
           **Total:** {{ state_attr('sensor.automation_health_summary', 'total') or '?' }}
           **Never triggered:** {{ state_attr('sensor.automation_health_summary', 'never_triggered_count') or '0' }}
           **Stale (7d+):** {{ state_attr('sensor.automation_health_summary', 'stale_7d_count') or '0' }}
+
+  # ============================================================
+  # AUTOMATIONS SECTION
+  # Per CLAUDE.md Section 5.7 and 6.2
+  # ============================================================
+  - type: grid
+    title: Health Automations
+    cards:
+      # ------------------------------------------------------------
+      # DOCUMENTATION PANEL (Understand)
+      # ------------------------------------------------------------
+      - type: markdown
+        title: System Health Automations
+        content: |
+          **Goal:** Maintain system reliability through proactive monitoring and self-healing.
+
+          **Categories:**
+          - **Entity Health:** Monitor for unavailable/stale entities across all domains
+          - **Automation Health:** Track automation errors and stale automations
+          - **Integration Health:** EV9, Jose, Daikin, Patio AC watchdogs
+
+          **Triggers:**
+          - State-based: Entity availability changes
+          - Time-based: Periodic health checks
+          - Error events: Automation failures
+
+          **Settings:**
+          - Watchdog toggles in Recovery Status section above
+
+      # ------------------------------------------------------------
+      # OBSERVABILITY TABLE (Observe)
+      # ------------------------------------------------------------
+      - type: entities
+        title: Automation Status
+        entities:
+          - type: section
+            label: Entity Health
+          - entity: automation.system_health_unavailable_entity_alert
+            name: Unavailable Entity Alert
+            secondary_info: last-triggered
+          - entity: automation.system_health_stale_entity_check
+            name: Stale Entity Check
+            secondary_info: last-triggered
+          - type: section
+            label: Automation Health
+          - entity: automation.automation_health_error_tracker
+            name: Error Tracker
+            secondary_info: last-triggered
+          - entity: automation.automation_health_stale_check
+            name: Stale Automation Check
+            secondary_info: last-triggered
+          - type: section
+            label: Integration Watchdogs
+          - entity: automation.ev9_connection_watchdog
+            name: EV9 Watchdog
+            secondary_info: last-triggered
+          - entity: automation.ecovacs_connection_watchdog
+            name: Jose Watchdog
+            secondary_info: last-triggered
+
+      # ------------------------------------------------------------
+      # ACTIVITY LOG (Observe - Historical)
+      # Read-only per CLAUDE.md Section 6.3
+      # ------------------------------------------------------------
+      - type: markdown
+        title: Health Activity Log
+        content: |
+          *Activity logging not yet configured for System Health automations.*
+
+          | Time | Automation | Result |
+          |------|------------|--------|
+          | — | No events recorded | — |
+        tap_action:
+          action: none

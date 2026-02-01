@@ -1,0 +1,159 @@
+# Automations Tab Template
+# See CLAUDE.md Section 6.2 (Required Tabs) and Section 5.7 (Visibility)
+#
+# PURPOSE:
+# Standard structure for the Automations tab in every feature dashboard.
+# Every automation must appear in exactly ONE dashboard's Automations tab.
+#
+# STRUCTURE:
+#   1. Documentation Panel - What this feature does and how
+#   2. Observability Table - All feature automations with telemetry
+#   3. Activity Log - Recent automation events (read-only)
+#
+# PLACEHOLDERS:
+#   {feature}         - Feature name (e.g., "hvac", "security")
+#   {feature_title}   - Human-readable title (e.g., "HVAC", "Security")
+#   {feature_summary} - Brief description of the feature
+#
+# USAGE:
+# 1. Copy to your dashboard YAML
+# 2. Replace placeholders
+# 3. Adjust entity filters to match your naming convention
+
+# =============================================================================
+# YAML-MANAGED DASHBOARD VERSION
+# =============================================================================
+
+type: sections
+title: "{feature_title} Automations"
+path: "{feature}-automations"
+icon: mdi:robot
+
+sections:
+  # ---------------------------------------------------------------------------
+  # SECTION 1: Documentation Panel
+  # ---------------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: markdown
+        title: "Feature Documentation"
+        content: |
+          ## {feature_title}
+
+          {feature_summary}
+
+          ### Automations in this Feature
+
+          | Automation | Trigger Type | Purpose |
+          |------------|--------------|---------|
+          | {automation_1_alias} | {trigger_type_1} | {purpose_1} |
+          | {automation_2_alias} | {trigger_type_2} | {purpose_2} |
+
+          ### Key Settings
+
+          - **Mode Helper:** `input_select.{feature}_mode`
+          - **Enable Toggle:** `input_boolean.{feature}_enabled`
+
+          ---
+          *Last updated: {date}*
+
+  # ---------------------------------------------------------------------------
+  # SECTION 2: Observability Table (flex-table-card)
+  # ---------------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: custom:flex-table-card
+        title: "Automation Status"
+        sort_by: last_triggered-
+        clickable: false
+        entities:
+          include: sensor.{feature}_automation_*_telemetry
+        columns:
+          - name: Automation
+            data: alias
+            modify: x || '—'
+          - name: Description
+            data: description
+            modify: x || '—'
+          - name: Trigger
+            data: trigger_type
+            icon: true
+            modify: |
+              if (x === 'state') return 'mdi:state-machine';
+              if (x === 'scheduled') return 'mdi:clock-outline';
+              if (x === 'event') return 'mdi:lightning-bolt';
+              if (x === 'manual') return 'mdi:gesture-tap';
+              return 'mdi:help-circle';
+          - name: Last Run
+            data: last_triggered_ago
+            modify: x || 'never'
+          - name: Runs Today
+            data: run_count_today
+            modify: x || '0'
+          - name: Last Result
+            data: last_result
+            modify: |
+              if (x === 'success') return '✓';
+              if (x === 'failed') return '✗';
+              if (x === 'skipped') return '—';
+              return x || '?';
+          - name: Status
+            data: state
+            modify: |
+              if (x === 'on') return '● Enabled';
+              if (x === 'off') return '○ Disabled';
+              return x;
+
+  # ---------------------------------------------------------------------------
+  # SECTION 3: Activity Log (READ-ONLY per CLAUDE.md Section 6.3)
+  # ---------------------------------------------------------------------------
+  - type: grid
+    cards:
+      - type: markdown
+        title: "Recent Activity (Read-Only)"
+        # MANDATORY: tap_action: none for read-only logs
+        tap_action:
+          action: none
+        content: |
+          {% set log = state_attr('sensor.{feature}_activity_log', 'entries') or [] %}
+          {% if log | length > 0 %}
+          | Time | Automation | Result |
+          |------|------------|--------|
+          {% for entry in log[:10] %}
+          | {{ entry.time }} | {{ entry.automation }} | {{ entry.result }} |
+          {% endfor %}
+          {% else %}
+          *No recent activity*
+          {% endif %}
+
+
+# =============================================================================
+# UI-MANAGED DASHBOARD VERSION (Conceptual Reference)
+# =============================================================================
+#
+# When using the UI to create dashboards:
+#
+# 1. Create a new view named "{feature_title} Automations"
+# 2. Add sections in this order:
+#
+#    SECTION 1: Documentation
+#    - Add Markdown card
+#    - Paste documentation content
+#
+#    SECTION 2: Observability Table
+#    - Install flex-table-card via HACS if not present
+#    - Add Manual Card with flex-table-card YAML
+#    - Configure entity filter: sensor.{feature}_automation_*_telemetry
+#
+#    SECTION 3: Activity Log
+#    - Add Markdown card
+#    - Enable "Show Code Editor"
+#    - Paste log template
+#    - CRITICAL: Add tap_action: none in YAML mode
+#
+# UI Limitations:
+# - tap_action: none cannot be set in visual editor
+# - Must switch to YAML mode to add it
+# - flex-table-card requires manual YAML entry
+#
+# =============================================================================

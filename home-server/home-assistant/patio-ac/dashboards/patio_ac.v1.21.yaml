@@ -491,3 +491,109 @@ views:
               {%- if states('input_text.patio_ac_event_1') in ['unknown', 'unavailable', '', None] %}
               | — | _No recent activity_ |
               {%- endif %}
+
+  # ============================================================
+  # AUTOMATIONS TAB
+  # Per CLAUDE.md Section 5.7 and 6.2
+  # ============================================================
+  - title: Automations
+    path: automations
+    icon: mdi:robot
+    badges: []
+    cards:
+      # ------------------------------------------------------------
+      # DOCUMENTATION PANEL (Understand)
+      # ------------------------------------------------------------
+      - type: markdown
+        title: Patio AC Automations
+        content: |
+          **Goal:** Maintain patio comfort through intelligent temperature and humidity control.
+
+          **Automation Categories:**
+          - **Periodic Evaluation:** Runs every 5 min to check conditions
+          - **Heat Guard:** Cooling when temp exceeds threshold
+          - **Day/Night Humidity:** Dehumidification with different thresholds
+          - **Compressor Protection:** Enforces rest periods
+          - **Safety Systems:** Emergency cutoffs, threshold validation
+
+          **Triggers:**
+          - Time pattern: 5-minute evaluation cycle
+          - State-based: Manual control detection, timer completions
+          - Day/Night boundaries: Period transitions
+
+          **Settings:**
+          - See Control tab for all configurable thresholds
+
+      # ------------------------------------------------------------
+      # OBSERVABILITY TABLE (Observe)
+      # ------------------------------------------------------------
+      - type: entities
+        title: Automation Status
+        entities:
+          - type: section
+            label: Core Control
+          - entity: automation.patio_ac_periodic_evaluation
+            name: Periodic Evaluation
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_heat_guard
+            name: Heat Guard Start
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_day_humidity_start
+            name: Day Humidity Start
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_night_humidity_start
+            name: Night Humidity Start
+            secondary_info: last-triggered
+          - type: section
+            label: Stop Conditions
+          - entity: automation.patio_ac_heat_guard_stop
+            name: Heat Guard Stop
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_humidity_stop
+            name: Humidity Stop
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_max_runtime_stop
+            name: Max Runtime Stop
+            secondary_info: last-triggered
+          - type: section
+            label: Safety & Protection
+          - entity: automation.patio_ac_compressor_protection
+            name: Compressor Protection
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_emergency_humidity_stop
+            name: Emergency Humidity Stop
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_manual_control_detected
+            name: Manual Control Detected
+            secondary_info: last-triggered
+          - type: section
+            label: Period Transitions
+          - entity: automation.patio_ac_day_night_boundary
+            name: Day/Night Boundary
+            secondary_info: last-triggered
+          - entity: automation.patio_ac_seamless_handoff
+            name: Seamless Handoff
+            secondary_info: last-triggered
+
+      # ------------------------------------------------------------
+      # ACTIVITY LOG (Observe - Historical)
+      # Read-only - uses same log as Control tab
+      # Per CLAUDE.md Section 6.3
+      # ------------------------------------------------------------
+      - type: markdown
+        title: Activity Log
+        content: |
+          | Time | Event |
+          |:-----|:------|
+          {%- for i in range(1, 11) %}
+          {%- set val = states('input_text.patio_ac_event_' ~ i) %}
+          {%- if val not in ['unknown', 'unavailable', '', None] %}
+          {%- set parts = val.split(' - ', 1) %}
+          | {{ parts[0] }} | {{ parts[1] | replace('|', '/') if parts | length > 1 else val | replace('|', '/') }} |
+          {%- endif %}
+          {%- endfor %}
+          {%- if states('input_text.patio_ac_event_1') in ['unknown', 'unavailable', '', None] %}
+          | — | _No recent activity_ |
+          {%- endif %}
+        tap_action:
+          action: none

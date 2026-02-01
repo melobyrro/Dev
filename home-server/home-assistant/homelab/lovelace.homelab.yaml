@@ -1637,3 +1637,66 @@ views:
                 entity: sensor.wireguard_storage_io_mb_s
                 name: I/O
 
+  # ============================================================
+  # AUTOMATIONS TAB
+  # Per CLAUDE.md Section 5.7 and 6.2
+  # ============================================================
+  - title: Automations
+    path: automations
+    icon: mdi:robot
+    badges: []
+    cards:
+      # ------------------------------------------------------------
+      # DOCUMENTATION PANEL (Understand)
+      # ------------------------------------------------------------
+      - type: markdown
+        title: Homelab Automations
+        content: |
+          **Goal:** Monitor network devices and keep Plex configuration in sync.
+
+          **Method:**
+          - NetAlertX: Monitor network for new devices and send alerts
+          - Plex: Sync priority configuration between HA and Plex server
+
+          **Triggers:**
+          - State-based: NetAlertX detection events
+          - Time-based: Plex config sync schedules
+
+          **Settings:**
+          - NetAlertX sensitivity configured in the integration
+          - Plex sync intervals set in automation
+
+      # ------------------------------------------------------------
+      # OBSERVABILITY TABLE (Observe)
+      # ------------------------------------------------------------
+      - type: entities
+        title: Automation Status
+        entities:
+          - entity: automation.netalertx_new_device_detected
+            name: New Device Detected
+            secondary_info: last-triggered
+          - entity: automation.netalertx_device_offline
+            name: Device Offline Alert
+            secondary_info: last-triggered
+          - entity: automation.plex_sync_priority
+            name: Plex Priority Sync
+            secondary_info: last-triggered
+          - entity: automation.plex_config_backup
+            name: Plex Config Backup
+            secondary_info: last-triggered
+
+      # ------------------------------------------------------------
+      # ACTIVITY LOG (Observe - Historical)
+      # Read-only per CLAUDE.md Section 6.3
+      # ------------------------------------------------------------
+      - type: markdown
+        title: Activity Log
+        content: |
+          *Activity logging not yet configured for Homelab automations.*
+
+          | Time | Automation | Action | Result |
+          |------|------------|--------|--------|
+          | — | No events recorded | — | — |
+        tap_action:
+          action: none
+

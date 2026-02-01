@@ -64,3 +64,59 @@ views:
             name: Baby Room Online
           - entity: binary_sensor.wyze_baby_room_motion
             name: Baby Room Motion
+
+  # ============================================================
+  # AUTOMATIONS TAB
+  # Per CLAUDE.md Section 5.7 and 6.2
+  # ============================================================
+  - title: Automations
+    path: automations
+    icon: mdi:robot
+    badges: []
+    cards:
+      # ------------------------------------------------------------
+      # DOCUMENTATION PANEL (Understand)
+      # ------------------------------------------------------------
+      - type: markdown
+        title: Wyze Camera Automations
+        content: |
+          **Goal:** Maintain camera connectivity through automatic recovery.
+
+          **Method:**
+          - Monitor Wyze Bridge connection status
+          - Auto-restart camera connections after 5 minutes of offline state
+          - Escalate to full service restart if problem persists 15+ minutes
+
+          **Triggers:**
+          - State-based: camera offline status
+
+          **Settings:**
+          - Recovery is automatic - no user configuration required
+
+      # ------------------------------------------------------------
+      # OBSERVABILITY TABLE (Observe)
+      # ------------------------------------------------------------
+      - type: entities
+        title: Automation Status
+        entities:
+          - entity: automation.wyze_bridge_recover_offline
+            name: Recover Offline Cameras
+            secondary_info: last-triggered
+          - entity: automation.wyze_bridge_recover_persistent
+            name: Persistent Problem Recovery
+            secondary_info: last-triggered
+
+      # ------------------------------------------------------------
+      # ACTIVITY LOG (Observe - Historical)
+      # Read-only per CLAUDE.md Section 6.3
+      # ------------------------------------------------------------
+      - type: markdown
+        title: Recovery Activity
+        content: |
+          *Activity logging not yet configured for Wyze automations.*
+
+          | Time | Action | Result |
+          |------|--------|--------|
+          | — | No events recorded | — |
+        tap_action:
+          action: none

@@ -1,0 +1,544 @@
+# ============================================================================
+# AUTOMATION OBSERVABILITY PACKAGE
+# ============================================================================
+# Package: automation_observability.v1.0.yaml
+# Version: 1.0
+# Created: 2026-01-31
+# Purpose: Central observability infrastructure for all feature automations
+#
+# This package provides:
+#   1. Daily counter reset automation for all feature run counters
+#   2. Canonical log format documentation
+#   3. Template sensor reference patterns
+#   4. Example telemetry sensor (dawarich_trip_start)
+#   5. Example log aggregation sensor (dawarich)
+#
+# Reference: HOME_ASSISTANT_AUDIT_OBSERVABILITY.md Section 7
+# ============================================================================
+
+# ============================================================================
+# CANONICAL LOG FORMAT DOCUMENTATION
+# ============================================================================
+#
+# All automation logs should use pipe-delimited format for consistency:
+#
+#   FORMAT: TIMESTAMP|AUTOMATION|ACTION|TRIGGER_TYPE|RESULT|DETAILS
+#
+#   Column Definitions:
+#   -------------------
+#   | Column       | Width         | Description               | Example                |
+#   |--------------|---------------|---------------------------|------------------------|
+#   | TIMESTAMP    | ISO 8601      | Execution time            | 2026-01-31T10:30:00    |
+#   | AUTOMATION   | 30 chars max  | Short automation name     | departure_prep         |
+#   | ACTION       | 20 chars max  | Action taken              | climate_start          |
+#   | TRIGGER_TYPE | 15 chars max  | What triggered it         | time                   |
+#   | RESULT       | 10 chars max  | Outcome                   | success                |
+#   | DETAILS      | Variable      | Additional context        | Target: 72F            |
+#
+#   Example Log Entry:
+#   2026-01-31T10:30:00|departure_prep|climate_start|time|success|Target: 72F, Duration: 15min
+#
+#   RESULT Values:
+#   - success  : Completed normally
+#   - error    : Failed with error
+#   - skipped  : Condition not met, no action taken
+#   - timeout  : Timed out waiting for condition
+#
+#   TRIGGER_TYPE Values (per Section 7.3):
+#   - state         : Entity state change (next_run: N/A)
+#   - zone          : Zone enter/leave (next_run: N/A)
+#   - time_pattern  : Cron-like pattern (next_run: calculable)
+#   - time          : Specific time (next_run: calculable)
+#   - event         : Event bus (next_run: N/A)
+#   - webhook       : HTTP webhook (next_run: N/A)
+#   - numeric_state : Threshold crossing (next_run: N/A)
+#   - template      : Template condition (next_run: N/A)
+#   - sun           : Sunrise/sunset (next_run: calculable)
+#
+# ============================================================================
+
+# ============================================================================
+# TELEMETRY SENSOR REFERENCE PATTERN
+# ============================================================================
+#
+# Every automation should have a corresponding telemetry sensor following this
+# naming convention (per CLAUDE.md Section 4.4):
+#
+#   sensor.{feature}_{automation_short_name}_telemetry
+#
+# Examples:
+#   sensor.kia_ev9_departure_prep_telemetry
+#   sensor.patio_ac_heat_guard_telemetry
+#   sensor.dawarich_trip_start_telemetry
+#   sensor.jose_daily_clean_telemetry
+#
+# REQUIRED ATTRIBUTES (per Section 7.2):
+# --------------------------------------
+# | Attribute          | Type     | Description                            |
+# |--------------------|----------|----------------------------------------|
+# | alias              | string   | Human-readable name                    |
+# | description        | string   | What the automation does               |
+# | feature            | string   | Feature grouping                       |
+# | dashboard          | string   | Target dashboard path                  |
+# | trigger_type       | enum     | Primary trigger category               |
+# | last_triggered     | datetime | Last execution time                    |
+# | last_triggered_ago | string   | Human-readable elapsed time            |
+# | next_run           | datetime | Next scheduled run (if time-based)     |
+# | run_count_today    | int      | Executions since midnight              |
+# | last_result        | enum     | Outcome of last run                    |
+# | mode               | enum     | Automation mode                        |
+#
+# ============================================================================
+
+# ============================================================================
+# LOG AGGREGATION SENSOR REFERENCE PATTERN
+# ============================================================================
+#
+# Each feature should have a log aggregation sensor:
+#
+#   sensor.{feature}_automation_log
+#
+# Examples:
+#   sensor.kia_ev9_automation_log
+#   sensor.patio_ac_automation_log
+#   sensor.dawarich_automation_log
+#
+# The sensor aggregates input_text.{feature}_event_{1-10} entries into a
+# structured format suitable for dashboard display.
+#
+# ============================================================================
+
+# ============================================================================
+# RUN COUNTERS
+# ============================================================================
+# Feature-specific run counters track daily execution counts.
+# These are reset at midnight by the automation below.
+#
+# Naming convention: counter.{feature}_{automation_short_name}_runs
+#
+# Examples of counters that should exist per feature:
+#
+# EV9:
+#   counter.ev9_departure_prep_runs
+#   counter.ev9_charge_management_runs
+#   counter.ev9_arrival_notification_runs
+#
+# Patio AC:
+#   counter.patio_ac_heat_guard_runs
+#   counter.patio_ac_humidity_night_runs
+#   counter.patio_ac_humidity_day_runs
+#
+# Dawarich:
+#   counter.dawarich_trip_start_runs
+#   counter.dawarich_trip_extend_runs
+#   counter.dawarich_trip_finalize_runs
+#
+# Jose:
+#   counter.jose_daily_clean_runs
+#   counter.jose_zone_clean_runs
+#
+# Daikin:
+#   counter.daikin_schedule_runs
+#   counter.daikin_presence_control_runs
+#
+# Wyze:
+#   counter.wyze_motion_detected_runs
+#   counter.wyze_person_detected_runs
+#
+# ============================================================================
+
+# ============================================================================
+# COUNTERS - Example Run Counter
+# ============================================================================
+
+counter:
+  # Example run counter for dawarich_trip_start automation
+  # Each feature should define its own counters in its package
+  dawarich_trip_start_runs:
+    name: "Dawarich Trip Start - Daily Runs"
+    initial: 0
+    step: 1
+    icon: mdi:map-marker-path
+
+  dawarich_trip_extend_runs:
+    name: "Dawarich Trip Extend - Daily Runs"
+    initial: 0
+    step: 1
+    icon: mdi:map-marker-path
+
+  dawarich_trip_finalize_runs:
+    name: "Dawarich Trip Finalize - Daily Runs"
+    initial: 0
+    step: 1
+    icon: mdi:map-marker-check
+
+# ============================================================================
+# INPUT TEXT - Log Storage Pattern
+# ============================================================================
+# Features should define 10 rotating log entries for activity tracking.
+# These are shifted by python_script.shift_event_log or similar mechanism.
+
+input_text:
+  # Dawarich log entries (1-10 for rotating log)
+  dawarich_event_1:
+    name: "Dawarich Event 1 (Most Recent)"
+    max: 255
+    initial: ""
+  dawarich_event_2:
+    name: "Dawarich Event 2"
+    max: 255
+    initial: ""
+  dawarich_event_3:
+    name: "Dawarich Event 3"
+    max: 255
+    initial: ""
+  dawarich_event_4:
+    name: "Dawarich Event 4"
+    max: 255
+    initial: ""
+  dawarich_event_5:
+    name: "Dawarich Event 5"
+    max: 255
+    initial: ""
+  dawarich_event_6:
+    name: "Dawarich Event 6"
+    max: 255
+    initial: ""
+  dawarich_event_7:
+    name: "Dawarich Event 7"
+    max: 255
+    initial: ""
+  dawarich_event_8:
+    name: "Dawarich Event 8"
+    max: 255
+    initial: ""
+  dawarich_event_9:
+    name: "Dawarich Event 9"
+    max: 255
+    initial: ""
+  dawarich_event_10:
+    name: "Dawarich Event 10 (Oldest)"
+    max: 255
+    initial: ""
+
+# ============================================================================
+# INPUT SELECT - Result Tracking
+# ============================================================================
+
+input_select:
+  # Track last result for dawarich_trip_start automation
+  dawarich_trip_start_result:
+    name: "Dawarich Trip Start - Last Result"
+    options:
+      - success
+      - error
+      - skipped
+      - timeout
+      - unknown
+    initial: unknown
+    icon: mdi:checkbox-marked-circle-outline
+
+# ============================================================================
+# TEMPLATE SENSORS
+# ============================================================================
+
+template:
+  - sensor:
+      # =====================================================================
+      # EXAMPLE: Telemetry Sensor for dawarich_trip_start
+      # =====================================================================
+      # This sensor demonstrates the canonical telemetry pattern.
+      # Each feature should create similar sensors for its automations.
+      #
+      # Copy this pattern and adjust:
+      #   - name: "Feature Automation Telemetry"
+      #   - unique_id: feature_automation_telemetry
+      #   - automation entity_id references
+      #   - feature, dashboard, trigger_type values
+      #   - counter and result entity references
+      # =====================================================================
+      - name: "Dawarich Trip Start Telemetry"
+        unique_id: dawarich_trip_start_telemetry
+        icon: mdi:map-marker-path
+        state: >-
+          {% set last = state_attr('automation.dawarich_trip_start', 'last_triggered') %}
+          {{ last.isoformat() if last else 'never' }}
+        device_class: timestamp
+        attributes:
+          alias: "Trip Start"
+          description: "Start or resume a trip when leaving home zone"
+          feature: "dawarich"
+          dashboard: "/dashboard-automations"
+          trigger_type: "zone"
+          last_triggered: >-
+            {{ state_attr('automation.dawarich_trip_start', 'last_triggered') }}
+          last_triggered_ago: >-
+            {% set last = state_attr('automation.dawarich_trip_start', 'last_triggered') %}
+            {{ relative_time(last) if last else 'never' }}
+          next_run: >-
+            {# Zone triggers are event-based, no scheduled next_run #}
+            {{ None }}
+          run_count_today: >-
+            {{ states('counter.dawarich_trip_start_runs') | int(0) }}
+          last_result: >-
+            {{ states('input_select.dawarich_trip_start_result') }}
+          mode: "single"
+        availability: >-
+          {{ states('automation.dawarich_trip_start') not in ['unavailable', 'unknown'] }}
+
+      # =====================================================================
+      # EXAMPLE: Log Aggregation Sensor for Dawarich
+      # =====================================================================
+      # This sensor aggregates the rotating log entries into a structured
+      # format for dashboard display.
+      #
+      # The state shows the count of non-empty entries.
+      # The 'entries' attribute contains parsed log data as a list.
+      # The 'entries_raw' attribute contains the raw pipe-delimited strings.
+      # =====================================================================
+      - name: "Dawarich Automation Log"
+        unique_id: dawarich_automation_log
+        icon: mdi:format-list-bulleted
+        state: >-
+          {% set entries = [
+            states('input_text.dawarich_event_1'),
+            states('input_text.dawarich_event_2'),
+            states('input_text.dawarich_event_3'),
+            states('input_text.dawarich_event_4'),
+            states('input_text.dawarich_event_5'),
+            states('input_text.dawarich_event_6'),
+            states('input_text.dawarich_event_7'),
+            states('input_text.dawarich_event_8'),
+            states('input_text.dawarich_event_9'),
+            states('input_text.dawarich_event_10')
+          ] | reject('eq', '') | reject('eq', 'unknown') | list %}
+          {{ entries | count }} entries
+        attributes:
+          entries: >-
+            {# Parse pipe-delimited entries into structured data #}
+            {% set result = [] %}
+            {% set raw_entries = [
+              states('input_text.dawarich_event_1'),
+              states('input_text.dawarich_event_2'),
+              states('input_text.dawarich_event_3'),
+              states('input_text.dawarich_event_4'),
+              states('input_text.dawarich_event_5'),
+              states('input_text.dawarich_event_6'),
+              states('input_text.dawarich_event_7'),
+              states('input_text.dawarich_event_8'),
+              states('input_text.dawarich_event_9'),
+              states('input_text.dawarich_event_10')
+            ] | reject('eq', '') | reject('eq', 'unknown') | list %}
+            {% for entry in raw_entries %}
+              {% set parts = entry.split('|') %}
+              {% if parts | count >= 5 %}
+                {% set parsed = {
+                  'time': parts[0] | default(''),
+                  'automation': parts[1] | default(''),
+                  'action': parts[1] | default(''),
+                  'trigger_type': parts[2] | default(''),
+                  'result': parts[3] | default(''),
+                  'details': parts[4] | default('')
+                } %}
+                {% set result = result + [parsed] %}
+              {% endif %}
+            {% endfor %}
+            {{ result }}
+          entries_raw: >-
+            {{ [
+              states('input_text.dawarich_event_1'),
+              states('input_text.dawarich_event_2'),
+              states('input_text.dawarich_event_3'),
+              states('input_text.dawarich_event_4'),
+              states('input_text.dawarich_event_5'),
+              states('input_text.dawarich_event_6'),
+              states('input_text.dawarich_event_7'),
+              states('input_text.dawarich_event_8'),
+              states('input_text.dawarich_event_9'),
+              states('input_text.dawarich_event_10')
+            ] | reject('eq', '') | reject('eq', 'unknown') | list }}
+          feature: "dawarich"
+          dashboard: "/dashboard-automations"
+        availability: >-
+          {{ states('input_text.dawarich_event_1') not in ['unavailable'] }}
+
+# ============================================================================
+# AUTOMATIONS
+# ============================================================================
+
+automation:
+  # ==========================================================================
+  # Daily Counter Reset - All Features
+  # ==========================================================================
+  # Resets all feature run counters at midnight.
+  #
+  # When adding a new feature with run counters, add them to the target list.
+  #
+  # Pattern: counter.{feature}_{automation}_runs
+  # ==========================================================================
+  - id: automation_observability_daily_counter_reset
+    alias: "Observability: Reset Daily Run Counters"
+    description: >
+      Resets all feature automation run counters at midnight.
+      Add new feature counters to the target list as they are created.
+    mode: single
+    trigger:
+      - platform: time
+        at: "00:00:00"
+    action:
+      - service: counter.reset
+        target:
+          entity_id:
+            # Dawarich counters
+            - counter.dawarich_trip_start_runs
+            - counter.dawarich_trip_extend_runs
+            - counter.dawarich_trip_finalize_runs
+            # Add EV9 counters here when created
+            # - counter.ev9_departure_prep_runs
+            # - counter.ev9_charge_management_runs
+            # Add Patio AC counters here when created
+            # - counter.patio_ac_heat_guard_runs
+            # - counter.patio_ac_humidity_night_runs
+            # - counter.patio_ac_humidity_day_runs
+            # Add Jose counters here when created
+            # - counter.jose_daily_clean_runs
+            # - counter.jose_zone_clean_runs
+            # Add Daikin counters here when created
+            # - counter.daikin_schedule_runs
+            # Add Wyze counters here when created
+            # - counter.wyze_motion_detected_runs
+      - service: logbook.log
+        data:
+          name: "OBSERVABILITY"
+          message: "Daily run counters reset at midnight"
+
+  # ==========================================================================
+  # Increment Run Counter - Dawarich Trip Start
+  # ==========================================================================
+  # Increments the run counter when the automation triggers.
+  # Each feature automation should have a similar counter increment automation.
+  # ==========================================================================
+  - id: automation_observability_dawarich_trip_start_increment
+    alias: "Observability: Increment Dawarich Trip Start Counter"
+    description: "Increment run counter when dawarich_trip_start executes"
+    mode: queued
+    max: 5
+    trigger:
+      - platform: state
+        entity_id: automation.dawarich_trip_start
+        attribute: last_triggered
+    action:
+      - service: counter.increment
+        target:
+          entity_id: counter.dawarich_trip_start_runs
+      - service: input_select.select_option
+        target:
+          entity_id: input_select.dawarich_trip_start_result
+        data:
+          option: "success"
+
+  - id: automation_observability_dawarich_trip_extend_increment
+    alias: "Observability: Increment Dawarich Trip Extend Counter"
+    description: "Increment run counter when dawarich_trip_extend executes"
+    mode: queued
+    max: 5
+    trigger:
+      - platform: state
+        entity_id: automation.dawarich_trip_extend
+        attribute: last_triggered
+    action:
+      - service: counter.increment
+        target:
+          entity_id: counter.dawarich_trip_extend_runs
+
+  - id: automation_observability_dawarich_trip_finalize_increment
+    alias: "Observability: Increment Dawarich Trip Finalize Counter"
+    description: "Increment run counter when dawarich_trip_finalize executes"
+    mode: queued
+    max: 5
+    trigger:
+      - platform: state
+        entity_id: automation.dawarich_trip_finalize
+        attribute: last_triggered
+    action:
+      - service: counter.increment
+        target:
+          entity_id: counter.dawarich_trip_finalize_runs
+
+  # ==========================================================================
+  # Log Rotation - Dawarich Events
+  # ==========================================================================
+  # Shifts log entries down and adds new entry at top.
+  # This provides a rolling 10-entry log for each feature.
+  # ==========================================================================
+  - id: automation_observability_dawarich_log_shift
+    alias: "Observability: Shift Dawarich Event Log"
+    description: >
+      When a new event is written to dawarich_activity_log, shift all entries
+      down and place the new entry at position 1.
+    mode: single
+    trigger:
+      - platform: state
+        entity_id: input_text.dawarich_activity_log
+    condition:
+      - condition: template
+        value_template: >
+          {{ trigger.to_state.state not in ['', 'unknown', 'unavailable']
+             and trigger.from_state.state != trigger.to_state.state }}
+    action:
+      # Shift entries 9 -> 10, 8 -> 9, ..., 1 -> 2
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_10
+        data:
+          value: "{{ states('input_text.dawarich_event_9') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_9
+        data:
+          value: "{{ states('input_text.dawarich_event_8') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_8
+        data:
+          value: "{{ states('input_text.dawarich_event_7') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_7
+        data:
+          value: "{{ states('input_text.dawarich_event_6') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_6
+        data:
+          value: "{{ states('input_text.dawarich_event_5') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_5
+        data:
+          value: "{{ states('input_text.dawarich_event_4') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_4
+        data:
+          value: "{{ states('input_text.dawarich_event_3') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_3
+        data:
+          value: "{{ states('input_text.dawarich_event_2') }}"
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_2
+        data:
+          value: "{{ states('input_text.dawarich_event_1') }}"
+      # Place new entry at position 1
+      - service: input_text.set_value
+        target:
+          entity_id: input_text.dawarich_event_1
+        data:
+          value: "{{ states('input_text.dawarich_activity_log') }}"
+
+# ============================================================================
+# END OF PACKAGE
+# ============================================================================

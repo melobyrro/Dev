@@ -1,0 +1,132 @@
+# Activity Log Card Template (Read-Only)
+# See CLAUDE.md Section 6.3: Read-Only Logs [HARD]
+#
+# PURPOSE:
+# Displays recent automation activity in a read-only format.
+# Users can observe but cannot edit log entries.
+#
+# MANDATORY REQUIREMENT:
+# tap_action: none - This is a HARD requirement per CLAUDE.md.
+# Log entities must not be editable through tap interactions.
+#
+# PLACEHOLDERS:
+#   {feature}       - Feature name (e.g., "hvac", "security")
+#   {feature_title} - Human-readable title (e.g., "HVAC", "Security")
+#   {max_entries}   - Number of log entries to display (default: 10)
+#
+# USAGE:
+# 1. Create an activity log sensor (see supporting helper below)
+# 2. Copy this card to your dashboard
+# 3. Replace placeholders
+# 4. NEVER remove tap_action: none
+
+# =============================================================================
+# VARIANT 1: Table Format (Recommended)
+# =============================================================================
+type: markdown
+title: "{feature_title} Activity Log"
+# MANDATORY: Read-only enforcement
+tap_action:
+  action: none
+hold_action:
+  action: none
+double_tap_action:
+  action: none
+content: |
+  {% set log_sensor = 'sensor.{feature}_activity_log' %}
+  {% set entries = state_attr(log_sensor, 'entries') or [] %}
+  {% set max_show = {max_entries} | default(10) %}
+
+  {% if entries | length > 0 %}
+  | Time | Automation | Action | Result |
+  |------|------------|--------|--------|
+  {% for entry in entries[:max_show] %}
+  | {{ entry.timestamp | as_timestamp | timestamp_custom('%H:%M:%S') }} | {{ entry.automation }} | {{ entry.action }} | {{ entry.result | default('—') }} |
+  {% endfor %}
+
+  {% if entries | length > max_show %}
+  *Showing {{ max_show }} of {{ entries | length }} entries*
+  {% endif %}
+  {% else %}
+  *No recent activity recorded*
+  {% endif %}
+
+  ---
+  *Log refreshes automatically. Last update: {{ states(log_sensor) }}*
+
+
+# =============================================================================
+# VARIANT 2: Compact List Format
+# =============================================================================
+# type: markdown
+# title: "{feature_title} Recent Events"
+# tap_action:
+#   action: none
+# hold_action:
+#   action: none
+# content: |
+#   {% set entries = state_attr('sensor.{feature}_activity_log', 'entries') or [] %}
+#   {% for entry in entries[:5] %}
+#   - **{{ entry.timestamp | as_timestamp | timestamp_custom('%H:%M') }}** — {{ entry.automation }}: {{ entry.action }}
+#   {% else %}
+#   *No recent events*
+#   {% endfor %}
+
+
+# =============================================================================
+# VARIANT 3: Timeline Format (requires custom:logbook-card or similar)
+# =============================================================================
+# type: custom:logbook-card
+# entity: automation.{feature}_*
+# hours_to_show: 24
+# tap_action:
+#   action: none
+# style: |
+#   ha-card {
+#     pointer-events: none;
+#   }
+
+
+# =============================================================================
+# SUPPORTING HELPER: Activity Log Sensor
+# =============================================================================
+# Add this sensor to your feature package to track automation activity.
+# The automation_triggered event captures when automations fire.
+#
+# template:
+#   - trigger:
+#       - platform: event
+#         event_type: automation_triggered
+#         event_data:
+#           # Filter to only this feature's automations
+#           # Adjust entity_id pattern as needed
+#     sensor:
+#       - name: "{feature}_activity_log"
+#         unique_id: "{feature}_activity_log"
+#         state: "{{ now().isoformat() }}"
+#         attributes:
+#           entries: >-
+#             {% set current = this.attributes.entries | default([]) %}
+#             {% set new_entry = {
+#               'timestamp': now().isoformat(),
+#               'automation': trigger.event.data.entity_id | replace('automation.', ''),
+#               'action': trigger.event.data.name,
+#               'result': 'triggered'
+#             } %}
+#             {{ ([new_entry] + current)[:50] }}
+#
+# -----------------------------------------------------------------------------
+# ALTERNATIVE: Use input_text for simple logging
+# -----------------------------------------------------------------------------
+# input_text:
+#   {feature}_last_activity:
+#     name: "{feature_title} Last Activity"
+#     max: 255
+#
+# Then in your automations, add an action to update the log:
+#   - service: input_text.set_value
+#     target:
+#       entity_id: input_text.{feature}_last_activity
+#     data:
+#       value: "{{ now().strftime('%H:%M') }}: {action_description}"
+# =============================================================================

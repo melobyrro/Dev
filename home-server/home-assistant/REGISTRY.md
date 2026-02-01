@@ -56,6 +56,46 @@ These files live at `ha-config/` and aggregate/include feature components:
 
 ---
 
+## Automation Ownership Matrix
+
+> **Rule:** Each automation MUST appear in exactly ONE dashboard's Automations tab. This prevents confusion about where to monitor/control each automation.
+
+### Ownership Mapping
+
+| Feature | Dashboard Path | Automation Prefixes | Automation Count | File Locations |
+|---------|---------------|---------------------|------------------|----------------|
+| Kia EV9 | `/kia-ev9` | `ev9_*` | 36 | `ha-config/automations.v3.0.yaml`, `kia-ev9/automations.v2.8.yaml` |
+| Patio AC | `/patio-ac` | `patio_ac_*` | 30+ | `ha-config/packages/patio_ac.yaml` |
+| Dawarich | `/dashboard-automations/dawarich` | `dawarich_*` | 8 | `automations/dawarich_automations.yaml` |
+| System Health | `/system-health` | `system_health_*`, `integration_health_*`, `watchdog_*` | 20+ | `packages/system_entity_health.v1.0.yaml`, `packages/automation_health.v1.0.yaml`, `packages/integration_health.yaml` |
+| Jose Vacuum | `/jose` | `jose_*`, `ecovacs_*` | 8+ | `packages/jose_schedule_v2_0.yaml`, `packages/ecovacs_recovery_package.yaml` |
+| Daikin | `/daikin` | `daikin_*` | 6 | `Daikin/daikin_automations.yaml` |
+| Wyze/Frigate | `/wyze-cameras` | `wyze_*`, `frigate_*` | 4 | `ha-config/automations.v3.0.yaml` |
+| Homelab | `/homelab` | `netalertx_*`, `plex_*` | 4 | `ha-config/automations.v3.0.yaml` |
+| Trackers (Reddit) | `/notifications-logs/trackers` | `tracker_*` | TBD | TBD |
+
+### Automations Tab Implementation Status
+
+| Dashboard | Has Automations Tab | Status |
+|-----------|---------------------|--------|
+| Kia EV9 | Yes | Complete |
+| Patio AC | Yes | Complete |
+| System Health | Yes | Complete |
+| Jose Vacuum | Partial | Needs update |
+| Daikin | No | TODO |
+| Wyze Cameras | No | TODO |
+| Homelab | No | TODO |
+| Dawarich | Yes | Complete |
+| Trackers | No | TODO |
+
+### Notes
+
+- **Central Automations Dashboard:** For cross-cutting automations that don't belong to a specific feature, a Central Automations dashboard is planned but not yet implemented.
+- **Full Audit Details:** See `docs/HOME_ASSISTANT_AUDIT_OBSERVABILITY.md` for the complete observability audit findings and recommendations.
+- **Automation Visibility Rule:** Per `CLAUDE.md` section 5.7, every automation must be visible in exactly ONE dashboard's Automations tab.
+
+---
+
 ## Maintenance
 
 ### When to Update This Registry

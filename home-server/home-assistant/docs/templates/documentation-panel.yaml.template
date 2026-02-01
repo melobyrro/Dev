@@ -1,0 +1,186 @@
+# Documentation Panel Template
+# See CLAUDE.md Section 6.1 (Hierarchy) and Section 6.2 (Required Tabs)
+#
+# PURPOSE:
+# Provides in-dashboard documentation for a feature.
+# Helps users understand what a feature does, how it works,
+# and what settings control its behavior.
+#
+# PLACEMENT:
+# - First card in the Automations tab
+# - Can also appear in Overview tab if needed
+#
+# PLACEHOLDERS:
+#   {feature}           - Feature name (e.g., "hvac", "security")
+#   {feature_title}     - Human-readable title (e.g., "HVAC Control")
+#   {goal_description}  - What this feature achieves
+#   {method_description}- How it achieves the goal
+#   {date}              - Last update date
+#
+# USAGE:
+# 1. Copy to your dashboard
+# 2. Replace all placeholders
+# 3. Fill in the specific details for your feature
+# 4. Keep updated when feature behavior changes
+
+# =============================================================================
+# STANDARD DOCUMENTATION PANEL
+# =============================================================================
+type: markdown
+title: "{feature_title} Documentation"
+content: |
+  ## Goal
+
+  {goal_description}
+
+  ## Method
+
+  {method_description}
+
+  ## Triggers
+
+  | Trigger | Type | Description |
+  |---------|------|-------------|
+  | {trigger_1_name} | {trigger_1_type} | {trigger_1_description} |
+  | {trigger_2_name} | {trigger_2_type} | {trigger_2_description} |
+
+  ## Settings Dependencies
+
+  This feature depends on the following settings:
+
+  | Setting | Entity | Current Value | Purpose |
+  |---------|--------|---------------|---------|
+  | {setting_1_name} | `{setting_1_entity}` | {{ states('{setting_1_entity}') }} | {setting_1_purpose} |
+  | {setting_2_name} | `{setting_2_entity}` | {{ states('{setting_2_entity}') }} | {setting_2_purpose} |
+
+  ## Related Features
+
+  - [{related_feature_1}](/{related_feature_1_path})
+  - [{related_feature_2}](/{related_feature_2_path})
+
+  ---
+  *Last updated: {date}*
+
+
+# =============================================================================
+# COMPACT VERSION (for space-constrained layouts)
+# =============================================================================
+# type: markdown
+# title: "About {feature_title}"
+# content: |
+#   **Goal:** {goal_description}
+#
+#   **How it works:** {method_description}
+#
+#   **Key settings:**
+#   - {setting_1_name}: {{ states('{setting_1_entity}') }}
+#   - {setting_2_name}: {{ states('{setting_2_entity}') }}
+
+
+# =============================================================================
+# EXPANDED VERSION (for complex features)
+# =============================================================================
+# type: markdown
+# title: "{feature_title} Documentation"
+# content: |
+#   ## Overview
+#
+#   ### Goal
+#   {goal_description}
+#
+#   ### Method
+#   {method_description}
+#
+#   ---
+#
+#   ## Triggers
+#
+#   ### State Triggers
+#   These automations respond to entity state changes:
+#
+#   | Automation | Watches | Condition | Action |
+#   |------------|---------|-----------|--------|
+#   | {automation_1} | {entity_1} | {condition_1} | {action_1} |
+#
+#   ### Scheduled Triggers
+#   These automations run on a schedule:
+#
+#   | Automation | Schedule | Purpose |
+#   |------------|----------|---------|
+#   | {automation_2} | {schedule_2} | {purpose_2} |
+#
+#   ---
+#
+#   ## Settings
+#
+#   ### Primary Controls
+#
+#   | Setting | Location | Values | Default |
+#   |---------|----------|--------|---------|
+#   | {setting_name} | Settings Tab | {valid_values} | {default} |
+#
+#   ### Dependencies
+#
+#   This feature requires these other features/integrations:
+#   - {dependency_1}: {why_needed_1}
+#   - {dependency_2}: {why_needed_2}
+#
+#   ---
+#
+#   ## Troubleshooting
+#
+#   ### Common Issues
+#
+#   **{issue_1_title}**
+#   - Symptom: {symptom_1}
+#   - Check: {check_1}
+#   - Fix: {fix_1}
+#
+#   **{issue_2_title}**
+#   - Symptom: {symptom_2}
+#   - Check: {check_2}
+#   - Fix: {fix_2}
+#
+#   ---
+#
+#   ## History
+#
+#   | Version | Date | Changes |
+#   |---------|------|---------|
+#   | v1.0 | {date_v1} | Initial implementation |
+#   | v1.1 | {date_v1_1} | {changes_v1_1} |
+#
+#   ---
+#   *Documentation last updated: {date}*
+
+
+# =============================================================================
+# TIPS FOR WRITING GOOD DOCUMENTATION
+# =============================================================================
+#
+# 1. GOAL SECTION
+#    - State the user benefit, not technical details
+#    - Good: "Automatically locks doors when everyone leaves home"
+#    - Bad: "Uses person entities to trigger lock service"
+#
+# 2. METHOD SECTION
+#    - Explain the logic flow in plain language
+#    - Include key thresholds and timings
+#    - Mention any user-visible behaviors
+#
+# 3. TRIGGERS TABLE
+#    - List ALL triggers that can cause this feature to act
+#    - Include both automatic and manual triggers
+#    - Note any conditions that must be met
+#
+# 4. SETTINGS DEPENDENCIES
+#    - Show live values using {{ states() }} templates
+#    - Link to Settings tab where values can be changed
+#    - Explain what happens at different values
+#
+# 5. KEEP IT UPDATED
+#    - Update when behavior changes
+#    - Update when settings are added/removed
+#    - Include last-updated date for reference
+#
+# =============================================================================
