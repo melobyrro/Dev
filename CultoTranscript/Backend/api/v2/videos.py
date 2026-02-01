@@ -65,6 +65,7 @@ def video_to_dto(video: Video) -> VideoDTO:
     return VideoDTO(
         id=str(video.id),
         title=video.title,
+        suggested_title=video.suggested_title,  # AI-generated title
         youtube_id=video.youtube_id,
         status=map_db_status_to_dto(video.status),
         duration=video.duration_sec,

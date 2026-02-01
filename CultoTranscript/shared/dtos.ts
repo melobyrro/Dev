@@ -42,6 +42,7 @@ export enum EventType {
 export interface VideoDTO {
   id: string;
   title: string;
+  suggested_title?: string; // AI-generated descriptive title based on sermon content
   youtube_id: string;
   status: VideoStatus;
   duration: number; // in seconds

@@ -69,6 +69,7 @@ class VideoDTO(BaseModel):
     """Core video information"""
     id: str
     title: str
+    suggested_title: Optional[str] = None  # AI-generated descriptive title
     youtube_id: str
     status: VideoStatus
     duration: int  # in seconds

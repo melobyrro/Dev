@@ -57,11 +57,17 @@ export function formatDate(dateString: string): string {
 }
 
 /**
- * Format video title with upload date prefix
- * Format: mm/dd/yyyy - Title
- * Uses published_at (YouTube upload date) for the prefix
+ * Format video title for display
+ * Prefers AI-generated suggested_title if available
+ * Falls back to date-prefixed YouTube title
  */
 export function formatVideoTitle(video: VideoDTO): string {
+  // Prefer AI-generated title if available
+  if (video.suggested_title) {
+    return video.suggested_title;
+  }
+
+  // Fallback: add date prefix to YouTube title
   const date = new Date(video.published_at || video.created_at);
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
