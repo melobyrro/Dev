@@ -238,6 +238,112 @@ input_select:
     initial: unknown
     icon: mdi:checkbox-marked-circle-outline
 
+  dawarich_trip_extend_result:
+    name: "Dawarich Trip Extend - Last Result"
+    options:
+      - success
+      - error
+      - skipped
+      - timeout
+      - unknown
+    initial: unknown
+    icon: mdi:checkbox-marked-circle-outline
+
+  dawarich_trip_finalize_result:
+    name: "Dawarich Trip Finalize - Last Result"
+    options:
+      - success
+      - error
+      - skipped
+      - timeout
+      - unknown
+    initial: unknown
+    icon: mdi:checkbox-marked-circle-outline
+
+# ============================================================================
+# SCRIPTS - Universal Observability Logging
+# ============================================================================
+
+script:
+  # ============================================================================
+  # observability_log_run - Universal automation execution logger
+  # ============================================================================
+  # Call this script from any automation to log its execution.
+  # It handles: counter increment, result tracking, and activity log entry.
+  #
+  # Usage in automations:
+  #   - service: script.observability_log_run
+  #     data:
+  #       feature: dawarich
+  #       automation: trip_start
+  #       action: start
+  #       trigger_type: zone
+  #       result: success
+  #       details: "Trip started from home"
+  # ============================================================================
+  observability_log_run:
+    alias: "Observability: Log Automation Run"
+    description: >
+      Universal script for logging automation execution.
+      Increments run counter, sets result status, and adds log entry.
+      Call at the end of any automation to log its execution.
+    mode: parallel
+    max: 50
+    fields:
+      feature:
+        description: "Feature name (e.g., dawarich, kia_ev9, patio_ac)"
+        required: true
+        example: "dawarich"
+      automation:
+        description: "Automation short name (e.g., trip_start, departure_prep)"
+        required: true
+        example: "trip_start"
+      action:
+        description: "Action performed (e.g., start, extend, finalize)"
+        required: true
+        example: "start"
+      trigger_type:
+        description: "What triggered this (e.g., time, state, zone, manual)"
+        required: false
+        default: "unknown"
+        example: "zone"
+      result:
+        description: "Outcome: success, error, skipped, timeout"
+        required: false
+        default: "success"
+        selector:
+          select:
+            options:
+              - success
+              - error
+              - skipped
+              - timeout
+      details:
+        description: "Additional context"
+        required: false
+        default: ""
+        example: "Trip started from home zone"
+    sequence:
+      # 1. Increment run counter (if it exists)
+      - service: counter.increment
+        target:
+          entity_id: "counter.{{ feature }}_{{ automation }}_runs"
+        continue_on_error: true
+      # 2. Update result status (if it exists)
+      - service: input_select.select_option
+        target:
+          entity_id: "input_select.{{ feature }}_{{ automation }}_result"
+        data:
+          option: "{{ result }}"
+        continue_on_error: true
+      # 3. Add log entry using python_script.shift_event_log
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: "input_text.{{ feature }}_event"
+          new_event: >-
+            {{ now().isoformat()[:19] }}|{{ automation }}|{{ action }}|{{ trigger_type }}|{{ result }}|{{ details }}
+          max_events: 10
+
 # ============================================================================
 # TEMPLATE SENSORS
 # ============================================================================
@@ -285,6 +391,75 @@ template:
           mode: "single"
         availability: >-
           {{ states('automation.dawarich_trip_start') not in ['unavailable', 'unknown'] }}
+
+      # =====================================================================
+      # Telemetry Sensor for dawarich_trip_extend
+      # =====================================================================
+      - name: "Dawarich Trip Extend Telemetry"
+        unique_id: dawarich_trip_extend_telemetry
+        icon: mdi:map-marker-plus
+        state: >-
+          {% set last = state_attr('automation.dawarich_trip_extend', 'last_triggered') %}
+          {{ last.isoformat() if last else 'never' }}
+        device_class: timestamp
+        attributes:
+          alias: "Trip Extend"
+          description: "Extend the current trip at configured intervals"
+          feature: "dawarich"
+          dashboard: "/dashboard-automations"
+          trigger_type: "time_pattern"
+          last_triggered: >-
+            {{ state_attr('automation.dawarich_trip_extend', 'last_triggered') }}
+          last_triggered_ago: >-
+            {% set last = state_attr('automation.dawarich_trip_extend', 'last_triggered') %}
+            {{ relative_time(last) if last else 'never' }}
+          next_run: >-
+            {# time_pattern runs every minute when on_trip is true #}
+            {% if is_state('input_boolean.dawarich_on_trip', 'on') %}
+              {% set interval = states('input_number.dawarich_extend_minutes') | int(10) %}
+              Interval: {{ interval }} min (when on trip)
+            {% else %}
+              N/A (not on trip)
+            {% endif %}
+          run_count_today: >-
+            {{ states('counter.dawarich_trip_extend_runs') | int(0) }}
+          last_result: >-
+            {{ states('input_select.dawarich_trip_extend_result') }}
+          mode: "single"
+        availability: >-
+          {{ states('automation.dawarich_trip_extend') not in ['unavailable', 'unknown'] }}
+
+      # =====================================================================
+      # Telemetry Sensor for dawarich_trip_finalize
+      # =====================================================================
+      - name: "Dawarich Trip Finalize Telemetry"
+        unique_id: dawarich_trip_finalize_telemetry
+        icon: mdi:map-marker-check
+        state: >-
+          {% set last = state_attr('automation.dawarich_trip_finalize', 'last_triggered') %}
+          {{ last.isoformat() if last else 'never' }}
+        device_class: timestamp
+        attributes:
+          alias: "Trip Finalize"
+          description: "Finalize the trip when returning home"
+          feature: "dawarich"
+          dashboard: "/dashboard-automations"
+          trigger_type: "zone"
+          last_triggered: >-
+            {{ state_attr('automation.dawarich_trip_finalize', 'last_triggered') }}
+          last_triggered_ago: >-
+            {% set last = state_attr('automation.dawarich_trip_finalize', 'last_triggered') %}
+            {{ relative_time(last) if last else 'never' }}
+          next_run: >-
+            {# Zone triggers are event-based, no scheduled next_run #}
+            N/A (zone trigger)
+          run_count_today: >-
+            {{ states('counter.dawarich_trip_finalize_runs') | int(0) }}
+          last_result: >-
+            {{ states('input_select.dawarich_trip_finalize_result') }}
+          mode: "single"
+        availability: >-
+          {{ states('automation.dawarich_trip_finalize') not in ['unavailable', 'unknown'] }}
 
       # =====================================================================
       # EXAMPLE: Log Aggregation Sensor for Dawarich

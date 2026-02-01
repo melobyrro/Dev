@@ -29,10 +29,11 @@ Transform Home Assistant dashboards from ad-hoc control panels to standardized o
 
 | Metric | Current | Target |
 |--------|---------|--------|
-| Dashboards with Automations tab | 1 (partial) | 13 (100%) |
+| Dashboards with Automations tab | 1 (partial) | 9 (all with owned automations) |
+| Dashboards skipped (no owned automations) | N/A | 4 (Byrro, Climate, Shield TV, Activity) |
 | Automations with telemetry sensors | 0 | 120+ |
 | Log format consistency | Mixed | Canonical (pipe-delimited) |
-| Documentation panels | 0 | 10 features |
+| Documentation panels | 0 | 9 features |
 
 ### 1.3 Principles
 
@@ -102,6 +103,85 @@ automation:
         data:
           name: "OBSERVABILITY"
           message: "Daily run counters reset for {{ states.counter | selectattr('entity_id', 'search', '_runs$') | list | count }} counters"
+
+# ============================================================
+# SHARED SCRIPT: Log Automation Run
+# ============================================================
+# Call this script from automations to log execution with a single call
+# Handles: counter increment, result tracking, and activity log entry
+
+script:
+  observability_log_run:
+    alias: "Observability: Log Automation Run"
+    description: >
+      Universal script for logging automation execution.
+      Increments run counter, sets result status, and adds log entry.
+      Call at the end of any automation to log its execution.
+    mode: parallel
+    max: 50
+    fields:
+      feature:
+        description: "Feature name (e.g., kia_ev9)"
+        required: true
+        example: "kia_ev9"
+      automation:
+        description: "Automation short name (e.g., departure_prep)"
+        required: true
+        example: "departure_prep"
+      action:
+        description: "Action performed (e.g., climate_start)"
+        required: true
+        example: "climate_start"
+      trigger_type:
+        description: "What triggered this (e.g., time, state, manual)"
+        required: false
+        default: "unknown"
+        example: "time"
+      result:
+        description: "Outcome: success, error, skipped, timeout"
+        required: false
+        default: "success"
+        selector:
+          select:
+            options:
+              - success
+              - error
+              - skipped
+              - timeout
+      details:
+        description: "Additional context"
+        required: false
+        default: ""
+        example: "Target: 72F"
+    sequence:
+      # 1. Increment run counter
+      - service: counter.increment
+        target:
+          entity_id: "counter.{{ feature }}_{{ automation }}_runs"
+      # 2. Update result status
+      - service: input_select.select_option
+        target:
+          entity_id: "input_select.{{ feature }}_{{ automation }}_result"
+        data:
+          option: "{{ result }}"
+      # 3. Add log entry using canonical format
+      - service: python_script.shift_event_log
+        data:
+          entity_prefix: "input_text.{{ feature }}_event"
+          new_event: >-
+            {{ now().isoformat()[:19] }}|{{ automation }}|{{ action }}|{{ trigger_type }}|{{ result }}|{{ details }}
+          max_events: 10
+
+# Usage example in an automation:
+# action:
+#   - service: script.observability_log_run
+#     data:
+#       feature: kia_ev9
+#       automation: departure_prep
+#       action: climate_start
+#       trigger_type: time
+#       result: success
+#       details: "Target: 72F"
 
 # ============================================================
 # REFERENCE TEMPLATES (Copy to feature packages)
@@ -501,6 +581,14 @@ action:
 
 ## 3. Phase 2: Automation Ownership Refactor
 
+> **NOTE: Phase 2 Merged into Phase 3**
+>
+> Sequential thinking validation identified a dependency mismatch: Phase 2 prioritized "high-value" features (System Health first) while Phase 3 prioritized "low-risk" dashboards (Dawarich first). This created a conflict.
+>
+> **Resolution:** Telemetry sensors are now created per-dashboard during the Phase 3 rollout, not all upfront. This ensures each dashboard has its telemetry ready immediately before its UI rollout.
+>
+> The sections below remain as reference for the work to be done, but the execution happens in Phase 3 on a per-dashboard basis.
+
 ### 3.1 Update REGISTRY.md with Automation Ownership
 
 Add a new section to `REGISTRY.md`:
@@ -577,17 +665,42 @@ With canonical format:
 
 ### 4.1 Rollout Order (Low-Risk First)
 
-| Order | Dashboard | Mode | Complexity | Rollback Method |
-|-------|-----------|------|------------|-----------------|
-| 1 | Dawarich | Storage | Low | HA UI: remove Automations view |
-| 2 | Daikin | Storage | Low | HA UI: remove Automations view |
-| 3 | Trackers | Storage | Low | HA UI: remove Automations view |
-| 4 | Wyze Cameras | YAML | Low | `git checkout HEAD~1 -- ha-config/dashboards/wyze_cameras.yaml` |
-| 5 | Homelab | YAML | Low | `git checkout HEAD~1 -- homelab/lovelace.homelab.yaml` |
-| 6 | Jose Vacuum | Storage | Medium | HA UI: remove Automations view |
-| 7 | System Health | YAML | Medium | `git checkout HEAD~1 -- ha-config/dashboards/system_health.yaml` |
-| 8 | Patio AC | YAML | High | `git checkout HEAD~1 -- patio-ac/dashboards/patio_ac.*.yaml` |
-| 9 | Kia EV9 | Storage | High | HA UI: remove Automations view + restore backup |
+**Dashboards Receiving Automations Tab (9 total):**
+
+| Order | Dashboard | Mode | Automations | Complexity | Rollback Method |
+|-------|-----------|------|-------------|------------|-----------------|
+| 1 | Dawarich | Storage | 8 | Low | HA UI: remove Automations view |
+| 2 | Daikin | Storage | 6 | Low | HA UI: remove Automations view |
+| 3 | Trackers | Storage | 1 | Low | HA UI: remove Automations view |
+| 4 | Wyze Cameras | YAML | 4 | Low | `git checkout HEAD~1 -- ha-config/dashboards/wyze_cameras.yaml` |
+| 5 | Homelab | YAML | 4 | Low | `git checkout HEAD~1 -- homelab/lovelace.homelab.yaml` |
+| 6 | Jose Vacuum | Storage | 8+ | Medium | HA UI: remove Automations view |
+| 7 | System Health | YAML | 20+ | Medium | `git checkout HEAD~1 -- ha-config/dashboards/system_health.yaml` |
+| 8 | Patio AC | YAML | 30+ | High | `git checkout HEAD~1 -- patio-ac/dashboards/patio_ac.*.yaml` |
+| 9 | Kia EV9 | Storage | 36 | High | HA UI: remove Automations view + restore backup |
+
+**Dashboards Skipped (4 total - No Owned Automations):**
+
+Per CLAUDE.md Section 5.7: "Every automation must appear in exactly ONE dashboard's Automations tab."
+
+| Dashboard | Path | Rationale |
+|-----------|------|-----------|
+| Byrro (Home) | `/dashboard-room` | Overview dashboard - automations belong to feature dashboards |
+| Climate | `/climate` | Aggregate view - automations owned by Patio AC and Daikin |
+| Shield TV | `/shield-tv` | Control dashboard only - no automations |
+| Activity | `/activity` | Aggregation view - displays activity from all features, no owned automations |
+
+These dashboards display data from features but don't own any automations. Adding empty Automations tabs would violate the "exactly one dashboard" rule and add visual clutter.
+
+**Revised Per-Dashboard Workflow:**
+
+For each dashboard in rollout order:
+1. **Prep**: Identify automations belonging to this dashboard
+2. **Telemetry**: Create sensors, counters, result trackers for those automations
+3. **Logging**: Create log infrastructure, update automations to call `script.observability_log_run`
+4. **Dashboard**: Add Automations tab with 3-section layout
+5. **Validate**: YAML check, HA config, Chrome MCP visual inspection
+6. **Commit**: Atomic commit for this dashboard complete
 
 ### 4.2 Per-Dashboard Procedure
 

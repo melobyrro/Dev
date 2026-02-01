@@ -7,99 +7,144 @@
 # that exposes all relevant metadata to dashboards.
 #
 # PLACEHOLDERS:
-#   {feature}          - Feature name (e.g., "hvac", "security", "laundry")
-#   {automation_name}  - Snake_case automation identifier (e.g., "auto_lock")
-#   {automation_alias} - Human-readable name (e.g., "Auto-Lock When Away")
-#   {description}      - What the automation does
-#   {trigger_type}     - "state", "scheduled", "event", or "manual"
-#   {dashboard}        - Dashboard where this automation appears
+#   {FEATURE}          - Feature name (e.g., "kia_ev9", "patio_ac", "dawarich")
+#   {AUTOMATION}       - Snake_case automation identifier (e.g., "departure_prep")
+#   {ALIAS}            - Human-readable name (e.g., "Departure Prep")
+#   {DESCRIPTION}      - What the automation does
+#   {DASHBOARD}        - Dashboard path (e.g., "/kia-ev9")
+#   {MODE}             - single | restart | queued | parallel
 #
 # USAGE:
 # 1. Copy this template to your feature package
-# 2. Replace all {placeholders} with actual values
-# 3. Add to your feature's template sensors
+# 2. Replace all {PLACEHOLDERS} with actual values
+# 3. Customize monitored_entities for your automation's inputs
 # 4. Reference in your Automations tab flex-table-card
 #
-# REQUIRED ATTRIBUTES (per CLAUDE.md):
+# REQUIRED ATTRIBUTES (per CLAUDE.md Section 7.2):
 #   - alias, description, feature, dashboard, trigger_type
 #   - last_triggered, last_triggered_ago, next_run
 #   - run_count_today, last_result, mode
 
 template:
   - sensor:
-      - name: "{feature}_automation_{automation_name}_telemetry"
-        unique_id: "{feature}_automation_{automation_name}_telemetry"
+      - name: "{FEATURE} {AUTOMATION} Telemetry"
+        unique_id: {FEATURE}_{AUTOMATION}_telemetry
         icon: mdi:robot
-        state: "{{ states('automation.{feature}_{automation_name}') }}"
-        availability: "{{ states('automation.{feature}_{automation_name}') not in ['unknown', 'unavailable'] }}"
+        state: >-
+          {% set last = state_attr('automation.{FEATURE}_{AUTOMATION}', 'last_triggered') %}
+          {{ last.isoformat() if last else 'never' }}
+        device_class: timestamp
+        availability: >-
+          {{ states('automation.{FEATURE}_{AUTOMATION}') not in ['unavailable', 'unknown'] }}
         attributes:
           # === Identity ===
-          alias: "{automation_alias}"
-          description: "{description}"
-          feature: "{feature}"
-          dashboard: "{dashboard}"
-
-          # === Trigger Configuration ===
-          trigger_type: "{trigger_type}"  # state | scheduled | event | manual
+          alias: "{ALIAS}"
+          description: "{DESCRIPTION}"
+          feature: "{FEATURE}"
+          dashboard: "{DASHBOARD}"
+          mode: "{MODE}"
 
           # === Timing Telemetry ===
           last_triggered: >-
-            {{ state_attr('automation.{feature}_{automation_name}', 'last_triggered') }}
+            {{ state_attr('automation.{FEATURE}_{AUTOMATION}', 'last_triggered') }}
           last_triggered_ago: >-
-            {% set lt = state_attr('automation.{feature}_{automation_name}', 'last_triggered') %}
-            {% if lt %}
-              {{ relative_time(lt | as_datetime) }}
+            {% set lt = state_attr('automation.{FEATURE}_{AUTOMATION}', 'last_triggered') %}
+            {% if lt %}{{ relative_time(lt) }}{% else %}never{% endif %}
+
+          # === Automatic next_run Calculation ===
+          # Calculates next run for time/sun/time_pattern triggers
+          # Shows "N/A (trigger_type)" for event-based triggers
+          trigger_type: >-
+            {% set auto = 'automation.{FEATURE}_{AUTOMATION}' %}
+            {% set triggers = state_attr(auto, 'trigger') %}
+            {% if triggers and triggers | length > 0 %}
+              {{ triggers[0].platform | default('unknown') }}
             {% else %}
-              never
+              unknown
             {% endif %}
           next_run: >-
-            {# For scheduled automations, calculate next run time #}
-            {# Replace with actual logic based on your schedule #}
-            {{ states('input_datetime.{feature}_{automation_name}_next_run') | default('N/A', true) }}
+            {% set auto = 'automation.{FEATURE}_{AUTOMATION}' %}
+            {% set triggers = state_attr(auto, 'trigger') %}
+            {% if triggers and triggers | length > 0 %}
+              {% set t = triggers[0] %}
+              {% if t.platform == 'time' %}
+                {{ t.at }}
+              {% elif t.platform == 'sun' %}
+                {% if t.event == 'sunrise' %}
+                  {{ state_attr('sun.sun', 'next_rising') }}
+                {% else %}
+                  {{ state_attr('sun.sun', 'next_setting') }}
+                {% endif %}
+              {% elif t.platform == 'time_pattern' %}
+                Interval: {{ t.hours | default('*') }}:{{ t.minutes | default('*') }}:{{ t.seconds | default('*') }}
+              {% else %}
+                N/A ({{ t.platform }})
+              {% endif %}
+            {% else %}
+              N/A
+            {% endif %}
 
           # === Execution Telemetry ===
           run_count_today: >-
-            {{ states('counter.{feature}_{automation_name}_daily_runs') | default(0, true) }}
+            {{ states('counter.{FEATURE}_{AUTOMATION}_runs') | int(0) }}
           last_result: >-
-            {{ states('input_text.{feature}_{automation_name}_last_result') | default('unknown', true) }}
+            {{ states('input_select.{FEATURE}_{AUTOMATION}_result') | default('unknown') }}
 
-          # === Mode ===
-          mode: >-
-            {{ state_attr('automation.{feature}_{automation_name}', 'mode') | default('single', true) }}
-          current_runs: >-
-            {{ state_attr('automation.{feature}_{automation_name}', 'current') | default(0, true) }}
+          # === Optional: Monitored Entities ===
+          # Customize this list to show what entities your automation monitors
+          # Useful for displaying live values like "distance to car" in documentation
+          monitored_entities: >-
+            {# Replace with entities your automation monitors #}
+            {% set entities = [
+              {# 'sensor.example_entity', #}
+              {# 'input_number.example_threshold' #}
+            ] %}
+            {% set ns = namespace(values=[]) %}
+            {% for e in entities %}
+              {% set ns.values = ns.values + [{
+                'entity': e,
+                'state': states(e),
+                'friendly_name': state_attr(e, 'friendly_name') | default(e)
+              }] %}
+            {% endfor %}
+            {{ ns.values }}
 
 # -----------------------------------------------------------------------------
-# SUPPORTING HELPERS (add to your feature package if tracking run count/result)
+# SUPPORTING HELPERS (add to your feature package)
 # -----------------------------------------------------------------------------
-# counter:
-#   {feature}_{automation_name}_daily_runs:
-#     name: "{automation_alias} Daily Run Count"
-#     initial: 0
-#     step: 1
-#     restore: false
+
+counter:
+  {FEATURE}_{AUTOMATION}_runs:
+    name: "{ALIAS} Daily Run Count"
+    initial: 0
+    step: 1
+    icon: mdi:counter
+
+input_select:
+  {FEATURE}_{AUTOMATION}_result:
+    name: "{ALIAS} Last Result"
+    options:
+      - success
+      - error
+      - skipped
+      - timeout
+      - unknown
+    initial: unknown
+    icon: mdi:checkbox-marked-circle-outline
+
+# -----------------------------------------------------------------------------
+# AUTOMATION INSTRUMENTATION
+# -----------------------------------------------------------------------------
+# Add this action at the END of your automation to log its execution:
 #
-# input_text:
-#   {feature}_{automation_name}_last_result:
-#     name: "{automation_alias} Last Result"
-#     initial: "unknown"
-#     max: 255
-#
-# input_datetime:
-#   {feature}_{automation_name}_next_run:
-#     name: "{automation_alias} Next Run"
-#     has_date: true
-#     has_time: true
-#
-# automation:
-#   # Reset daily counter at midnight
-#   - id: "{feature}_{automation_name}_reset_daily_counter"
-#     alias: "Reset {automation_alias} Daily Counter"
-#     trigger:
-#       - platform: time
-#         at: "00:00:00"
-#     action:
-#       - service: counter.reset
-#         target:
-#           entity_id: counter.{feature}_{automation_name}_daily_runs
+# action:
+#   # ... your automation's actions ...
+#   - service: script.observability_log_run
+#     data:
+#       feature: {FEATURE}
+#       automation: {AUTOMATION}
+#       action: "{action description}"
+#       trigger_type: "{{ trigger.platform | default('manual') }}"
+#       result: success
+#       details: "{optional context}"
 # -----------------------------------------------------------------------------

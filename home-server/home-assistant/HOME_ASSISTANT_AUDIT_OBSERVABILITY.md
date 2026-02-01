@@ -78,6 +78,21 @@ Per CLAUDE.md Section 5.7 and 6.2:
 
 **Current Compliance: 0%** - No dashboard fully implements required Automations tab.
 
+### Dashboards Without Owned Automations
+
+Per CLAUDE.md Section 5.7: "Every automation must appear in exactly ONE dashboard's Automations tab."
+
+The following dashboards have no owned automations and therefore do **not** need an Automations tab:
+
+| Dashboard | Rationale |
+|-----------|-----------|
+| Byrro (Home) | Overview dashboard - automations belong to feature dashboards |
+| Climate | Aggregate view - automations owned by Patio AC and Daikin dashboards |
+| Shield TV | Control dashboard only - no automations |
+| Activity | Aggregation view - displays activity from all features, no owned automations |
+
+These dashboards display data from features but don't own any automations. Adding empty Automations tabs would violate the "exactly one dashboard" rule and add visual clutter.
+
 ---
 
 ## 3. Automation Inventory by Feature
@@ -308,17 +323,62 @@ template:
           last_triggered: >-
             {{ state_attr('automation.kia_ev9_departure_prep', 'last_triggered') }}
           last_triggered_ago: >-
-            {{ relative_time(state_attr('automation.kia_ev9_departure_prep', 'last_triggered')) }}
+            {% set lt = state_attr('automation.kia_ev9_departure_prep', 'last_triggered') %}
+            {% if lt %}{{ relative_time(lt) }}{% else %}never{% endif %}
           next_run: >-
-            {{ states('input_datetime.kia_ev9_next_departure') }}
+            {# Automatic calculation for time/sun triggers #}
+            {% set auto = 'automation.kia_ev9_departure_prep' %}
+            {% set triggers = state_attr(auto, 'trigger') %}
+            {% if triggers and triggers | length > 0 %}
+              {% set t = triggers[0] %}
+              {% if t.platform == 'time' %}
+                {{ t.at }}
+              {% elif t.platform == 'sun' %}
+                {% if t.event == 'sunrise' %}
+                  {{ state_attr('sun.sun', 'next_rising') }}
+                {% else %}
+                  {{ state_attr('sun.sun', 'next_setting') }}
+                {% endif %}
+              {% elif t.platform == 'time_pattern' %}
+                Interval: {{ t.hours | default('*') }}:{{ t.minutes | default('*') }}
+              {% else %}
+                N/A ({{ t.platform }})
+              {% endif %}
+            {% else %}
+              N/A
+            {% endif %}
           run_count_today: >-
             {{ states('counter.kia_ev9_departure_prep_runs') | int(0) }}
           last_result: >-
-            {{ states('input_select.kia_ev9_departure_prep_result') }}
+            {{ states('input_select.kia_ev9_departure_prep_result') | default('unknown') }}
           mode: "single"
+          # Optional: Live input values for automations that monitor specific entities
+          monitored_entities: >-
+            {# Customize per-automation to show what entities it monitors #}
+            {% set entities = [
+              'sensor.kia_ev9_distance_to_home',
+              'input_datetime.kia_ev9_next_departure'
+            ] %}
+            {% set ns = namespace(values=[]) %}
+            {% for e in entities %}
+              {% set ns.values = ns.values + [{
+                'entity': e,
+                'state': states(e),
+                'friendly_name': state_attr(e, 'friendly_name') | default(e)
+              }] %}
+            {% endfor %}
+            {{ ns.values }}
         availability: >-
           {{ states('automation.kia_ev9_departure_prep') not in ['unavailable', 'unknown'] }}
 ```
+
+**Key improvements in this template:**
+
+1. **Automatic `next_run` calculation**: For `time`, `sun`, and `time_pattern` triggers, calculates the next run from the automation's trigger definition. For other triggers (state, event, webhook), shows "N/A (trigger_type)" to clarify why no prediction is possible.
+
+2. **`monitored_entities` attribute**: Allows each automation to declare what entities it monitors, with live values. This addresses the requirement to show "distance-to-car" type values in the documentation panel. Each feature customizes this list for its specific automations.
+
+3. **Defensive templating**: Uses `| default()` and null checks to prevent template errors when attributes are missing.
 
 ---
 
