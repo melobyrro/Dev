@@ -321,9 +321,9 @@ class QueryClassifier:
         logger.debug(f"Response config for {query_type.value}: max_tokens={config.max_tokens}")
         return config
 
-    def classify_and_configure(self, query: str) -> tuple[QueryType, ResponseConfig]:
+    def classify_and_configure(self, query: str) -> tuple[QueryType, ResponseConfig, QueryIntent]:
         """
-        Classify query and return both type and config
+        Classify query and return type, config, and intent
 
         Convenience method that combines classify() and get_response_config()
 
@@ -331,11 +331,47 @@ class QueryClassifier:
             query: User's question
 
         Returns:
-            Tuple of (QueryType, ResponseConfig)
+            Tuple of (QueryType, ResponseConfig, QueryIntent)
         """
         query_type = self.classify(query)
         config = self.get_response_config(query_type)
-        return query_type, config
+
+        # Map QueryType to QueryIntent
+        query_intent = self._get_query_intent(query_type, query)
+
+        return query_type, config, query_intent
+
+    def _get_query_intent(self, query_type: QueryType, query: str) -> QueryIntent:
+        """
+        Determine query intent based on query type and content
+
+        Args:
+            query_type: The classified query type
+            query: Original query string
+
+        Returns:
+            QueryIntent enum value
+        """
+        query_lower = query.lower()
+
+        # Check for specific intents
+        if query_type == QueryType.LIST_REQUEST:
+            # Check if it's a "list all" type query
+            if any(p in query_lower for p in ['todos os', 'todas as', 'liste os', 'liste as', 'quais sermões']):
+                return QueryIntent.LIST_ALL
+
+        # Check for highlights intent
+        highlight_keywords = ['destaque', 'destaques', 'momento', 'momentos', 'marcante', 'marcantes', 'importante', 'importantes']
+        if any(kw in query_lower for kw in highlight_keywords):
+            return QueryIntent.HIGHLIGHTS
+
+        # Check for questions intent
+        question_keywords = ['pergunta', 'perguntas', 'discussão', 'reflexão', 'reflexões', 'estudo']
+        if any(kw in query_lower for kw in question_keywords):
+            return QueryIntent.QUESTIONS
+
+        # Default to content
+        return QueryIntent.CONTENT
 
 
 # Singleton instance for efficiency
